@@ -1,42 +1,399 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
-<title>Planet Dogs</title>
-<link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
-<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-<style>
-*{box-sizing:border-box;margin:0;padding:0;}
-body{background:#fff;font-family:'Nunito',sans-serif;}
-.screen{min-height:100vh;background:#fff;padding-top:56px;padding-bottom:80px;}
-.screen-notop{min-height:100vh;background:#fff;padding-bottom:80px;}
-.btn{cursor:pointer;border:none;border-radius:14px;font-family:'Nunito',sans-serif;font-weight:800;transition:transform .15s;}
-.btn:active{transform:scale(.96);}
-.card{background:#fff;border-radius:20px;box-shadow:0 4px 20px rgba(255,107,157,.15);border:1.5px solid #FFE4EF;}
-@keyframes up{from{opacity:0;transform:translateY(12px);}to{opacity:1;transform:translateY(0);}}.anim{animation:up .22s ease both;}
-input,select,textarea{font-family:'Nunito',sans-serif;}
-.topbar{position:fixed;top:0;left:0;right:0;z-index:200;background:linear-gradient(135deg,#FF6B9D,#FFD93D);padding:7px 10px;display:flex;gap:5px;box-shadow:0 2px 12px rgba(255,107,157,.35);}
-</style>
-</head>
-<body>
-<div id="root"></div>
-<script type="text/babel">
-const {useState,useEffect,useRef}=React;
-const MESES=["Janeiro","Fevereiro","Marco","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
-const DIAS_SEM=["Dom","Seg","Ter","Qua","Qui","Sex","Sab"];
-const DIAS_SEMANA_FULL=["Domingo","Segunda","Terca","Quarta","Quinta","Sexta","Sabado"];
-const SERVICOS_LISTA=["Banho","Tosa","Banho + Tosa","Vacina","Consulta","Outro"];
-const FUNCIONARIOS=[{nome:"Jaqueline",cargo:"Banho e Tosa"},{nome:"Patricia",cargo:"Banho e Tosa"},{nome:"Kleber",cargo:"Banho e Tosa"},{nome:"Julia",cargo:"Recepcao"},{nome:"Vera",cargo:"Recepcao"},{nome:"Felipe",cargo:"Motorista"}];
-const REPETICOES=[{label:"7 dias",dias:7},{label:"10 dias",dias:10},{label:"15 dias",dias:15},{label:"4 semanas",dias:28}];
-const BAIRROS=["Terra Ville","Lami","Chapeu do Sol","Ponta Grossa","Lajeado","Belem Novo"];
-const RACAS=["Affenpinscher","Akita","American Bully","Beagle","Bichon Frise","Border Collie","Boxer","Bulldog Frances","Bulldog Ingles","Chihuahua","Chow Chow","Cocker Spaniel","Dachshund","Dobermann","Fox Paulistinha","Lulu da Pomerana","Golden Retriever","Husky Siberiano","Jack Russell","Labrador","Lhasa Apso","Maltes","Pastor Alemao","Pastor Australiano","Poodle","Pug","Rottweiler","Schnauzer","Shih Tzu","Yorkshire","Vira-lata / SRD","Outra raca"];
-const CAT_SAIDAS=[{key:"carro",label:"Carro",emoji:"🚗"},{key:"funcionarios",label:"Funcionarios",emoji:"👥"},{key:"alimentacao",label:"Alimentacao",emoji:"🍽"},{key:"produtos",label:"Produtos",emoji:"🧴"},{key:"outros",label:"Outros",emoji:"📦"}];
-const C={primary:"#FF6B9D",accent:"#FFD93D",accentDark:"#E8A000",dark:"#1A1A2E",muted:"#8B8FA8",success:"#2DC653",border:"#FFE4EF"};
-const fi=(x)=>Object.assign({width:"100%",padding:"12px 14px",borderRadius:12,border:"1.5px solid #FFE4EF",fontSize:15,fontWeight:600,color:"#1A1A2E",outline:"none",background:"#fff"},x||{});
-const lb={fontWeight:700,color:"#8B8FA8",fontSize:11,textTransform:"uppercase",letterSpacing:.8,marginBottom:5,display:"block"};
-const KEY="pd_v8";
-const emptyData=()=>({casas:{},casas2:{},cobrancas:{},cobrancas2:{},modelos:{},agenda:[],saidas:[],enderecos:{},vendas:[],produtos:[],lab:{maquina:"",insumos:[],exames:[],valorExame:"60"},gruposWA:{0:"",1:"",2:"",3:"",4:"",5:"",6:""}});
-const loadData=()=>{try{const d=localStorage.getItem(KEY);if(d){const p=JSON.parse(d);const base=emptyData();if(!p.lab)p.lab={maquina:"",insumos:[],exames:[],valorExame:"60"};if(!p.gruposWA)p.gruposWA={0:"",1:"",2:"",3:"",4:"",5:"",6:""};return{...base,...p};}retur
+<?xml version="1.0" encoding="UTF-8"?>
+<planetdogs_data>
+  
+  <!-- PRODUTOS DA FARMÁCIA -->
+  <produtos_farmacia>
+    <produto>
+      <nome>Meloxivet 1mg</nome>
+      <categoria>Anti-inflamatorio</categoria>
+      <preco></preco>
+    </produto>
+    <produto>
+      <nome>Meloxivet 2mg</nome>
+      <categoria>Anti-inflamatorio</categoria>
+      <preco></preco>
+    </produto>
+    <produto>
+      <nome>Meloxivet 6mg</nome>
+      <categoria>Anti-inflamatorio</categoria>
+      <preco></preco>
+    </produto>
+    <produto>
+      <nome>Flamavet 0,5mg</nome>
+      <categoria>Anti-inflamatorio</categoria>
+      <preco></preco>
+    </produto>
+    <produto>
+      <nome>Flamavet 1mg</nome>
+      <categoria>Anti-inflamatorio</categoria>
+      <preco></preco>
+    </produto>
+    <produto>
+      <nome>Flamavet 2mg</nome>
+      <categoria>Anti-inflamatorio</categoria>
+      <preco></preco>
+    </produto>
+    <produto>
+      <nome>Carproflan</nome>
+      <categoria>Anti-inflamatorio</categoria>
+      <preco></preco>
+    </produto>
+    <produto>
+      <nome>Cortvet</nome>
+      <categoria>Anti-inflamatorio</categoria>
+      <preco></preco>
+    </produto>
+    <produto>
+      <nome>Prednon 4mg</nome>
+      <categoria>Anti-inflamatorio</categoria>
+      <preco></preco>
+    </produto>
+    <produto>
+      <nome>Prednon 20mg</nome>
+      <categoria>Anti-inflamatorio</categoria>
+      <preco></preco>
+    </produto>
+    <produto>
+      <nome>Simparic Trio</nome>
+      <categoria>Antiparasitario</categoria>
+      <preco></preco>
+    </produto>
+    <produto>
+      <nome>Simparic 5mg</nome>
+      <categoria>Antiparasitario</categoria>
+      <preco></preco>
+    </produto>
+    <produto>
+      <nome>Simparic 20mg</nome>
+      <categoria>Antiparasitario</categoria>
+      <preco></preco>
+    </produto>
+    <produto>
+      <nome>Simparic 40mg</nome>
+      <categoria>Antiparasitario</categoria>
+      <preco></preco>
+    </produto>
+    <produto>
+      <nome>Revolution 6%</nome>
+      <categoria>Antiparasitario</categoria>
+      <preco></preco>
+    </produto>
+    <produto>
+      <nome>Advantage</nome>
+      <categoria>Antiparasitario</categoria>
+      <preco></preco>
+    </produto>
+    <produto>
+      <nome>EctoFend Coleira</nome>
+      <categoria>Antiparasitario</categoria>
+      <preco>149,90</preco>
+    </produto>
+    <produto>
+      <nome>Vetmax Plus</nome>
+      <categoria>Antiparasitario</categoria>
+      <preco></preco>
+    </produto>
+    <produto>
+      <nome>Giardicid 500mg</nome>
+      <categoria>Antiparasitario</categoria>
+      <preco></preco>
+    </produto>
+    <produto>
+      <nome>Apoquel</nome>
+      <categoria>Antiparasitario</categoria>
+      <preco></preco>
+    </produto>
+    <produto>
+      <nome>Silmox CL</nome>
+      <categoria>Antibiotico</categoria>
+      <preco></preco>
+    </produto>
+    <produto>
+      <nome>Cefa SID</nome>
+      <categoria>Antibiotico</categoria>
+      <preco></preco>
+    </produto>
+    <produto>
+      <nome>Clinbacter 75mg</nome>
+      <categoria>Antibiotico</categoria>
+      <preco></preco>
+    </produto>
+    <produto>
+      <nome>Clinbacter 150mg</nome>
+      <categoria>Antibiotico</categoria>
+      <preco></preco>
+    </produto>
+    <produto>
+      <nome>Enrotrat Tabs 50mg</nome>
+      <categoria>Antibiotico</categoria>
+      <preco></preco>
+    </produto>
+    <produto>
+      <nome>Doxymax</nome>
+      <categoria>Antibiotico</categoria>
+      <preco></preco>
+    </produto>
+    <produto>
+      <nome>Ciprovet</nome>
+      <categoria>Antibiotico</categoria>
+      <preco></preco>
+    </produto>
+    <produto>
+      <nome>Otodex</nome>
+      <categoria>Otologico</categoria>
+      <preco></preco>
+    </produto>
+    <produto>
+      <nome>Otocalm</nome>
+      <categoria>Otologico</categoria>
+      <preco></preco>
+    </produto>
+    <produto>
+      <nome>EasOtic</nome>
+      <categoria>Otologico</categoria>
+      <preco></preco>
+    </produto>
+    <produto>
+      <nome>Posatex</nome>
+      <categoria>Otologico</categoria>
+      <preco></preco>
+    </produto>
+    <produto>
+      <nome>EpiOtic</nome>
+      <categoria>Otologico</categoria>
+      <preco></preco>
+    </produto>
+    <produto>
+      <nome>Episoothe Shampoo</nome>
+      <categoria>Shampoo</categoria>
+      <preco>160,00</preco>
+    </produto>
+    <produto>
+      <nome>Episoothe Condicionador</nome>
+      <categoria>Shampoo</categoria>
+      <preco>165,00</preco>
+    </produto>
+    <produto>
+      <nome>Phisioderm Shampoo Pele Seca</nome>
+      <categoria>Shampoo</categoria>
+      <preco>145,00</preco>
+    </produto>
+    <produto>
+      <nome>Phisioderm Shampoo Pele Normal</nome>
+      <categoria>Shampoo</categoria>
+      <preco>136,00</preco>
+    </produto>
+    <produto>
+      <nome>Dermotrat Creme</nome>
+      <categoria>Dermatologico</categoria>
+      <preco></preco>
+    </produto>
+    <produto>
+      <nome>Neodexa Spray</nome>
+      <categoria>Dermatologico</categoria>
+      <preco></preco>
+    </produto>
+    <produto>
+      <nome>Hemolitan Pet</nome>
+      <categoria>Suplemento</categoria>
+      <preco></preco>
+    </produto>
+    <produto>
+      <nome>Omega 3</nome>
+      <categoria>Suplemento</categoria>
+      <preco></preco>
+    </produto>
+    <produto>
+      <nome>OrgaMilk</nome>
+      <categoria>Suplemento</categoria>
+      <preco>35,80</preco>
+    </produto>
+    <produto>
+      <nome>Lactobac Multiespecie</nome>
+      <categoria>Suplemento</categoria>
+      <preco>35,80</preco>
+    </produto>
+    <produto>
+      <nome>Gaviz Omeprazol 1mg</nome>
+      <categoria>Gastrointestinal</categoria>
+      <preco></preco>
+    </produto>
+    <produto>
+      <nome>Diarril</nome>
+      <categoria>Gastrointestinal</categoria>
+      <preco></preco>
+    </produto>
+    <produto>
+      <nome>Florentero</nome>
+      <categoria>Gastrointestinal</categoria>
+      <preco></preco>
+    </produto>
+    <produto>
+      <nome>Tapete Higienico</nome>
+      <categoria>Outros</categoria>
+      <preco></preco>
+    </produto>
+    <produto>
+      <nome>Coleira Antipulgas</nome>
+      <categoria>Outros</categoria>
+      <preco></preco>
+    </produto>
+  </produtos_farmacia>
+
+  <!-- FUNCIONÁRIOS -->
+  <funcionarios>
+    <funcionario>
+      <nome>Jaqueline</nome>
+      <cargo>Banho e Tosa</cargo>
+    </funcionario>
+    <funcionario>
+      <nome>Patricia</nome>
+      <cargo>Banho e Tosa</cargo>
+    </funcionario>
+    <funcionario>
+      <nome>Kleber</nome>
+      <cargo>Banho e Tosa</cargo>
+    </funcionario>
+    <funcionario>
+      <nome>Julia</nome>
+      <cargo>Recepcao</cargo>
+    </funcionario>
+    <funcionario>
+      <nome>Vera</nome>
+      <cargo>Recepcao</cargo>
+    </funcionario>
+    <funcionario>
+      <nome>Felipe</nome>
+      <cargo>Motorista</cargo>
+    </funcionario>
+  </funcionarios>
+
+  <!-- CASAS PRESET (CASAS_PREFILL) -->
+  <casas_prefill>
+    <casa numero="40">
+      <morador>Fernanda</morador>
+      <telefone></telefone>
+    </casa>
+    <casa numero="139">
+      <morador>Geysebel</morador>
+      <telefone></telefone>
+    </casa>
+    <casa numero="144">
+      <morador>Leticia</morador>
+      <telefone></telefone>
+    </casa>
+    <casa numero="147">
+      <morador>Carmem</morador>
+      <telefone></telefone>
+    </casa>
+    <casa numero="148">
+      <morador>Fernanda</morador>
+      <telefone></telefone>
+    </casa>
+    <casa numero="150">
+      <morador>Liliane</morador>
+      <telefone></telefone>
+    </casa>
+    <casa numero="608">
+      <morador>Bruna Sabljak</morador>
+      <telefone>51991555991</telefone>
+    </casa>
+    <casa numero="623">
+      <morador>Luiz Felipe</morador>
+      <telefone></telefone>
+    </casa>
+    <casa numero="707">
+      <morador>Fatima Cristina Cunha</morador>
+      <telefone>51993617959</telefone>
+    </casa>
+    <casa numero="754">
+      <morador>Luciano Azevedo Cunha</morador>
+      <telefone>5199980621</telefone>
+    </casa>
+    <casa numero="806">
+      <morador>Bianca Ferreira</morador>
+      <telefone></telefone>
+    </casa>
+    <casa numero="850">
+      <morador>Mairi Carbone</morador>
+      <telefone>51984229941</telefone>
+    </casa>
+    <casa numero="905">
+      <morador>Fernando Cury</morador>
+      <telefone></telefone>
+    </casa>
+    <casa numero="1029">
+      <morador>Marcelo Schwingel</morador>
+      <telefone>51989494239</telefone>
+    </casa>
+    <casa numero="1060">
+      <morador>Amanda Silvabe</morador>
+      <telefone>5198056-5600</telefone>
+    </casa>
+    <casa numero="1069">
+      <morador>Fabiana Rigo</morador>
+      <telefone></telefone>
+    </casa>
+    <casa numero="1081">
+      <morador>Milene Daros</morador>
+      <telefone></telefone>
+    </casa>
+    <casa numero="1127">
+      <morador>Tahina Lopes</morador>
+      <telefone>519585-1987</telefone>
+    </casa>
+    <casa numero="1154">
+      <morador>Julia Dal Santo</morador>
+      <telefone>51984482508</telefone>
+    </casa>
+    <casa numero="1156">
+      <morador>Michele Porto</morador>
+      <telefone>51 99193-9912</telefone>
+    </casa>
+    <casa numero="1174">
+      <morador>Shana Muller</morador>
+      <telefone>51981893048</telefone>
+    </casa>
+    <casa numero="1185">
+      <morador>Claudio Etzberger</morador>
+      <telefone>51 9986-3073</telefone>
+    </casa>
+    <casa numero="1210">
+      <morador>Daiane Lando</morador>
+      <telefone>51999395213</telefone>
+    </casa>
+    <casa numero="1222">
+      <morador>Sharlene Luiza</morador>
+      <telefone>51999649908</telefone>
+    </casa>
+    <casa numero="1231">
+      <morador>Amanda Tavares</morador>
+      <telefone>51984338068</telefone>
+    </casa>
+    <casa numero="1245">
+      <morador>Cintia dos Santos</morador>
+      <telefone>51999866678</telefone>
+    </casa>
+  </casas_prefill>
+
+  <!-- CONFIGURAÇÕES ADICIONAIS -->
+  <listas_auxiliares>
+    <servicos>
+      <servico>Banho</servico>
+      <servico>Tosa</servico>
+      <servico>Banho + Tosa</servico>
+      <servico>Vacina</servico>
+      <servico>Consulta</servico>
+      <servico>Outro</servico>
+    </servicos>
+    <bairros>
+      <bairro>Terra Ville</bairro>
+      <bairro>Lami</bairro>
+      <bairro>Chapeu do Sol</bairro>
+      <bairro>Ponta Grossa</bairro>
+      <bairro>Lajeado</bairro>
+      <bairro>Belem Novo</bairro>
+    </bairros>
+  </listas_auxiliares>
+
+</planetdogs_data>
