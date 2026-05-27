@@ -814,17 +814,25 @@ function abrirAgModal(dataInicial,onDone,getAllPets,gerente){
   const cont=div();
   const dI=inp({className:"fi",type:"date",value:dataInicial,style:{marginBottom:12}});
   const buscaNum=inp({className:"fi",placeholder:"Ex: 608, 1029...",style:{marginBottom:8,border:"2px solid #4285F4"}});
-  const buscaNome=inp({className:"fi",placeholder:"Nome do cao, tutor...",style:{marginBottom:8,border:"2px solid #FF6B9D"}});
+  const buscaCao=inp({className:"fi",placeholder:"Cao...",style:{marginBottom:0,border:"2px solid #FF6B9D"}});
+  const buscaTutor=inp({className:"fi",placeholder:"Tutor / telefone...",style:{marginBottom:0,border:"2px solid #FF6B9D"}});
   const buscaEnd=inp({className:"fi",placeholder:"Rua, bairro...",style:{marginBottom:8,border:"2px solid #2DC653"}});
   const listaDiv=div({style:{maxHeight:200,overflowY:"auto",border:"1.5px solid #FFE4EF",borderRadius:14,marginBottom:12}});
   const selInfo=div({style:{fontSize:12,fontWeight:700,color:"#FF6B9D",marginBottom:8,minHeight:18}});
   function filtrarPets(){
     const qNum=buscaNum.value.toLowerCase().trim();
-    const qNome=buscaNome.value.toLowerCase().trim();
+    const qCao=buscaCao.value.toLowerCase().trim();
+    const qTutor=buscaTutor.value.toLowerCase().trim();
+    const qTutorDig=qTutor.replace(/\D/g,"");
     const qEnd=buscaEnd.value.toLowerCase().trim();
     return pets.filter(p=>{
       if(qNum&&!String(p.casa).includes(qNum))return false;
-      if(qNome&&!(p.pet.toLowerCase().includes(qNome)||p.morador.toLowerCase().includes(qNome)))return false;
+      if(qCao&&!p.pet.toLowerCase().includes(qCao))return false;
+      if(qTutor){
+        const tutorOk=p.morador.toLowerCase().includes(qTutor);
+        const telOk=qTutorDig&&p.telefone&&String(p.telefone).replace(/\D/g,"").includes(qTutorDig);
+        if(!tutorOk&&!telOk)return false;
+      }
       if(qEnd&&!p.endereco.toLowerCase().includes(qEnd))return false;
       return true;
     });
@@ -889,7 +897,7 @@ function abrirAgModal(dataInicial,onDone,getAllPets,gerente){
     resumoDiv.appendChild(res);
   }
   const onInput=()=>buildLista();
-  buscaNum.addEventListener("input",onInput);buscaNome.addEventListener("input",onInput);buscaEnd.addEventListener("input",onInput);
+  buscaNum.addEventListener("input",onInput);buscaCao.addEventListener("input",onInput);buscaTutor.addEventListener("input",onInput);buscaEnd.addEventListener("input",onInput);
   const selTodos=btn({style:{padding:"7px 12px",background:"#FF6B9D",color:"#fff",borderRadius:10,fontSize:12,fontWeight:800,marginBottom:8},onClick:()=>{selIdxs=petsFiltrados.slice(0,80).map((_,i)=>i);buildLista();}},"Todos");
   const svSel2=sel({className:"fi",style:{marginBottom:12}},SERVICOS.map(s=>({v:s,l:s})));svSel2.addEventListener("change",()=>servicoSel=svSel2.value);
   const fSel2=sel({className:"fi",style:{marginBottom:12}},FUNCS.map((f,i)=>({v:i,l:f.n+" - "+f.c})));fSel2.addEventListener("change",()=>funcIdx=Number(fSel2.value));
@@ -903,9 +911,14 @@ function abrirAgModal(dataInicial,onDone,getAllPets,gerente){
   });
   const selRow=div({style:{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}});
   selRow.appendChild(lbl("Selecione os pets"));selRow.appendChild(selTodos);
+  // linha de busca dupla: cao + tutor lado a lado
+  const buscaDupla=div({style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}});
+  const colCao=div();colCao.appendChild(h("span",{style:{fontWeight:700,color:"#FF6B9D",fontSize:10,textTransform:"uppercase",letterSpacing:.8,display:"block",marginBottom:4}},"Cao"));colCao.appendChild(buscaCao);
+  const colTutor=div();colTutor.appendChild(h("span",{style:{fontWeight:700,color:"#FF6B9D",fontSize:10,textTransform:"uppercase",letterSpacing:.8,display:"block",marginBottom:4}},"Tutor / Tel"));colTutor.appendChild(buscaTutor);
+  buscaDupla.appendChild(colCao);buscaDupla.appendChild(colTutor);
   [lbl("Data"),dI,
    h("span",{style:{fontWeight:700,color:"#4285F4",fontSize:10,textTransform:"uppercase",letterSpacing:.8,display:"block",marginBottom:4}},"Buscar por numero da casa"),buscaNum,
-   h("span",{style:{fontWeight:700,color:"#FF6B9D",fontSize:10,textTransform:"uppercase",letterSpacing:.8,display:"block",marginBottom:4}},"Buscar por pet ou tutor"),buscaNome,
+   buscaDupla,
    h("span",{style:{fontWeight:700,color:"#2DC653",fontSize:10,textTransform:"uppercase",letterSpacing:.8,display:"block",marginBottom:4}},"Buscar por rua / endereco"),buscaEnd,
    selRow,selInfo,listaDiv,
    lbl("Servico"),svSel2,lbl("Funcionario"),fSel2,lbl("Hora"),hI,lbl("Repetir"),repGrid
