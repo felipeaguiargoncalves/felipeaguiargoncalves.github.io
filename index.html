@@ -394,7 +394,7 @@ function renderCadCasa(titulo,pref){
   const telInp=inp({className:"fi",placeholder:"(51) 99999-9999",type:"tel",style:{marginBottom:14}});
   const ruaInp=inp({className:"fi",placeholder:"Rua / Avenida",style:{marginBottom:10}});
   const numEndInp=inp({className:"fi",placeholder:"Numero",type:"number",style:{marginBottom:10}});
-  const bairroSel=sel({className:"fi",style:{marginBottom:20}},[{v:"",l:"Selecione o bairro..."},{v:"Terra Ville",l:"Terra Ville"},{v:"Lami",l:"Lami"},{v:"Chapeu do Sol",l:"Chapeu do Sol"},{v:"Ponta Grossa",l:"Ponta Grossa"},{v:"Lajeado",l:"Lajeado"},{v:"Belem Novo",l:"Belem Novo"},{v:"Outro",l:"Outro"}]);
+  const bairroSel=sel({className:"fi",style:{marginBottom:20}},[{v:"",l:"Selecione o bairro..."},{v:"Terra Ville",l:"Terra Ville"},{v:"Lami",l:"Lami"},{v:"Chapeu do Sol",l:"Chapeu do Sol"},{v:"Ponta Grossa",l:"Ponta Grossa"},{v:"Lajeado",l:"Lajeado"},{v:"Belem Novo",l:"Belem Novo"},{v:"Restinga",l:"Restinga"},{v:"Outro",l:"Outro"}]);
   [lbl("Tutor"),morInp,lbl("Telefone"),telInp,
    lbl("Rua"),ruaInp,lbl("Numero do Endereco"),numEndInp,lbl("Bairro"),bairroSel
   ].forEach(el=>card.appendChild(el));
@@ -770,12 +770,24 @@ function renderAgenda(gerente){
       const endObj=(DATA.enderecos||{})[num]||{};
       const endStr=endObj.rua?`${endObj.rua}, ${endObj.numero||""}, ${endObj.bairro||""}`:"";
       const vis=new Set();
+      // 1) Pets dos atendimentos de cobrança (fonte original)
       [...Object.values(DATA.cobrancas||{}),...Object.values(DATA.cobrancas2||{})].forEach(cbM=>{
         const cb=cbM[num];if(!cb)return;
         (cb.atendimentos||[]).forEach(at=>(at.caes||[]).forEach(c=>{
           if(c.nome&&!vis.has(c.nome)){vis.add(c.nome);const uid=num+"_"+c.nome;if(!visto.has(uid)){visto.add(uid);pets.push({pet:c.nome,casa:Number(num),morador:casa.morador||"",endereco:endStr,telefone:casa.telefone||"",});}}
         }));
       });
+      // 2) Pets do campo modelos (cadastrados via modal de pets)
+      const modPets=DATA.modelos?.[num]||[];
+      modPets.forEach(p=>{
+        if(p.nome&&!vis.has(p.nome)){vis.add(p.nome);const uid=num+"_"+p.nome;if(!visto.has(uid)){visto.add(uid);pets.push({pet:p.nome,casa:Number(num),morador:casa.morador||"",endereco:endStr,telefone:casa.telefone||"",});}}
+      });
+      // 3) Pets do campo pets da casa (campo direto do cadastro)
+      const casaPets=casa.pets||[];
+      casaPets.forEach(p=>{
+        if(p.nome&&!vis.has(p.nome)){vis.add(p.nome);const uid=num+"_"+p.nome;if(!visto.has(uid)){visto.add(uid);pets.push({pet:p.nome,casa:Number(num),morador:casa.morador||"",endereco:endStr,telefone:casa.telefone||"",});}}
+      });
+      // 4) Se ainda não tem nenhum pet, exibe tutor para cadastrar
       if(vis.size===0){const uid=num+"_";if(!visto.has(uid)){visto.add(uid);pets.push({pet:"",casa:Number(num),morador:casa.morador||"",endereco:endStr,telefone:casa.telefone||"",});}}
     });
     return pets;
@@ -1003,14 +1015,25 @@ function abrirAgModal(dataInicial,onDone,getAllPets,gerente){
       const row=div({style:{display:"flex",alignItems:"center",gap:0,background:isSel?"#FFF0F7":"#fff",borderBottom:"1px solid #FFE4EF",transition:"background .1s"}});
       // info (clicável para selecionar)
       const inf=div({style:{flex:1,padding:"11px 12px",cursor:"pointer"},onClick:()=>{
+        if(!p.pet){
+          // Tutor sem pet: abre cadastro de pets e recarga a lista
+          const pref2=DATA.casas[p.casa]?"cad1":"cad2";
+          abrirCadastroPetModal(p.casa,pref2,()=>{DATA=loadData();petsFiltrados=filtrarPets();buildLista();});
+          return;
+        }
         const idx=selIdxs.indexOf(i);if(idx>=0)selIdxs.splice(idx,1);else selIdxs.push(i);buildLista();
       }});
       const ult=getUltimoValorPet(p.casa,p.pet);
-      inf.innerHTML=`<div style="display:flex;align-items:center;gap:8px"><span style="font-weight:800;color:#1A1A2E;font-size:14px">${p.pet||"(sem pet)"}</span>${(!gerente&&ult>0)?`<span style="background:#e8fbed;color:#2DC653;border-radius:6px;padding:1px 7px;font-size:11px;font-weight:800">R$ ${ult.toFixed(2)}</span>`:""}</div><div style="font-size:11px;color:#8B8FA8">Casa ${p.casa} - ${p.morador}</div>${p.endereco?`<div style="font-size:10px;color:#FF6B9D">📍 ${p.endereco}</div>`:""}`;
+      inf.innerHTML=`<div style="display:flex;align-items:center;gap:8px"><span style="font-weight:800;color:${p.pet?"#1A1A2E":"#E8A000"};font-size:14px">${p.pet||"(sem pet)"}</span>${p.pet?(!gerente&&ult>0?`<span style="background:#e8fbed;color:#2DC653;border-radius:6px;padding:1px 7px;font-size:11px;font-weight:800">R$ ${ult.toFixed(2)}</span>`:""):`<span style="background:#FFFBEE;color:#E8A000;border-radius:6px;padding:1px 7px;font-size:10px;font-weight:800">Toque para cadastrar pet 🐾</span>`}</div><div style="font-size:11px;color:#8B8FA8">Casa ${p.casa} - ${p.morador}</div>${p.endereco?`<div style="font-size:10px;color:#FF6B9D">📍 ${p.endereco}</div>`:""}`;
       // botão ± lado direito
       const togBtn=btn({style:{width:44,height:44,borderRadius:12,background:isSel?"#FF6B9D":"#fff",border:"2px solid "+(isSel?"#FF6B9D":"#FFE4EF"),color:isSel?"#fff":"#FF6B9D",fontSize:22,fontWeight:900,flexShrink:0,margin:"0 8px",display:"flex",alignItems:"center",justifyContent:"center"},onClick:()=>{
+        if(!p.pet){
+          const pref2=DATA.casas[p.casa]?"cad1":"cad2";
+          abrirCadastroPetModal(p.casa,pref2,()=>{DATA=loadData();petsFiltrados=filtrarPets();buildLista();});
+          return;
+        }
         const idx=selIdxs.indexOf(i);if(idx>=0)selIdxs.splice(idx,1);else selIdxs.push(i);buildLista();
-      }},isSel?"✓":"+");
+      }},isSel?"✓":(p.pet?"+":"🐾"));
       row.appendChild(inf);row.appendChild(togBtn);listaDiv.appendChild(row);
     });
     buildResumo();
@@ -1067,7 +1090,7 @@ function abrirAgModal(dataInicial,onDone,getAllPets,gerente){
   const endRuaI=inp({className:"fi",placeholder:"Rua / Avenida",style:{marginBottom:6}});
   const endNumI=inp({className:"fi",placeholder:"Número",style:{marginBottom:6}});
   // bairro como select fixo (mesma lista do Cad.1/Cad.2)
-  const BAIRROS_LISTA=[{v:"",l:"Selecione o bairro..."},{v:"Terra Ville",l:"🏘 Terra Ville"},{v:"Lami",l:"🏖 Lami"},{v:"Chapeu do Sol",l:"☀️ Chapeu do Sol"},{v:"Ponta Grossa",l:"🌊 Ponta Grossa"},{v:"Lajeado",l:"🌿 Lajeado"},{v:"Belem Novo",l:"🌳 Belem Novo"},{v:"Outro",l:"📍 Outro"}];
+  const BAIRROS_LISTA=[{v:"",l:"Selecione o bairro..."},{v:"Terra Ville",l:"🏘 Terra Ville"},{v:"Lami",l:"🏖 Lami"},{v:"Chapeu do Sol",l:"☀️ Chapeu do Sol"},{v:"Ponta Grossa",l:"🌊 Ponta Grossa"},{v:"Lajeado",l:"🌿 Lajeado"},{v:"Belem Novo",l:"🌳 Belem Novo"},{v:"Restinga",l:"🏙 Restinga"},{v:"Outro",l:"📍 Outro"}];
   const endBairSel=sel({className:"fi",style:{marginBottom:10}},BAIRROS_LISTA);
   const cadPainelTitle=h("p",{style:{fontWeight:800,color:"#3B82F6",fontSize:13,marginBottom:10,display:"flex",alignItems:"center",gap:6}},"👤 Dados do Tutor");
   const cadEndTitle=h("p",{style:{fontWeight:800,color:"#2DC653",fontSize:13,marginBottom:6,marginTop:8}},"📍 Endereço");
