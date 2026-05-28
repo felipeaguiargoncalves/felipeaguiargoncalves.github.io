@@ -723,16 +723,28 @@ function renderAgenda(gerente){
       const statusAtual=rep.statusCor||"pendente";const sc2=STATUS_CORES[statusAtual]||STATUS_CORES.pendente;
       const card=div({className:"card anim",style:{marginBottom:8,animationDelay:gi*20+"ms",borderLeft:"5px solid "+sc2.faixa,background:sc2.bg}});
       const inner=div({style:{padding:"12px 14px"}});
-      grupo.forEach(ev=>{
-        const val=getValorEvento(ev);
-        const petRow=div({style:{display:"flex",alignItems:"center",gap:8,marginBottom:4,flexWrap:"wrap"}});
-        petRow.appendChild(h("span",{style:{fontWeight:800,color:"#1A1A2E",fontSize:14}},ev.pet||"Pet"));
-        if(!gerente){
-          const valBtn=btn({style:{background:val>0?"#e8fbed":"#fff0f0",color:val>0?"#2DC653":"#e53e3e",fontWeight:800,fontSize:12,padding:"2px 8px",borderRadius:8,border:"1px solid "+(val>0?"#2DC653":"#ffcdd2")},onClick:()=>abrirValorModal(ev,buildEvs)},val>0?"R$ "+val.toFixed(2):"+ Valor");
-          petRow.appendChild(valBtn);
-        }
-        inner.appendChild(petRow);
-      });
+      const petsWrap=div();
+      function buildPetsWrap(){
+        petsWrap.innerHTML="";
+        const grpAtual=(DATA.agenda||[]).filter(a=>grupo.some(g=>g.id===a.id));
+        grpAtual.forEach(ev=>{
+          const val=getValorEvento(ev);
+          const petRow=div({style:{display:"flex",alignItems:"center",gap:8,marginBottom:4,flexWrap:"wrap"}});
+          petRow.appendChild(h("span",{style:{fontWeight:800,color:"#1A1A2E",fontSize:14}},ev.pet||"Pet"));
+          if(!gerente){
+            const valBtn=btn({style:{background:val>0?"#e8fbed":"#fff0f0",color:val>0?"#2DC653":"#e53e3e",fontWeight:800,fontSize:12,padding:"2px 8px",borderRadius:8,border:"1px solid "+(val>0?"#2DC653":"#ffcdd2")},onClick:()=>abrirValorModal(ev,()=>{DATA=loadData();buildPetsWrap();})},val>0?"R$ "+val.toFixed(2):"+ Valor");
+            petRow.appendChild(valBtn);
+          }
+          // botão remover pet do grupo
+          petRow.appendChild(btn({style:{background:"#fff0f0",color:"#e53e3e",fontWeight:800,fontSize:11,padding:"2px 7px",borderRadius:8,border:"1px solid #ffcdd2"},onClick:()=>{if(grpAtual.length<=1){alert("Grupo precisa ter ao menos 1 pet.");return;}updSilent(d=>({...d,agenda:d.agenda.filter(a=>a.id!==ev.id)}));DATA=loadData();buildPetsWrap();}},"✕"));
+          petsWrap.appendChild(petRow);
+        });
+        // botão + Pet
+        const addPetBtn=btn({style:{display:"flex",alignItems:"center",gap:5,padding:"5px 12px",background:"#FFF5F9",color:"#FF6B9D",border:"2px dashed #FF6B9D",borderRadius:10,fontSize:12,fontWeight:800,marginTop:4},onClick:()=>abrirAddPetGrupoModal(rep,grpAtual,buildPetsWrap,gerente)},[h("span",{},"＋")," Pet"]);
+        petsWrap.appendChild(addPetBtn);
+      }
+      buildPetsWrap();
+      inner.appendChild(petsWrap);
       const funcR=div({style:{display:"flex",alignItems:"center",gap:8,marginTop:4,flexWrap:"wrap"}});
       const funcSel2=sel({style:{fontSize:12,fontWeight:700,color:"#3B82F6",background:"#EFF6FF",border:"1.5px solid #BFDBFE",borderRadius:8,padding:"4px 8px",fontFamily:"Nunito,sans-serif"},onChange:e=>{const ids=new Set(grupo.map(x=>x.id));updSilent(d=>({...d,agenda:d.agenda.map(a=>ids.has(a.id)?{...a,func:e.target.value}:a)}));}},FUNCS.map(f=>({v:f.n,l:f.n,sel:f.n===rep.func})));
       funcR.appendChild(funcSel2);
@@ -797,7 +809,75 @@ function renderAgenda(gerente){
   return w;
 }
 
-// ── MODAL GRUPOS WA ───────────────────────────────────────────────────────────
+// ── MODAL ADICIONAR PET AO GRUPO ─────────────────────────────────────────────
+function abrirAddPetGrupoModal(rep,grupoAtual,onDone,gerente){
+  const casaNum=rep.casa;
+  const casaObj=(DATA.casas||{})[casaNum]||(DATA.casas2||{})[casaNum]||{};
+  const telefone=casaObj.telefone||rep.telefone||"";
+  const morador=casaObj.morador||rep.morador||"";
+  const endObj=(DATA.enderecos||{})[casaNum]||{};
+  const endStr=endObj.rua?`${endObj.rua}, ${endObj.numero||""}, ${endObj.bairro||""}`:(rep.endereco||"");
+
+  // Coletar todos os pets do tutor (modelos + cobrancas + campo pets)
+  const petsCadastrados=new Set();
+  grupoAtual.forEach(e=>{if(e.pet)petsCadastrados.add(e.pet);});// já agendados
+  const petsDisponiveis=[];
+  const vistos=new Set(grupoAtual.map(e=>e.pet));
+
+  // modelos
+  (DATA.modelos?.[casaNum]||[]).forEach(p=>{if(p.nome&&!vistos.has(p.nome)){vistos.add(p.nome);petsDisponiveis.push({nome:p.nome,valor:getValorPetFromCobs(casaNum,p.nome)});}});
+  // campo pets da casa
+  (casaObj.pets||[]).forEach(p=>{if(p.nome&&!vistos.has(p.nome)){vistos.add(p.nome);petsDisponiveis.push({nome:p.nome,valor:getValorPetFromCobs(casaNum,p.nome)});}});
+  // cobrancas
+  [DATA.cobrancas,DATA.cobrancas2||{}].forEach(src=>{
+    Object.values(src||{}).forEach(cbM=>{
+      const cb=cbM[casaNum];if(!cb)return;
+      (cb.atendimentos||[]).forEach(at=>(at.caes||[]).forEach(c=>{if(c.nome&&!vistos.has(c.nome)){vistos.add(c.nome);petsDisponiveis.push({nome:c.nome,valor:getValorPetFromCobs(casaNum,c.nome)});}}));
+    });
+  });
+
+  const cont=div();
+  cont.appendChild(h("p",{style:{fontSize:12,color:"#8B8FA8",fontWeight:700,marginBottom:12}},`Casa ${casaNum} — ${morador}`));
+
+  let mv=null;
+
+  // ── Pets cadastrados do tutor
+  if(petsDisponiveis.length>0){
+    cont.appendChild(h("p",{style:{fontWeight:800,color:"#FF6B9D",fontSize:12,marginBottom:8,textTransform:"uppercase",letterSpacing:.6}},"Pets do tutor"));
+    petsDisponiveis.forEach(p=>{
+      const row=div({style:{display:"flex",alignItems:"center",justifyContent:"space-between",background:"#FFF5F9",borderRadius:12,padding:"10px 14px",marginBottom:8,border:"1.5px solid #FFE4EF"}});
+      row.appendChild(h("span",{style:{fontWeight:800,fontSize:14,color:"#1A1A2E"}},"🐶 "+p.nome));
+      const r=div({style:{display:"flex",alignItems:"center",gap:8}});
+      if(p.valor>0)r.appendChild(h("span",{style:{fontWeight:700,color:"#2DC653",fontSize:13}},"R$ "+p.valor.toFixed(2)));
+      r.appendChild(btn({style:{background:"linear-gradient(135deg,#FF6B9D,#FFD93D)",color:"#fff",padding:"8px 14px",borderRadius:10,fontSize:13,fontWeight:800},onClick:()=>{
+        const novoEv={id:Date.now(),data:rep.data,pet:p.nome,casa:casaNum,morador,servico:rep.servico||"Banho",func:rep.func||"",hora:rep.hora||"08:00",endereco:endStr,telefone,buscado:false};
+        if(p.valor>0)novoEv.valorCustom=String(p.valor);
+        updSilent(d=>({...d,agenda:[...d.agenda,novoEv].sort((a,b)=>a.data.localeCompare(b.data))}));
+        DATA=loadData();if(mv)mv.remove();onDone&&onDone();
+      }},"+ Agendar"));
+      row.appendChild(r);cont.appendChild(row);
+    });
+    cont.appendChild(div({style:{borderTop:"2px dashed #FFE4EF",margin:"14px 0"}}));
+  }
+
+  // ── Cadastro avulso (pet novo, sem histórico)
+  cont.appendChild(h("p",{style:{fontWeight:800,color:"#8B8FA8",fontSize:12,marginBottom:10,textTransform:"uppercase",letterSpacing:.6}},"Pet avulso (não cadastrado)"));
+  const nomI=inp({className:"fi",placeholder:"Nome do pet",style:{marginBottom:10}});
+  const valI=inp({className:"fi",type:"number",placeholder:"Valor R$",style:{marginBottom:14}});
+  cont.appendChild(lbl("Nome do Pet"));cont.appendChild(nomI);
+  cont.appendChild(lbl("Valor (R$)"));cont.appendChild(valI);
+  cont.appendChild(btn({style:{width:"100%",padding:"14px",background:"linear-gradient(135deg,#FF6B9D,#FFD93D)",color:"#fff",fontSize:15,borderRadius:14,fontWeight:800},onClick:()=>{
+    if(!nomI.value.trim()){alert("Informe o nome do pet!");return;}
+    const novoEv={id:Date.now(),data:rep.data,pet:nomI.value.trim(),casa:casaNum,morador,servico:rep.servico||"Banho",func:rep.func||"",hora:rep.hora||"08:00",endereco:endStr,telefone,buscado:false};
+    if(valI.value&&parseFloat(valI.value)>0)novoEv.valorCustom=valI.value;
+    updSilent(d=>({...d,agenda:[...d.agenda,novoEv].sort((a,b)=>a.data.localeCompare(b.data))}));
+    DATA=loadData();if(mv)mv.remove();onDone&&onDone();
+  }},"✓ Adicionar ao Agendamento"));
+
+  mv=openModal("+ Pet — Casa "+casaNum,cont,()=>{});
+}
+
+
 function abrirGruposModal(){
   const gwa=DATA.gruposWA||{};const ge=Object.assign({},gwa);const cont=div();
   cont.appendChild(h("p",{style:{fontSize:12,color:"#8B8FA8",marginBottom:16,lineHeight:1.6,fontWeight:600}},"Cole o link do grupo WA de cada dia."));
