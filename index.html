@@ -740,7 +740,7 @@ function renderAgenda(gerente){
           petsWrap.appendChild(petRow);
         });
         // botão + Pet
-        const addPetBtn=btn({style:{display:"flex",alignItems:"center",gap:5,padding:"5px 12px",background:"#FFF5F9",color:"#FF6B9D",border:"2px dashed #FF6B9D",borderRadius:10,fontSize:12,fontWeight:800,marginTop:4},onClick:()=>abrirAddPetGrupoModal(rep,grpAtual,buildPetsWrap,gerente)},[h("span",{},"＋")," Pet"]);
+        const addPetBtn=btn({style:{display:"flex",alignItems:"center",gap:5,padding:"5px 12px",background:"#FFF5F9",color:"#FF6B9D",border:"2px dashed #FF6B9D",borderRadius:10,fontSize:12,fontWeight:800,marginTop:4},onClick:()=>abrirAddPetGrupoModal(rep,grpAtual,buildEvs,gerente)},[h("span",{},"＋")," Pet"]);
         petsWrap.appendChild(addPetBtn);
       }
       buildPetsWrap();
