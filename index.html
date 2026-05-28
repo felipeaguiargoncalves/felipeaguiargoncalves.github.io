@@ -770,7 +770,7 @@ function renderAgenda(gerente){
       mapRow.appendChild(div({style:{flex:1,fontSize:11,color:"#8B8FA8",minWidth:50,wordBreak:"break-word"}},endStr||"Sem endereco"));
       if(endStr)mapRow.appendChild(h("a",{href:mapsUrl(endStr),target:"_blank",style:{background:"#4285F4",color:"#fff",padding:"7px 10px",borderRadius:10,fontWeight:800,fontSize:11,textDecoration:"none",flexShrink:0}},"🗺 Maps"));
       mapRow.appendChild(btn({style:{background:"#FF6B9D",color:"#fff",padding:"7px 10px",borderRadius:10,fontWeight:800,fontSize:11,flexShrink:0},onClick:()=>abrirWATelebusca(grupo,gwa)},"🚗 Buscar"));
-      if(!gerente)mapRow.appendChild(btn({style:{background:"#25D366",color:"#fff",padding:"7px 10px",borderRadius:10,fontWeight:800,fontSize:11,flexShrink:0},onClick:()=>abrirPagamentoModal(grupo,buildEvs)},"💬 WA"));
+      if(!gerente)mapRow.appendChild(btn({style:{background:"#25D366",color:"#fff",padding:"7px 10px",borderRadius:10,fontWeight:800,fontSize:11,flexShrink:0},onClick:()=>abrirPagamentoModal(grupo,buildEvs,gwa)},"💬 WA"));
       inner.appendChild(mapRow);
       card.appendChild(inner);evSection.appendChild(card);
     });
@@ -962,8 +962,10 @@ function abrirValorModal(ev,onDone){
 }
 
 // ── MODAL PAGAMENTO WA ────────────────────────────────────────────────────────
-function abrirPagamentoModal(grupo,onDone){
+function abrirPagamentoModal(grupo,onDone,gwa){
   const rep=grupo[0];const tel=(rep.telefone||"").replace(/\D/g,"");
+  const diaSemPag=new Date(rep.data+"T12:00:00").getDay();
+  const linkGrupoPag=((gwa||DATA.gruposWA||{})[diaSemPag]||"").trim();
   const totalG=grupo.reduce((s,ev)=>s+getValorEvento(ev),0);
   const montarMsg=(formaPag)=>{
     const labels={dinheiro:"Dinheiro 💵",cartao:"Cartao 💳",pix:"Pix 📱",naopagou:"Pendente ⚠️"};
@@ -1011,8 +1013,11 @@ function abrirPagamentoModal(grupo,onDone){
     const b=btn({style:{width:"100%",padding:"14px 18px",background:op.bg,border:"2px solid "+op.bc,borderRadius:16,display:"flex",alignItems:"center",gap:14,textAlign:"left",marginBottom:11},onClick:()=>{
       lancarNaCobranca(op.k!=="naopagou");
       const msg=montarMsg(op.k);
-      if(tel)window.open("https://api.whatsapp.com/send?phone=55"+tel+"&text="+msg,"_blank");
-      else window.open("https://api.whatsapp.com/send?text="+msg,"_blank");
+      if(linkGrupoPag.startsWith("https://"))window.open(linkGrupoPag,"_blank");
+      setTimeout(()=>{
+        if(tel)window.open("https://api.whatsapp.com/send?phone=55"+tel+"&text="+msg,"_blank");
+        else window.open("https://api.whatsapp.com/send?text="+msg,"_blank");
+      },300);
       if(mv)mv.remove();onDone&&onDone();
     }});
     b.innerHTML=`<span style="font-size:28px">${op.e}</span><div><div style="font-weight:800;color:${op.c};font-size:15px">${op.l}</div><div style="font-size:11px;color:${op.c};opacity:.7;font-weight:600">${op.sub}</div></div>`;
