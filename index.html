@@ -79,13 +79,13 @@ const PRODS_DEF=[
   {nome:"Lactobac Multiespecie",cat:"Suplemento",preco:"35,80"},{nome:"Florentero",cat:"Gastrointestinal",preco:""},
 ];
 function emptyData(){
-  return{casas:{},casas2:{},cobrancas:{},cobrancas2:{},modelos:{},agenda:[],saidas:[],enderecos:{},vendas:[],produtos:JSON.parse(JSON.stringify(PRODS_DEF)),lab:{maquina:"",insumos:[],exames:[],valorExame:"60"},gruposWA:{0:"",1:"",2:"",3:"",4:"",5:"",6:""}};
+  return{casas:{},casas2:{},cobrancas:{},cobrancas2:{},modelos:{},agenda:[],saidas:[],enderecos:{},vendas:[],produtos:JSON.parse(JSON.stringify(PRODS_DEF)),lab:{maquina:"",insumos:[],exames:[],valorExame:"60"},gruposWA:{0:"",1:"",2:"",3:"",4:"",5:"",6:""},gruposWAPag:{0:"",1:"",2:"",3:"",4:"",5:"",6:""}};
 }
 function loadData(){
   try{const d=localStorage.getItem(KEY);if(d){const p=JSON.parse(d);
     if(!p.produtos||p.produtos.length<3)p.produtos=JSON.parse(JSON.stringify(PRODS_DEF));
     if(!p.lab)p.lab={maquina:"",insumos:[],exames:[],valorExame:"60"};
-    if(!p.gruposWA)p.gruposWA={0:"",1:"",2:"",3:"",4:"",5:"",6:""};
+    if(!p.gruposWA)p.gruposWA={0:"",1:"",2:"",3:"",4:"",5:"",6:""};if(!p.gruposWAPag)p.gruposWAPag={0:"",1:"",2:"",3:"",4:"",5:"",6:""};
     if(!p.casas2)p.casas2={};if(!p.cobrancas2)p.cobrancas2={};
     return p;}}catch(e){}
   return emptyData();
@@ -879,15 +879,31 @@ function abrirAddPetGrupoModal(rep,grupoAtual,onDone,gerente){
 
 
 function abrirGruposModal(){
-  const gwa=DATA.gruposWA||{};const ge=Object.assign({},gwa);const cont=div();
-  cont.appendChild(h("p",{style:{fontSize:12,color:"#8B8FA8",marginBottom:16,lineHeight:1.6,fontWeight:600}},"Cole o link do grupo WA de cada dia."));
+  const gwa=DATA.gruposWA||{};const ge=Object.assign({},gwa);
+  const gwp=DATA.gruposWAPag||{};const gpe=Object.assign({},gwp);
+  const cont=div();
+  // Seção Rota
+  const secRota=div({style:{background:"#EFF6FF",border:"2px solid #3B82F6",borderRadius:14,padding:"14px",marginBottom:16}});
+  secRota.appendChild(h("p",{style:{fontWeight:800,color:"#3B82F6",fontSize:13,marginBottom:10,display:"flex",alignItems:"center",gap:6}},"🚗 Grupos de ROTA (Busca)"));
+  secRota.appendChild(h("p",{style:{fontSize:11,color:"#8B8FA8",fontWeight:600,marginBottom:12}},"Link do grupo que recebe a mensagem de rota/busca"));
   DIAS_FULL.forEach((dia,i)=>{
-    cont.appendChild(lbl(dia));
+    secRota.appendChild(lbl(dia));
     const inp2=inp({className:"fi",placeholder:"https://chat.whatsapp.com/...",value:ge[i]||""});
-    inp2.addEventListener("input",()=>ge[i]=inp2.value);cont.appendChild(inp2);cont.appendChild(div({style:{height:8}}));
+    inp2.addEventListener("input",()=>ge[i]=inp2.value);secRota.appendChild(inp2);secRota.appendChild(div({style:{height:6}}));
   });
+  cont.appendChild(secRota);
+  // Seção Pagamento
+  const secPag=div({style:{background:"#f0fff4",border:"2px solid #2DC653",borderRadius:14,padding:"14px",marginBottom:16}});
+  secPag.appendChild(h("p",{style:{fontWeight:800,color:"#2DC653",fontSize:13,marginBottom:10,display:"flex",alignItems:"center",gap:6}},"💬 Grupos de PAGAMENTO"));
+  secPag.appendChild(h("p",{style:{fontSize:11,color:"#8B8FA8",fontWeight:600,marginBottom:12}},"Link do grupo que recebe a mensagem de forma de pagamento"));
+  DIAS_FULL.forEach((dia,i)=>{
+    secPag.appendChild(lbl(dia));
+    const inp3=inp({className:"fi",placeholder:"https://chat.whatsapp.com/...",value:gpe[i]||""});
+    inp3.addEventListener("input",()=>gpe[i]=inp3.value);secPag.appendChild(inp3);secPag.appendChild(div({style:{height:6}}));
+  });
+  cont.appendChild(secPag);
   let mv=null;
-  cont.appendChild(btn({style:{width:"100%",padding:"16px",background:"linear-gradient(135deg,#FF6B9D,#FFD93D)",color:"#fff",fontSize:15,borderRadius:14,marginTop:8},onClick:()=>{updSilent(d=>({...d,gruposWA:{...ge}}));if(mv)mv.remove();}},"Salvar Grupos"));
+  cont.appendChild(btn({style:{width:"100%",padding:"16px",background:"linear-gradient(135deg,#FF6B9D,#FFD93D)",color:"#fff",fontSize:15,borderRadius:14,marginTop:4},onClick:()=>{updSilent(d=>({...d,gruposWA:{...ge},gruposWAPag:{...gpe}}));if(mv)mv.remove();}},"💾 Salvar Grupos"));
   mv=openModal("Grupos WA por Dia",cont);
 }
 
@@ -962,10 +978,10 @@ function abrirValorModal(ev,onDone){
 }
 
 // ── MODAL PAGAMENTO WA ────────────────────────────────────────────────────────
-function abrirPagamentoModal(grupo,onDone,gwa){
-  const rep=grupo[0];const tel=(rep.telefone||"").replace(/\D/g,"");
+function abrirPagamentoModal(grupo,onDone,gwaRota){
+  const rep=grupo[0];
   const diaSemPag=new Date(rep.data+"T12:00:00").getDay();
-  const linkGrupoPag=((gwa||DATA.gruposWA||{})[diaSemPag]||"").trim();
+  const linkGrupoPag=((DATA.gruposWAPag||{})[diaSemPag]||"").trim();
   const totalG=grupo.reduce((s,ev)=>s+getValorEvento(ev),0);
   const montarMsg=(formaPag)=>{
     const labels={dinheiro:"Dinheiro 💵",cartao:"Cartao 💳",pix:"Pix 📱",naopagou:"Pendente ⚠️"};
@@ -1014,10 +1030,7 @@ function abrirPagamentoModal(grupo,onDone,gwa){
       lancarNaCobranca(op.k!=="naopagou");
       const msg=montarMsg(op.k);
       if(linkGrupoPag.startsWith("https://"))window.open(linkGrupoPag,"_blank");
-      setTimeout(()=>{
-        if(tel)window.open("https://api.whatsapp.com/send?phone=55"+tel+"&text="+msg,"_blank");
-        else window.open("https://api.whatsapp.com/send?text="+msg,"_blank");
-      },300);
+      setTimeout(()=>window.open("https://api.whatsapp.com/send?text="+msg,"_blank"),300);
       if(mv)mv.remove();onDone&&onDone();
     }});
     b.innerHTML=`<span style="font-size:28px">${op.e}</span><div><div style="font-weight:800;color:${op.c};font-size:15px">${op.l}</div><div style="font-size:11px;color:${op.c};opacity:.7;font-weight:600">${op.sub}</div></div>`;
