@@ -275,6 +275,37 @@ function abrirCadastroPetModal(casaNum,pref,onDone){
   const infoD=div({style:{background:"#EFF6FF",borderRadius:12,padding:"10px 14px",marginBottom:14,fontSize:13,fontWeight:700,color:"#3B82F6"}});
   infoD.textContent="Tutor salvo! Agora cadastre o(s) pet(s) desta casa.";
   cont.appendChild(infoD);
+
+  // ── Coleta raças já cadastradas no banco (modelos + atendimentos) ─────────────
+  function getRacasConhecidas(){
+    const racas=new Set();
+    // dos modelos
+    Object.values(DATA.modelos||{}).forEach(lista=>{
+      (lista||[]).forEach(p=>{if(p.raca&&p.raca.trim())racas.add(p.raca.trim());});
+    });
+    // dos atendimentos (cobrancas + cobrancas2)
+    [DATA.cobrancas,DATA.cobrancas2||{}].forEach(src=>{
+      Object.values(src||{}).forEach(cbMes=>{
+        Object.values(cbMes||{}).forEach(cb=>{
+          (cb.atendimentos||[]).forEach(at=>{
+            (at.caes||[]).forEach(c=>{if(c.raca&&c.raca.trim())racas.add(c.raca.trim());});
+          });
+        });
+      });
+    });
+    // das casas (campo pets)
+    [...Object.values(DATA.casas||{}),...Object.values(DATA.casas2||{})].forEach(casa=>{
+      (casa.pets||[]).forEach(p=>{if(p.raca&&p.raca.trim())racas.add(p.raca.trim());});
+    });
+    return [...racas].sort((a,b)=>a.localeCompare(b));
+  }
+
+  // datalist compartilhado entre todos os campos de raça
+  const dlId="raca-dl-"+Date.now();
+  const dl=h("datalist",{id:dlId});
+  getRacasConhecidas().forEach(r=>{const op=document.createElement("option");op.value=r;dl.appendChild(op);});
+  cont.appendChild(dl);
+
   let pets=[{nome:"",raca:""}];
   const petsWrap=div();
   function buildPets(){
@@ -282,17 +313,30 @@ function abrirCadastroPetModal(casaNum,pref,onDone){
     pets.forEach((p,i)=>{
       const pb=div({style:{background:"#FFF5F9",borderRadius:14,padding:14,marginBottom:10,border:"1.5px solid #FFE4EF"}});
       const tRow=div({style:{display:"flex",justifyContent:"space-between",marginBottom:8,alignItems:"center"}});
-      tRow.appendChild(h("span",{style:{fontWeight:800,fontSize:14,color:"#FF6B9D"}},"Pet "+(i+1)));
+      tRow.appendChild(h("span",{style:{fontWeight:800,fontSize:14,color:"#FF6B9D"}},"🐶 Pet "+(i+1)));
       if(pets.length>1)tRow.appendChild(btn({style:{background:"#fff0f0",color:"#e53e3e",padding:"4px 10px",borderRadius:10,fontSize:12},onClick:()=>{pets.splice(i,1);buildPets();}},"Remover"));
       pb.appendChild(tRow);
       pb.appendChild(lbl("Nome do Pet"));
       const nI=inp({className:"fi",placeholder:"Ex: Rex",value:p.nome,style:{marginBottom:10}});
       nI.addEventListener("input",()=>pets[i].nome=nI.value);
       pb.appendChild(nI);
-      pb.appendChild(lbl("Raca"));
-      const rI=inp({className:"fi",placeholder:"Ex: Poodle",value:p.raca,style:{marginBottom:4}});
+      pb.appendChild(lbl("Raça"));
+      // input com datalist para autocomplete dinâmico
+      const rI=inp({className:"fi",placeholder:"Digite ou escolha...",value:p.raca,style:{marginBottom:4}});
+      rI.setAttribute("list",dlId);
       rI.addEventListener("input",()=>pets[i].raca=rI.value);
-      pb.appendChild(rI);
+      // chips de raças mais usadas (top 5)
+      const topRacas=getRacasConhecidas().slice(0,5);
+      if(topRacas.length>0){
+        const chips=div({style:{display:"flex",flexWrap:"wrap",gap:5,marginTop:6,marginBottom:2}});
+        topRacas.forEach(r=>{
+          const c=btn({style:{padding:"4px 10px",fontSize:11,fontWeight:700,background:"#FFF5F9",color:"#FF6B9D",border:"1.5px solid #FFE4EF",borderRadius:20},onClick:()=>{rI.value=r;pets[i].raca=r;}},r);
+          chips.appendChild(c);
+        });
+        pb.appendChild(rI);pb.appendChild(chips);
+      } else {
+        pb.appendChild(rI);
+      }
       petsWrap.appendChild(pb);
     });
   }
@@ -1020,45 +1064,49 @@ function abrirAgModal(dataInicial,onDone,getAllPets,gerente){
   const morI=inp({className:"fi",placeholder:"Nome do tutor *",style:{marginBottom:10,border:"2px solid #3B82F6"}});
   const telI=inp({className:"fi",placeholder:"(51) 99999-9999",type:"tel",style:{marginBottom:10}});
   // campos endereço
-  const endRuaI=inp({className:"fi",placeholder:"Rua",style:{marginBottom:6}});
+  const endRuaI=inp({className:"fi",placeholder:"Rua / Avenida",style:{marginBottom:6}});
   const endNumI=inp({className:"fi",placeholder:"Número",style:{marginBottom:6}});
-  const endBairI=inp({className:"fi",placeholder:"Bairro",style:{marginBottom:10}});
+  // bairro como select fixo (mesma lista do Cad.1/Cad.2)
+  const BAIRROS_LISTA=[{v:"",l:"Selecione o bairro..."},{v:"Terra Ville",l:"🏘 Terra Ville"},{v:"Lami",l:"🏖 Lami"},{v:"Chapeu do Sol",l:"☀️ Chapeu do Sol"},{v:"Ponta Grossa",l:"🌊 Ponta Grossa"},{v:"Lajeado",l:"🌿 Lajeado"},{v:"Belem Novo",l:"🌳 Belem Novo"},{v:"Outro",l:"📍 Outro"}];
+  const endBairSel=sel({className:"fi",style:{marginBottom:10}},BAIRROS_LISTA);
   const cadPainelTitle=h("p",{style:{fontWeight:800,color:"#3B82F6",fontSize:13,marginBottom:10,display:"flex",alignItems:"center",gap:6}},"👤 Dados do Tutor");
   const cadEndTitle=h("p",{style:{fontWeight:800,color:"#2DC653",fontSize:13,marginBottom:6,marginTop:8}},"📍 Endereço");
   const svTutorBtn=btn({style:{width:"100%",padding:"14px",background:"linear-gradient(135deg,#FF6B9D,#FFD93D)",color:"#fff",fontSize:14,borderRadius:12,fontWeight:800},onClick:()=>{
     if(!morI.value.trim()){alert("Informe o nome do tutor!");return;}
     const novoId=getProxId(DATA.casas2||{});
-    const endObj={rua:endRuaI.value.trim(),numero:endNumI.value.trim(),bairro:endBairI.value.trim()};
-    const endStr=endObj.rua?`${endObj.rua}, ${endObj.numero}, ${endObj.bairro}`:"";
+    const endObj={rua:endRuaI.value.trim(),numero:endNumI.value.trim(),bairro:endBairSel.value};
     updSilent(d=>({
       ...d,
       casas2:{...d.casas2||{},[novoId]:{numero:novoId,morador:morI.value.trim(),telefone:telI.value}},
       enderecos:{...d.enderecos||{},[novoId]:endObj}
     }));
     DATA=loadData();
-    cadPainel.style.display="none";
+    cadPainel.style.display="none";cadAberto=false;
+    // ícone do botão volta ao +
+    cadBtnTopo.querySelector("span:last-child").textContent="＋";
     // Mostra feedback de sucesso
     const ok=div({style:{background:"#e8fbed",border:"2px solid #2DC653",borderRadius:10,padding:"10px 14px",marginBottom:10,fontSize:13,fontWeight:800,color:"#2DC653"}});
-    ok.textContent="✅ Tutor salvo! Agora abrindo cadastro de pets...";
-    cadAreaWrap.appendChild(ok);
+    ok.textContent="✅ Tutor salvo! Abrindo cadastro de pets...";
+    cadAreaWrap.insertBefore(ok,cadPainel);
     setTimeout(()=>{
+      const nomeSalvo=morI.value.trim();
       abrirCadastroPetModal(novoId,"cad2",()=>{
         DATA=loadData();
         ok.remove();
         buildLista();
-        // Auto-preenche a busca pelo nome
-        buscaTutor.value=morI.value.trim().split(" ")[0];
-        morI.value="";telI.value="";endRuaI.value="";endNumI.value="";endBairI.value="";
+        buscaTutor.value=nomeSalvo.split(" ")[0];
+        morI.value="";telI.value="";endRuaI.value="";endNumI.value="";endBairSel.value="";
         filtrarPets();buildLista();
       });
     },400);
   }},"💾 Salvar Tutor → Cadastrar Pets");
-  [cadPainelTitle,morI,lbl("Telefone"),telI,cadEndTitle,endRuaI,endNumI,endBairI,svTutorBtn].forEach(el=>cadPainel.appendChild(el));
+  [cadPainelTitle,morI,lbl("Telefone"),telI,cadEndTitle,endRuaI,endNumI,lbl("Bairro"),endBairSel,svTutorBtn].forEach(el=>cadPainel.appendChild(el));
 
   let cadAberto=false;
   cadBtnTopo.addEventListener("click",()=>{
     cadAberto=!cadAberto;
     cadPainel.style.display=cadAberto?"block":"none";
+    cadBtnTopo.querySelector("span:last-child").textContent=cadAberto?"✕":"＋";
     if(cadAberto)setTimeout(()=>morI.focus(),80);
   });
   cadAreaWrap.appendChild(cadBtnTopo);
