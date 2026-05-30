@@ -4,6 +4,104 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <title>Planet Dogs</title>
+<script type="module">
+// ── FIREBASE SYNC ─────────────────────────────────────────────────────────────
+import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import{getFirestore,doc,setDoc,getDoc,onSnapshot}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+// 🔧 CONFIGURAÇÃO FIREBASE — substitua pelos seus valores do console.firebase.google.com
+const FB_CFG={
+  apiKey:"AIzaSyBEYXgM1_MNLLZrQvKjlIE1jYjlCyYwBTU",
+  authDomain:"agenda-f1655.firebaseapp.com",
+  projectId:"agenda-f1655",
+  storageBucket:"agenda-f1655.firebasestorage.app",
+  messagingSenderId:"642535901107",
+  appId:"1:642535901107:web:91b28095471fe13e972dc6",
+  measurementId:"G-YV0P5DC48Y"
+};
+const FB_DOC_ID="principal"; // nome do documento no Firestore
+
+let _db=null;
+let _unsubscribe=null;
+let _lastSaveTs=0;
+let _syncPaused=false;
+
+window._fbReady=false;
+window._fbSyncStatus=null; // callback para UI
+
+async function fbInit(){
+  try{
+    const app=initializeApp(FB_CFG);
+    _db=getFirestore(app);
+    window._fbReady=true;
+    console.log("🔥 Firebase conectado");
+    _notifyStatus("online");
+    // escuta mudanças em tempo real
+    const ref=doc(_db,"planetdogs",FB_DOC_ID);
+    _unsubscribe=onSnapshot(ref,snap=>{
+      if(_syncPaused)return;
+      if(!snap.exists())return;
+      const remoto=snap.data();
+      if(!remoto||!remoto._ts)return;
+      const localTs=parseInt(localStorage.getItem("pd_sync_ts")||"0");
+      if(remoto._ts>localTs+2000){
+        // dado remoto é mais novo — atualiza local silenciosamente
+        const d=JSON.parse(remoto.json||"{}");
+        localStorage.setItem("pd_v8",JSON.stringify(d));
+        localStorage.setItem("pd_sync_ts",String(remoto._ts));
+        if(window._fbOnRemoteUpdate)window._fbOnRemoteUpdate(d);
+        _notifyStatus("synced");
+        console.log("🔄 Dados atualizados do servidor");
+      }
+    },err=>{ console.warn("Firestore listen err",err);_notifyStatus("offline"); });
+  }catch(e){
+    console.warn("Firebase init err",e);
+    _notifyStatus("offline");
+  }
+}
+
+window.fbSave=async function(dataObj){
+  if(!_db||!window._fbReady)return;
+  const ts=Date.now();
+  _lastSaveTs=ts;
+  _syncPaused=true;
+  try{
+    const ref=doc(_db,"planetdogs",FB_DOC_ID);
+    await setDoc(ref,{json:JSON.stringify(dataObj),_ts:ts});
+    localStorage.setItem("pd_sync_ts",String(ts));
+    _notifyStatus("synced");
+  }catch(e){
+    console.warn("fbSave err",e);
+    _notifyStatus("offline");
+  }finally{
+    setTimeout(()=>{_syncPaused=false;},3000);
+  }
+};
+
+window.fbPull=async function(){
+  if(!_db||!window._fbReady)return null;
+  try{
+    const ref=doc(_db,"planetdogs",FB_DOC_ID);
+    const snap=await getDoc(ref);
+    if(snap.exists()&&snap.data().json){
+      return JSON.parse(snap.data().json);
+    }
+  }catch(e){console.warn("fbPull err",e);}
+  return null;
+};
+
+function _notifyStatus(s){
+  const el=document.getElementById("fb-status");
+  if(!el)return;
+  if(s==="online"||s==="synced"){
+    el.textContent="☁️";el.title="Sincronizado com a nuvem";el.style.color="#2DC653";
+  }else{
+    el.textContent="📵";el.title="Sem conexão — salvo apenas localmente";el.style.color="#e53e3e";
+  }
+}
+
+fbInit();
+</script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;600;700;800&display=swap');
 *{box-sizing:border-box;margin:0;padding:0;}
@@ -90,8 +188,23 @@ function loadData(){
     return p;}}catch(e){}
   return emptyData();
 }
-function saveData(d){try{localStorage.setItem(KEY,JSON.stringify(d));}catch(e){}}
+function saveData(d){
+  try{localStorage.setItem(KEY,JSON.stringify(d));}catch(e){}
+  // sincroniza com Firebase (debounce 1.5s para não sobrecarregar)
+  clearTimeout(window._fbSaveTimer);
+  window._fbSaveTimer=setTimeout(()=>{
+    if(window.fbSave)window.fbSave(d);
+  },1500);
+}
 let DATA=loadData();
+
+// Ao receber atualização remota, atualiza DATA e re-renderiza
+window._fbOnRemoteUpdate=function(d){
+  // merge seguro: só atualiza se a página não está em edição ativa
+  DATA=d;
+  if(window.render)render();
+};
+
 function updSilent(fn){DATA=fn(JSON.parse(JSON.stringify(DATA)));saveData(DATA);}
 function upd(fn){DATA=fn(JSON.parse(JSON.stringify(DATA)));saveData(DATA);render();}
 
@@ -157,6 +270,15 @@ function renderTopbar(){
   [{k:"cad1",l:"Cad.1",i:"📁"},{k:"cad2",l:"Cad.2",i:"📂"},{k:"agenda",l:"Agenda",i:"📅"},{k:"saidas",l:"Saidas",i:"💸"},{k:"vendas",l:"Vendas",i:"🛍"},{k:"home",l:"Home",i:"🏠"}].forEach(b=>{
     tb.appendChild(h("button",{className:"topbtn",onClick:()=>go(b.k)},[h("span",{},b.i),b.l]));
   });
+  const si=h("span",{id:"fb-status",title:"Sincronização nuvem",style:{fontSize:14,cursor:"pointer",marginLeft:"auto",padding:"4px 6px",flexShrink:0},onClick:async()=>{
+    if(!window.fbPull){alert("Firebase não configurado ainda.");return;}
+    const r=await window.fbPull();
+    if(!r){alert("Sem dados na nuvem ainda.");return;}
+    if(confirm("Forçar download da nuvem agora?\nIsso vai substituir os dados locais.")){
+      localStorage.setItem("pd_v8",JSON.stringify(r));DATA=r;render();alert("✅ Dados restaurados da nuvem!");
+    }
+  }},"☁️");
+  tb.appendChild(si);
 }
 function renderTopbarGerente(){
   const tb=document.getElementById("topbar");tb.innerHTML="";
@@ -1853,6 +1975,27 @@ function renderNotas(){
 function renderExportar(){
   const w=div({className:"screen"});w.appendChild(mkHdr("Exportar Dados",()=>go("home")));
   const body=div({style:{padding:"20px 18px 40px"}});
+  // Botão de sync nuvem
+  const cloudCard=div({className:"card",style:{padding:"16px 18px",marginBottom:16,background:"linear-gradient(135deg,#e8f4fd,#dbeafe)",border:"1.5px solid #3B82F6"}});
+  cloudCard.innerHTML='<div style="font-weight:800;color:#1d4ed8;font-size:15px;margin-bottom:6px">☁️ Sincronização em Nuvem</div><div style="font-size:13px;color:#1A1A2E;line-height:1.8">Os dados são salvos automaticamente na nuvem a cada alteração.<br><span id="sync-ts-info" style="color:#6B7280;font-size:12px">Verificando...</span></div>';
+  const ts=parseInt(localStorage.getItem("pd_sync_ts")||"0");
+  setTimeout(()=>{const el=document.getElementById("sync-ts-info");if(el)el.textContent=ts?("Último sync: "+new Date(ts).toLocaleString("pt-BR")):"Ainda não sincronizado";},100);
+  const forceUpB=btn({style:{width:"100%",padding:"14px",background:"linear-gradient(135deg,#3B82F6,#60a5fa)",color:"#fff",fontSize:14,borderRadius:14,marginBottom:8,display:"flex",alignItems:"center",justifyContent:"center",gap:8},onClick:async()=>{
+    if(!window.fbSave){alert("Firebase não configurado. Siga as instruções no README.");return;}
+    forceUpB.textContent="Enviando...";
+    await window.fbSave(DATA);
+    alert("✅ Dados enviados para a nuvem com sucesso!");
+    forceUpB.innerHTML="☁️ ⬆ Enviar para a Nuvem Agora";
+  }},["☁️ ⬆ Enviar para a Nuvem Agora"]);
+  const forceDnB=btn({style:{width:"100%",padding:"14px",background:"linear-gradient(135deg,#7C3AED,#a78bfa)",color:"#fff",fontSize:14,borderRadius:14,marginBottom:16,display:"flex",alignItems:"center",justifyContent:"center",gap:8},onClick:async()=>{
+    if(!window.fbPull){alert("Firebase não configurado.");return;}
+    const r=await window.fbPull();
+    if(!r){alert("Sem dados na nuvem ainda. Envie primeiro de um dispositivo.");return;}
+    if(confirm("Baixar dados da nuvem e substituir os locais?")){
+      localStorage.setItem("pd_v8",JSON.stringify(r));DATA=r;render();alert("✅ Dados restaurados da nuvem!");
+    }
+  }},["☁️ ⬇ Baixar da Nuvem Agora"]);
+  [cloudCard,forceUpB,forceDnB].forEach(el=>body.appendChild(el));
   const txt=JSON.stringify(DATA);
   const info=div({className:"card",style:{padding:"14px 18px",marginBottom:16,background:"#e8fbed",border:"1.5px solid #2DC653"}});
   info.innerHTML=`<div style="font-weight:800;color:#2DC653;font-size:15px;margin-bottom:6px">Backup</div><div style="font-size:13px;color:#1A1A2E;line-height:1.9">Cad.1: <b>${Object.keys(DATA.casas||{}).length}</b> | Cad.2: <b>${Object.keys(DATA.casas2||{}).length}</b><br>Agenda: <b>${(DATA.agenda||[]).length}</b> items<br>Tamanho: <b>${(txt.length/1024).toFixed(1)} KB</b></div>`;
