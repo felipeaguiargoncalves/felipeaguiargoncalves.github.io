@@ -1117,9 +1117,20 @@ function abrirPagamentoModal(grupo,onDone,gwaRota){
     });
     const jaExiste=(cbCasa.atendimentos||[]).some(at=>at.data===rep.data&&grupo.some(ev=>(at.caes||[]).find(c=>c.nome===ev.pet)));
     let novosAts;
-    if(jaExiste)novosAts=(cbCasa.atendimentos||[]).map(at=>{const isEste=at.data===rep.data&&grupo.some(ev=>(at.caes||[]).find(c=>c.nome===ev.pet));return isEste?{...at,pago}:at;});
-    else{const novoAt={id:Date.now(),data:rep.data,caes,pago};novosAts=[...(cbCasa.atendimentos||[]),novoAt].sort((a,b)=>a.data.localeCompare(b.data));}
-    const novaCb={...cbCasa,atendimentos:novosAts};
+    if(jaExiste){
+      novosAts=(cbCasa.atendimentos||[]).map(at=>{
+        const isEste=at.data===rep.data&&grupo.some(ev=>(at.caes||[]).find(c=>c.nome===ev.pet));
+        if(!isEste)return at;
+        // Mescla caes existentes + novos pets do grupo que nao estavam
+        const caesExist=at.caes||[];
+        const nomesExist=new Set(caesExist.map(c=>c.nome));
+        const caesNovos=caes.filter(c=>!nomesExist.has(c.nome));
+        return{...at,caes:[...caesExist,...caesNovos],pago};
+      });
+    } else{const novoAt={id:Date.now(),data:rep.data,caes,pago};novosAts=[...(cbCasa.atendimentos||[]),novoAt].sort((a,b)=>a.data.localeCompare(b.data));}
+    // Se todos atendimentos do mes estao pagos, marca cob.pago=true tambem
+    const todosPagesTodos=pago&&novosAts.every(at=>at.pago);
+    const novaCb={...cbCasa,atendimentos:novosAts,...(pago?{pago:todosPagesTodos}:{})};
     if(isCad1)updSilent(d=>({...d,cobrancas:{...d.cobrancas,[mesNome]:{...(d.cobrancas[mesNome]||{}),[rep.casa]:novaCb}}}));
     else updSilent(d=>({...d,cobrancas2:{...d.cobrancas2||{},[mesNome]:{...(d.cobrancas2||{})[mesNome]||{},[rep.casa]:novaCb}}}));
     const ids=new Set(grupo.map(e=>e.id));
