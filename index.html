@@ -612,20 +612,82 @@ function renderGrade(titulo,pref,mes){
     });
     body.appendChild(sm);
   }
-  if(nums.length===0){body.innerHTML='<div style="text-align:center;padding:60px 0;color:#8B8FA8"><div style="font-size:48px">🏠</div><p style="font-weight:700;margin-top:10px">Nenhuma casa cadastrada</p></div>';w.appendChild(body);return w;}
-  const grid=div({style:{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:11}});
-  nums.forEach(num=>{
-    const cb=cbMes[num]||{};const ats=cb.atendimentos||[];const sub=totAts(ats);
-    let bColor="#FFE4EF",sBg="#fff0f0",sColor="#e53e3e",sTxt="Pendente";
-    if(cb.pago){bColor="#2DC653";sBg="#e8fbed";sColor="#2DC653";sTxt="Pago";}
-    else if(cb.notaEnviada){bColor="#FFD93D";sBg="#FFFBEE";sColor="#E8A000";sTxt="Enviado";}
-    const c=div({className:"btn card",style:{padding:"13px 8px",display:"flex",flexDirection:"column",alignItems:"center",gap:5,borderTop:"4px solid "+bColor,cursor:"pointer"},onClick:()=>go(pref+"_det",{mes,num})});
-    const vetusNum=num>=10001?num-10000:num;
-    const labelTopo=pref==="cad2"?`<div style="font-family:'Fredoka One',sans-serif;font-size:13px;color:${cb.pago?"#2DC653":"#FF6B9D"}">ID Vetus ${vetusNum}</div>`:`<div style="font-family:'Fredoka One',sans-serif;font-size:18px;color:${cb.pago?"#2DC653":"#FF6B9D"}">🏠${num}</div>`;
-    c.innerHTML=`${labelTopo}<div style="font-weight:700;color:#1A1A2E;font-size:11px;text-align:center">${casas[num]?.morador?casas[num].morador.split(" ")[0]:""}</div>${ats.length>0?`<div style="font-weight:800;color:${cb.pago?"#2DC653":"#FF6B9D"};font-size:12px">R$ ${sub.toFixed(2)}</div><div style="font-size:10px;color:#8B8FA8">${ats.length} banho${ats.length>1?"s":""}</div>`:'<div style="font-size:10px;color:#8B8FA8">Sem banhos</div>'}<div style="font-size:10px;font-weight:700;color:${sColor};background:${sBg};padding:2px 6px;border-radius:8px;width:100%;text-align:center">${sTxt}</div>`;
-    grid.appendChild(c);
-  });
-  body.appendChild(grid);w.appendChild(body);return w;
+
+  // ── BUSCA + FILTROS DE TAG ────────────────────────────────────────────────
+  let busca="";let filtroTag="todos";
+  const buscaWrap=div({style:{marginBottom:10,position:"relative"}});
+  const buscaIcon=h("span",{style:{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",fontSize:16,pointerEvents:"none"}},"🔍");
+  const buscaInp=inp({className:"fi",placeholder:"Buscar tutor ou ID Vetus...",style:{paddingLeft:36,paddingRight:36}});
+  const buscaClear=btn({style:{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",color:"#8B8FA8",fontSize:16,padding:"2px 6px",borderRadius:8,display:"none"},onClick:()=>{buscaInp.value="";busca="";buscaClear.style.display="none";buildGrid();}},"\u00d7");
+  buscaInp.addEventListener("input",()=>{busca=buscaInp.value.toLowerCase().trim();buscaClear.style.display=busca?"block":"none";buildGrid();});
+  buscaWrap.appendChild(buscaIcon);buscaWrap.appendChild(buscaInp);buscaWrap.appendChild(buscaClear);
+  body.appendChild(buscaWrap);
+
+  const tagsWrap=div({style:{display:"flex",gap:7,marginBottom:14,overflowX:"auto",paddingBottom:4}});
+  const TAGS=[
+    {k:"todos",l:"Todos",e:"📋",bg:"#FF6B9D",bi:"#FF6B9D"},
+    {k:"pago",l:"Pago",e:"✅",bg:"#2DC653",bi:"#2DC653"},
+    {k:"pendente",l:"Pendente",e:"🔴",bg:"#e53e3e",bi:"#e53e3e"},
+    {k:"enviado",l:"Enviado",e:"📨",bg:"#E8A000",bi:"#FFD93D"},
+    {k:"sembanho",l:"Sem Banho",e:"🛁",bg:"#8B8FA8",bi:"#8B8FA8"},
+  ];
+  function buildTagBtns(){
+    tagsWrap.innerHTML="";
+    TAGS.forEach(t=>{
+      const isA=filtroTag===t.k;
+      const tb=btn({style:{flexShrink:0,padding:"7px 13px",fontSize:12,fontWeight:800,background:isA?t.bg:"#fff",color:isA?"#fff":"#1A1A2E",border:"1.5px solid "+(isA?t.bg:"#FFE4EF"),borderRadius:20,whiteSpace:"nowrap",transition:"all .15s"},onClick:()=>{filtroTag=t.k;buildTagBtns();buildGrid();}},t.e+" "+t.l);
+      tagsWrap.appendChild(tb);
+    });
+  }
+  buildTagBtns();
+  body.appendChild(tagsWrap);
+
+  if(nums.length===0){const emp=div({style:{textAlign:"center",padding:"60px 0",color:"#8B8FA8"}});emp.innerHTML='<div style="font-size:48px">🏠</div><p style="font-weight:700;margin-top:10px">Nenhuma casa cadastrada</p>';body.appendChild(emp);w.appendChild(body);return w;}
+
+  const gridWrap=div();
+  body.appendChild(gridWrap);
+
+  function buildGrid(){
+    gridWrap.innerHTML="";
+    const grid=div({style:{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:11}});
+    let count=0;
+    nums.forEach(num=>{
+      const cb=cbMes[num]||{};const ats=cb.atendimentos||[];const sub=totAts(ats);
+      const casa=casas[num]||{};
+      const vetusNum=num>=10001?num-10000:num;
+      const nomeTutor=(casa.morador||"").toLowerCase();
+      const idStr=String(vetusNum);
+
+      // filtro tag
+      let tagAtual="pendente";
+      if(cb.pago)tagAtual="pago";
+      else if(cb.notaEnviada)tagAtual="enviado";
+      else if(ats.length===0)tagAtual="sembanho";
+      if(filtroTag!=="todos"&&filtroTag!==tagAtual)return;
+
+      // filtro busca
+      if(busca&&!nomeTutor.includes(busca)&&!idStr.includes(busca))return;
+
+      let bColor="#FFE4EF",sBg="#fff0f0",sColor="#e53e3e",sTxt="Pendente";
+      if(cb.pago){bColor="#2DC653";sBg="#e8fbed";sColor="#2DC653";sTxt="Pago";}
+      else if(cb.notaEnviada){bColor="#FFD93D";sBg="#FFFBEE";sColor="#E8A000";sTxt="Enviado";}
+      else if(ats.length===0){bColor="#8B8FA8";sBg="#f5f5f7";sColor="#8B8FA8";sTxt="Sem Banho";}
+
+      const c=div({className:"btn card",style:{padding:"13px 8px",display:"flex",flexDirection:"column",alignItems:"center",gap:5,borderTop:"4px solid "+bColor,cursor:"pointer"},onClick:()=>go(pref+"_det",{mes,num})});
+      const labelTopo=pref==="cad2"?`<div style="font-family:'Fredoka One',sans-serif;font-size:13px;color:${cb.pago?"#2DC653":"#FF6B9D"}">ID Vetus ${vetusNum}</div>`:`<div style="font-family:'Fredoka One',sans-serif;font-size:18px;color:${cb.pago?"#2DC653":"#FF6B9D"}">🏠${num}</div>`;
+      c.innerHTML=`${labelTopo}<div style="font-weight:700;color:#1A1A2E;font-size:11px;text-align:center">${casa.morador?casa.morador.split(" ")[0]:""}</div>${ats.length>0?`<div style="font-weight:800;color:${cb.pago?"#2DC653":"#FF6B9D"};font-size:12px">R$ ${sub.toFixed(2)}</div><div style="font-size:10px;color:#8B8FA8">${ats.length} banho${ats.length>1?"s":""}</div>`:'<div style="font-size:10px;color:#8B8FA8">Sem banhos</div>'}<div style="font-size:10px;font-weight:700;color:${sColor};background:${sBg};padding:2px 6px;border-radius:8px;width:100%;text-align:center">${sTxt}</div>`;
+      grid.appendChild(c);count++;
+    });
+    if(count===0){
+      const emp=div({style:{textAlign:"center",padding:"40px 0",color:"#8B8FA8",gridColumn:"1/-1"}});
+      emp.innerHTML='<div style="font-size:40px">🔍</div><p style="font-weight:700;margin-top:8px;font-size:13px">Nenhum resultado</p>';
+      gridWrap.appendChild(emp);
+    } else {
+      gridWrap.appendChild(grid);
+    }
+  }
+  buildGrid();
+  w.appendChild(body);return w;
 }
 
 // ── DETALHE CASA ──────────────────────────────────────────────────────────────
