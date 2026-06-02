@@ -1235,9 +1235,14 @@ function abrirPagamentoModal(grupo,onDone,gwaRota){
 
   // ── Seletor de próximo retorno ────────────────────────────────────────────
   const repSel=div({style:{marginBottom:14}});
-  repSel.appendChild(h("p",{style:{fontWeight:800,color:"#1A1A2E",fontSize:12,marginBottom:8,textTransform:"uppercase",letterSpacing:.7}},"🔁 Próximo retorno"));
-  const repOpts=[{l:"7 dias",d:7},{l:"10 dias",d:10},{l:"15 dias",d:15},{l:"30 dias",d:30},{l:"Sem repetir",d:0}];
-  let repSelecionado=0; // padrão sempre "Sem repetir"
+  repSel.appendChild(h("p",{style:{fontWeight:800,color:"#1A1A2E",fontSize:12,marginBottom:4,textTransform:"uppercase",letterSpacing:.7}},"🔁 Próximo retorno"));
+  if(intervaloDias>0){
+    const hint=div({style:{fontSize:11,color:"#3B82F6",fontWeight:700,marginBottom:8,background:"#EFF6FF",borderRadius:8,padding:"4px 10px",display:"inline-block"}});
+    hint.textContent="💡 Este pet foi agendado com "+intervaloDias+" dias";
+    repSel.appendChild(hint);
+  }
+  const repOpts=[{l:"7 dias",d:7},{l:"10 dias",d:10},{l:"14 dias",d:14},{l:"30 dias",d:30},{l:"Sem repetir",d:0}];
+  let repSelecionado=rep.repetirDias||0; // pré-seleciona o intervalo anterior se existir
   const repGrid=div({style:{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}});
   function buildRepGrid(){
     repGrid.innerHTML="";
@@ -1297,7 +1302,7 @@ function abrirEditDataModal(grupo,onDone){
 function abrirAgModal(dataInicial,onDone,getAllPets,gerente){
   gerente=gerente||IS_GERENTE;
   const pets=getAllPets();
-  let selIdxs=[];let funcIdx=0;let servicoSel="Banho";let repetir=null;
+  let selIdxs=[];let funcIdx=0;let servicoSel="Banho";
   let petsFiltrados=pets;
   const cont=div();
   const dI=inp({className:"fi",type:"date",value:dataInicial,style:{marginBottom:12}});
@@ -1483,7 +1488,7 @@ function abrirAgModal(dataInicial,onDone,getAllPets,gerente){
    buscaDupla,
    h("span",{style:{fontWeight:700,color:"#2DC653",fontSize:10,textTransform:"uppercase",letterSpacing:.8,display:"block",marginBottom:4}},"Buscar por rua / endereco"),buscaEnd,
    selRow,selInfo,listaDiv,
-   lbl("Servico"),svSel2,lbl("Funcionario"),fSel2,lbl("Hora"),hI,lbl("Repetir"),repGrid
+   lbl("Servico"),svSel2,lbl("Funcionario"),fSel2,lbl("Hora"),hI
   ].forEach(el=>cont.appendChild(el));
   buildLista();
   let mv=null;
@@ -1492,9 +1497,8 @@ function abrirAgModal(dataInicial,onDone,getAllPets,gerente){
     if(selecionados.length===0){alert("Selecione pelo menos um pet!");return;}
     let novas=[...DATA.agenda];
     selecionados.forEach((p,pi)=>{
-      const base={data:dI.value,pet:p.pet,casa:p.casa,morador:p.morador,servico:servicoSel,func:FUNCS[funcIdx].n,hora:hI.value,endereco:p.endereco,telefone:p.telefone,buscado:false};
+      const base={data:dI.value,pet:p.pet,casa:p.casa,morador:p.morador,servico:servicoSel,func:FUNCS[funcIdx].n,hora:hI.value,endereco:p.endereco,telefone:p.telefone,buscado:false,repetirDias:0};
       novas.push({...base,id:Date.now()+pi*100});
-      if(repetir){let d=dI.value;const maxRep=Math.ceil(1095/repetir);const t=Date.now();for(let i=1;i<=maxRep;i++){d=addD(d,repetir);novas.push({...base,id:t+pi*10000+i,data:d});}}
     });
     novas.sort((a,b)=>a.data.localeCompare(b.data));
     updSilent(d=>({...d,agenda:novas}));DATA=loadData();
