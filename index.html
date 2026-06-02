@@ -681,9 +681,54 @@ function renderDet(pref,mes,numero){
     sc.appendChild(nB);
     if(tel){
       const waR=div({style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}});
-      const monta=()=>{let msg=`🐾 PLANET DOGS\n📅 ${mes}\nOla ${casa.morador||""}\n\n`;ats.forEach(at=>{const sub=totAts([at]);msg+=`📅 ${fmtD(at.data)} - R$ ${sub.toFixed(2)}\n`;at.caes.forEach(c=>{msg+=`  🐶 ${c.nome||"Pet"}${c.raca?" ("+c.raca+")":""}\n     ${(c.servicos||[]).map(sv=>sv.nome+" R$"+parseFloat(sv.valor||0).toFixed(2)).join(" | ")}\n`;});});msg+=`\n💰 TOTAL: R$ ${total.toFixed(2)}`;return encodeURIComponent(msg);};
-      waR.appendChild(btn({style:{padding:"11px",background:"#25D366",color:"#fff",borderRadius:12,fontSize:12,fontWeight:800},onClick:()=>window.open("https://api.whatsapp.com/send?phone=55"+tel+"&text="+monta(),"_blank")},"WA Completo"));
-      waR.appendChild(btn({style:{padding:"11px",background:"#128C7E",color:"#fff",borderRadius:12,fontSize:12,fontWeight:800},onClick:()=>window.open("https://api.whatsapp.com/send?phone=55"+tel+"&text="+monta(),"_blank")},"WA Nota"));
+
+      // Vendas não pagas deste tutor (sem campo pago = não pago)
+      const vendasTutor=(DATA.vendas||[]).filter(v=>Number(v.casaNum)===Number(numero)&&!v.pago);
+      const totalVendas=vendasTutor.reduce((s,v)=>s+(parseFloat(v.preco)||0)*(parseInt(v.qtd)||1),0);
+
+      // WA Completo — atendimentos NÃO pagos + vendas não pagas
+      const montaCompleto=()=>{
+        const atsPendentes=ats.filter(at=>!at.pago);
+        const totalPendente=atsPendentes.reduce((s,at)=>s+totAts([at]),0);
+        const totalGeral=totalPendente+totalVendas;
+        if(totalGeral===0)return encodeURIComponent(`🐾 PLANET DOGS\n📅 ${mes}\nOlá ${casa.morador||""}\n\n✅ Tudo em dia! Nenhum pendente.\n\n💚 Obrigado pela confiança!`);
+        let msg=`🐾 PLANET DOGS\n📅 ${mes}\nOlá ${casa.morador||""}\n\n`;
+        if(atsPendentes.length>0){
+          msg+=`✂️ BANHOS PENDENTES\n`;
+          atsPendentes.forEach(at=>{
+            const sub=totAts([at]);
+            msg+=`📅 ${fmtD(at.data)} - R$ ${sub.toFixed(2)}\n`;
+            at.caes.forEach(c=>{
+              msg+=`  🐶 ${c.nome||"Pet"}${c.raca?" ("+c.raca+")":""}\n     ${(c.servicos||[]).map(sv=>sv.nome+" R$"+parseFloat(sv.valor||0).toFixed(2)).join(" | ")}\n`;
+            });
+          });
+        }
+        if(vendasTutor.length>0){
+          msg+=`\n🛍 PRODUTOS PENDENTES\n`;
+          vendasTutor.forEach(v=>{
+            const sub=(parseFloat(v.preco)||0)*(parseInt(v.qtd)||1);
+            msg+=`  📦 ${v.nome}${parseInt(v.qtd)>1?" x"+v.qtd:""} - R$ ${sub.toFixed(2)}\n`;
+          });
+        }
+        msg+=`\n💰 TOTAL PENDENTE: R$ ${totalGeral.toFixed(2)}`;
+        return encodeURIComponent(msg);
+      };
+
+      // WA Resumo — só o total (banhos + vendas)
+      const montaResumo=()=>{
+        const atsPendentes=ats.filter(at=>!at.pago);
+        const totalPendente=atsPendentes.reduce((s,at)=>s+totAts([at]),0);
+        const totalGeral=totalPendente+totalVendas;
+        if(totalGeral===0)return encodeURIComponent(`🐾 PLANET DOGS\n📅 ${mes}\nOlá ${casa.morador||""}!\n\n✅ Está tudo em dia, obrigado! 💚`);
+        let msg=`🐾 PLANET DOGS\n📅 ${mes}\nOlá ${casa.morador||""}!\n\n`;
+        if(totalPendente>0)msg+=`✂️ Banhos: *R$ ${totalPendente.toFixed(2)}*\n`;
+        if(totalVendas>0)msg+=`🛍 Produtos: *R$ ${totalVendas.toFixed(2)}*\n`;
+        msg+=`\n💰 Total pendente: *R$ ${totalGeral.toFixed(2)}*\n\nObrigado! 🐾`;
+        return encodeURIComponent(msg);
+      };
+
+      waR.appendChild(btn({style:{padding:"11px",background:"#25D366",color:"#fff",borderRadius:12,fontSize:12,fontWeight:800},onClick:()=>window.open("https://api.whatsapp.com/send?phone=55"+tel+"&text="+montaCompleto(),"_blank")},"WA Completo"));
+      waR.appendChild(btn({style:{padding:"11px",background:"#128C7E",color:"#fff",borderRadius:12,fontSize:12,fontWeight:800},onClick:()=>window.open("https://api.whatsapp.com/send?phone=55"+tel+"&text="+montaResumo(),"_blank")},"WA Resumo"));
       sc.appendChild(waR);
     }
     body.appendChild(sc);
@@ -1756,18 +1801,38 @@ function renderVendas(){
   w.appendChild(mkHdr("Vendas",()=>go("home"),btn({style:{background:"rgba(255,255,255,.35)",color:"#1A1A2E",padding:"9px 13px",fontSize:13,borderRadius:12},onClick:()=>abrirVendaModal(null,build)},"+Nova")));
   const body=div({style:{padding:"16px 18px 40px"}});w.appendChild(body);
   function build(){
-    body.innerHTML="";const lista=DATA.vendas||[];const tot=lista.reduce((s,v)=>s+(parseFloat(v.preco)||0)*(parseInt(v.qtd)||1),0);
+    body.innerHTML="";const lista=DATA.vendas||[];
+    const tot=lista.reduce((s,v)=>s+(parseFloat(v.preco)||0)*(parseInt(v.qtd)||1),0);
+    const totPago=lista.filter(v=>v.pago).reduce((s,v)=>s+(parseFloat(v.preco)||0)*(parseInt(v.qtd)||1),0);
+    const totPend=tot-totPago;
     const sm=div({className:"card",style:{padding:"14px 18px",marginBottom:14,background:"#FFF5F9"}});
-    sm.innerHTML=`<div style="font-weight:700;color:#8B8FA8;font-size:11px;text-transform:uppercase">Total Vendas</div><div style="font-family:'Fredoka One',sans-serif;font-size:26px;color:#FF6B9D">R$ ${tot.toFixed(2)}</div>`;
+    sm.innerHTML=`
+      <div style="font-weight:700;color:#8B8FA8;font-size:11px;text-transform:uppercase;margin-bottom:6px">Resumo de Vendas</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+        <div><div style="font-size:10px;font-weight:700;color:#8B8FA8">TOTAL</div><div style="font-family:'Fredoka One',sans-serif;font-size:18px;color:#FF6B9D">R$ ${tot.toFixed(2)}</div></div>
+        <div><div style="font-size:10px;font-weight:700;color:#2DC653">PAGO</div><div style="font-family:'Fredoka One',sans-serif;font-size:18px;color:#2DC653">R$ ${totPago.toFixed(2)}</div></div>
+        <div><div style="font-size:10px;font-weight:700;color:#e53e3e">PENDENTE</div><div style="font-family:'Fredoka One',sans-serif;font-size:18px;color:#e53e3e">R$ ${totPend.toFixed(2)}</div></div>
+      </div>`;
     body.appendChild(sm);
     if(lista.length===0){body.innerHTML+='<div style="text-align:center;padding:40px 0;color:#8B8FA8"><div style="font-size:48px">🛍</div><p style="font-weight:700;margin-top:12px">Nenhuma venda</p></div>';return;}
     [...lista].reverse().forEach((v,i)=>{
       const sub=(parseFloat(v.preco)||0)*(parseInt(v.qtd)||1);
-      const c=div({className:"card anim",style:{marginBottom:10,animationDelay:i*18+"ms",borderLeft:"4px solid #FF6B9D"}});
+      const pago=!!v.pago;
+      const c=div({className:"card anim",style:{marginBottom:10,animationDelay:i*18+"ms",borderLeft:"4px solid "+(pago?"#2DC653":"#FF6B9D")}});
       const top=div({style:{padding:"12px 14px",display:"flex",gap:10,alignItems:"center"}});
-      const inf=div({style:{flex:1}});inf.innerHTML=`<div style="font-weight:800;color:#1A1A2E;font-size:14px">${v.nome}</div><div style="font-size:12px;color:#8B8FA8">Casa ${v.casaNum||""} ${v.morador||""} - ${fmtD(v.data)}</div>`;
-      const r=div({style:{textAlign:"right"}});r.innerHTML=`<div style="font-weight:800;color:#FF6B9D;font-size:15px">R$ ${sub.toFixed(2)}</div>`;
-      const a=div({style:{display:"flex",gap:5,marginTop:6}});
+      const inf=div({style:{flex:1}});
+      inf.innerHTML=`<div style="font-weight:800;color:#1A1A2E;font-size:14px;text-decoration:${pago?"line-through":"none"}">${v.nome}</div><div style="font-size:12px;color:#8B8FA8">Casa ${v.casaNum||""} ${v.morador||""} - ${fmtD(v.data)}</div>`;
+      const r=div({style:{textAlign:"right"}});
+      r.innerHTML=`<div style="font-weight:800;color:${pago?"#2DC653":"#FF6B9D"};font-size:15px">R$ ${sub.toFixed(2)}</div>`;
+      // Toggle pago
+      const togRow=div({style:{display:"flex",alignItems:"center",gap:6,marginTop:6,justifyContent:"flex-end"}});
+      togRow.appendChild(h("span",{style:{fontSize:11,fontWeight:800,color:pago?"#2DC653":"#8B8FA8"}},pago?"Pago":"Pendente"));
+      togRow.appendChild(tog(pago,val=>{
+        updSilent(d=>({...d,vendas:(d.vendas||[]).map(x=>x.id===v.id?{...x,pago:val}:x)}));
+        DATA=loadData();build();
+      }));
+      r.appendChild(togRow);
+      const a=div({style:{display:"flex",gap:5,marginTop:6,justifyContent:"flex-end"}});
       a.appendChild(btn({style:{background:"#FFF5F9",color:"#FF6B9D",padding:"6px 9px",borderRadius:10,fontSize:11},onClick:()=>abrirVendaModal(v,build)},"Edit"));
       a.appendChild(btn({style:{background:"#fff0f0",color:"#e53e3e",padding:"6px 9px",borderRadius:10,fontSize:11},onClick:()=>{updSilent(d=>({...d,vendas:(d.vendas||[]).filter(x=>x.id!==v.id)}));DATA=loadData();build();}},"Del"));
       r.appendChild(a);top.appendChild(inf);top.appendChild(r);c.appendChild(top);body.appendChild(c);
