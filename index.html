@@ -104,59 +104,7 @@ function saveData(d){try{localStorage.setItem(KEY,JSON.stringify(d));}catch(e){
 }}
 let DATA=loadData();
 
-// ── AUTO-LIMPEZA DUPLICADOS COM "1" NA FRENTE ────────────────────────────────
-(function(){
-  const FLAG="pd_dedup1_v2";
-  if(localStorage.getItem(FLAG))return;
-  try{
-    const allIds=new Set([...Object.keys(DATA.casas||{}),...Object.keys(DATA.casas2||{})].map(Number));
-    const pares=[];
-    allIds.forEach(id=>{
-      const s=String(id);
-      if(s.startsWith("1")&&s.length>4){
-        const semUm=Number(s.slice(1));
-        if(semUm>0&&allIds.has(semUm)&&!pares.find(p=>(p.a===id&&p.b===semUm)||(p.a===semUm&&p.b===id))){
-          pares.push({a:id,b:semUm});
-        }
-      }
-    });
-    if(!pares.length){localStorage.setItem(FLAG,"1");return;}
-
-    function score(id){
-      let s=0;
-      const allC={...DATA.casas,...DATA.casas2||{}};
-      const c=allC[id]||{};
-      if(c.telefone&&c.telefone.length>5)s+=5;
-      if(c.morador)s+=1;
-      s+=(DATA.modelos?.[id]||[]).length*2;
-      s+=(c.pets||[]).length*2;
-      MESES.forEach(m=>{
-        [DATA.cobrancas,DATA.cobrancas2||{}].forEach(src=>{
-          const cb=(src[m]||{})[id];
-          if(cb){
-            (cb.atendimentos||[]).forEach(at=>{
-              s+=(at.caes||[]).reduce((ss,c2)=>ss+(c2.servicos||[]).reduce((sss,sv)=>sss+(parseFloat(sv.valor)||0)>0?3:0,0),0);
-            });
-            s+=(cb.atendimentos||[]).length*2;
-          }
-        });
-      });
-      s+=(DATA.agenda||[]).filter(a=>a.casa===id).length;
-      return s;
-    }
-
-    pares.forEach(p=>{
-      const sA=score(p.a),sB=score(p.b);
-      const manter=sA>=sB?p.a:p.b;
-      const remover=sA>=sB?p.b:p.a;
-      executarFusao(manter,[remover]);
-    });
-
-    DATA=loadData();
-    localStorage.setItem(FLAG,"1");
-    console.log("Auto-dedup: "+pares.length+" pares fundidos");
-  }catch(e){console.warn("Auto-dedup erro:",e);localStorage.setItem(FLAG,"1");}
-})();
+// ── AUTO-IMPORT VETUS ────────────────────────────────────────────────────────
 (function(){
   const VFLAG="pd_vetus_imported_v2";
   if(localStorage.getItem(VFLAG)) return; // já importado
@@ -346,8 +294,7 @@ function renderHome(){
   const agBtn=div({className:"btn",style:{width:"100%",padding:"18px",background:"linear-gradient(135deg,#9B59B6,#FF6B9D)",color:"#fff",fontSize:15,borderRadius:16,display:"flex",alignItems:"center",gap:12,cursor:"pointer"},onClick:()=>go("agenda_gerente")});
   agBtn.innerHTML='<span style="font-size:26px">✂️</span><div style="text-align:left"><div style="font-family:\'Fredoka One\',sans-serif;font-size:17px">Agenda — Banho e Tosa</div><div style="font-size:11px;opacity:.85">Tela da gerente</div></div>';
   extra.appendChild(agBtn);
-  [   [()=>lancamentoMassaC1(),"📥","Lançar Agenda → C1","linear-gradient(135deg,#3B82F6,#60a5fa)"],
-   [()=>go("mesclar"),"🔀","Mesclar Duplicados","linear-gradient(135deg,#E8A000,#FFD93D)"],
+  [   [()=>go("mesclar"),"🔀","Mesclar Duplicados","linear-gradient(135deg,#E8A000,#FFD93D)"],
    [()=>go("exportar"),"📋","Exportar Dados","linear-gradient(135deg,#1A1A2E,#2d2d4e)"],
    [()=>go("restaurar"),"📂","Restaurar Backup","linear-gradient(135deg,#2DC653,#52e87b)"]
   ].forEach(([fn,ico,lab,bg])=>{
@@ -596,54 +543,20 @@ function renderCadCasa(titulo,pref){
   if(nums.length>0){
     const p=div({style:{marginBottom:18}});
     p.appendChild(h("p",{style:{fontWeight:700,color:"#8B8FA8",fontSize:11,textTransform:"uppercase",marginBottom:8}},`Ja cadastrados (${nums.length})`));
-    if(isCad2){
-      // Busca igual à agenda
-      const buscaWrap=div({style:{marginBottom:8}});
-      const buscaInp=inp({className:"fi",placeholder:"🔍 Buscar por nome, telefone ou ID...",style:{marginBottom:0,border:"2px solid #FF6B9D"}});
-      buscaWrap.appendChild(buscaInp);
-      p.appendChild(buscaWrap);
-      const flex=div({style:{maxHeight:220,overflowY:"auto",border:"1.5px solid #FFE4EF",borderRadius:14,padding:4}});
-      function buildBuscaList(){
-        flex.innerHTML="";
-        const q=buscaInp.value.toLowerCase().trim();
-        const qDig=q.replace(/\D/g,"");
-        const filtrados=nums.filter(n=>{
-          if(!q)return true;
-          const c2=casas[n]||{};
-          if(String(n).includes(q))return true;
-          if((c2.morador||"").toLowerCase().includes(q))return true;
-          if(qDig&&(c2.telefone||"").replace(/\D/g,"").includes(qDig))return true;
-          return false;
-        });
-        const exibir=q?filtrados:filtrados.slice(0,60);
-        if(exibir.length===0){flex.appendChild(div({style:{padding:"12px",textAlign:"center",color:"#8B8FA8",fontSize:13}},"Nenhum resultado"));return;}
-        exibir.forEach(n=>{
-          const c2=casas[n]||{};const end2=(DATA.enderecos||{})[n]||{};
-          const row=div({style:{display:"flex",alignItems:"center",gap:0,background:"#fff",borderBottom:"1px solid #FFE4EF",cursor:"pointer",borderRadius:8},onClick:()=>{numInp.value=n;numInp.readOnly=false;numInp.style.background="";numInp.style.color="#FF6B9D";novoBtn.style.display="block";morInp.value=c2.morador||"";telInp.value=c2.telefone||"";ruaInp.value=end2.rua||"";numEndInp.value=end2.numero||"";bairroSel.value=end2.bairro||"";}});
-          row.innerHTML=`<div style="flex:1;padding:10px 12px"><div style="font-weight:800;color:#1A1A2E;font-size:14px">${c2.morador||"?"}</div><div style="font-size:11px;color:#8B8FA8">ID ${n}${c2.telefone?" · "+c2.telefone:""}</div></div><div style="color:#FF6B9D;padding:0 12px;font-size:18px">›</div>`;
-          flex.appendChild(row);
-        });
-        if(!q&&filtrados.length>60){const m=div({style:{textAlign:"center",padding:"8px",color:"#8B8FA8",fontSize:11}});m.textContent="... e mais "+(filtrados.length-60)+" — use a busca";flex.appendChild(m);}
-      }
-      buscaInp.addEventListener("input",buildBuscaList);
-      buildBuscaList();
-      p.appendChild(flex);
-    } else {
-      const flex=div({style:{display:"flex",flexWrap:"wrap",gap:7,maxHeight:200,overflowY:"auto",padding:4}});
-      nums.slice(0,80).forEach(n=>{
-        const c=casas[n]||{};const end=(DATA.enderecos||{})[n]||{};
-        flex.appendChild(btn({style:{background:"linear-gradient(135deg,#FF6B9D,#FFD93D)",color:"#fff",borderRadius:12,padding:"7px 13px",fontWeight:800,fontSize:12},onClick:()=>{numInp.value=n;numInp.readOnly=false;numInp.style.background="";numInp.style.color="#FF6B9D";editLabelReal.style.display="none";novoBtn.style.display="block";morInp.value=c.morador||"";telInp.value=c.telefone||"";ruaInp.value=end.rua||"";numEndInp.value=end.numero||"";bairroSel.value=end.bairro||"";}},c.morador?c.morador.split(" ")[0]:"Casa "+n));
-      });
-      p.appendChild(flex);
-    }
-    body.appendChild(p);
+    const flex=div({style:{display:"flex",flexWrap:"wrap",gap:7,maxHeight:200,overflowY:"auto",padding:4}});
+    nums.slice(0,80).forEach(n=>{
+      const c=casas[n]||{};const end=(DATA.enderecos||{})[n]||{};
+      flex.appendChild(btn({style:{background:"linear-gradient(135deg,#FF6B9D,#FFD93D)",color:"#fff",borderRadius:12,padding:"7px 13px",fontWeight:800,fontSize:12},onClick:()=>{numInp.value=n;numInp.readOnly=true;numInp.style.background="#f0f0f0";numInp.style.color="#888";editLabelReal.style.display="block";novoBtn.style.display="block";morInp.value=c.morador||"";telInp.value=c.telefone||"";ruaInp.value=end.rua||"";numEndInp.value=end.numero||"";bairroSel.value=end.bairro||"";}},c.morador?c.morador.split(" ")[0]:"Casa "+n));
+    });
+    p.appendChild(flex);body.appendChild(p);
   }
   const card=div({className:"card anim",style:{padding:20}});
   const idLabel=isCad2?"ID (deixe vazio para gerar automatico)":"Numero da casa";
   const idPlaceholder=isCad2?"Deixe vazio = auto (15000+)":"Numero da casa";
   const numInp=inp({className:"fi",placeholder:idPlaceholder,type:"number",style:{marginBottom:4,fontSize:22,fontWeight:800,textAlign:"center",padding:"14px",color:"#FF6B9D"}});
-  const editLabelReal=div({style:{display:"none"}});
-  const novoBtn=btn({style:{display:"none",width:"100%",padding:"9px",background:"#f5f5f5",color:"#8B8FA8",borderRadius:10,fontSize:12,marginBottom:10},onClick:()=>{numInp.value="";numInp.readOnly=false;numInp.style.background="";numInp.style.color="#FF6B9D";novoBtn.style.display="none";morInp.value="";telInp.value="";ruaInp.value="";numEndInp.value="";bairroSel.value="";}}, "➕ Limpar para novo cadastro");
+  const editLabelReal=div({style:{display:"none",background:"#EFF6FF",border:"1.5px solid #3B82F6",borderRadius:10,padding:"8px 12px",marginBottom:10,fontSize:12,fontWeight:700,color:"#3B82F6"}});
+  editLabelReal.innerHTML='✏️ Modo edição — ID bloqueado';
+  const novoBtn=btn({style:{display:"none",width:"100%",padding:"9px",background:"#f5f5f5",color:"#8B8FA8",borderRadius:10,fontSize:12,marginBottom:10},onClick:()=>{numInp.value="";numInp.readOnly=false;numInp.style.background="";numInp.style.color="#FF6B9D";editLabelReal.style.display="none";novoBtn.style.display="none";morInp.value="";telInp.value="";ruaInp.value="";numEndInp.value="";bairroSel.value="";}}, "➕ Limpar para novo cadastro");
   if(isCad2){
     const autoHint=div({style:{fontSize:11,color:"#8B8FA8",fontWeight:700,marginBottom:14,textAlign:"center"}});
     autoHint.textContent="Se nao preencher, ID sera gerado automaticamente a partir de 15000";
@@ -1081,7 +994,12 @@ function renderAgenda(gerente){
       inner.appendChild(div({style:{fontSize:11,color:"#8B8FA8",marginTop:3}},"Casa "+rep.casa+(rep.morador?" - "+rep.morador:"")));
       const acts=div({style:{display:"flex",gap:5,marginTop:8,flexWrap:"wrap"}});
       const todosBaixados=grupo.every(e=>e.buscado);
-      if(!todosBaixados)acts.appendChild(btn({style:{padding:"8px 12px",background:"linear-gradient(135deg,#FFD93D,#E8A000)",color:"#fff",borderRadius:10,fontSize:12,fontWeight:800},onClick:()=>{const ids=new Set(grupo.map(e=>e.id));const grupoAtual=(DATA.agenda||[]).filter(a=>ids.has(a.id));abrirPagamentoModal(grupoAtual.length>0?grupoAtual:grupo,buildEvs,gwa);}},"✓ Dar Baixa"));
+      if(!todosBaixados)acts.appendChild(btn({style:{padding:"8px 12px",background:"linear-gradient(135deg,#FFD93D,#E8A000)",color:"#fff",borderRadius:10,fontSize:12,fontWeight:800},onClick:()=>{
+        // Abre modal de pagamento igual ao botão 💬 WA
+        const ids=new Set(grupo.map(e=>e.id));
+        const grupoAtual=(DATA.agenda||[]).filter(a=>ids.has(a.id));
+        abrirPagamentoModal(grupoAtual.length>0?grupoAtual:grupo,buildEvs,DATA.gruposWAPag||{});
+      }},"✓ Dar Baixa"));
       else acts.appendChild(div({style:{padding:"8px 10px",background:"#e8fbed",color:"#2DC653",borderRadius:10,fontSize:11,fontWeight:800,border:"1px solid #2DC653"}},"✅ Baixado"));
       acts.appendChild(btn({style:{background:"#EFF6FF",color:"#3B82F6",padding:"7px 10px",borderRadius:10,fontSize:12,fontWeight:800},onClick:()=>abrirEditDataModal(grupo,buildEvs)},"📅"));
       acts.appendChild(btn({style:{background:"#f5f5f5",color:rep.vetus?"#444":"#bbb",padding:"7px 10px",borderRadius:10,fontSize:12,fontWeight:700,border:"1px solid #ddd"},onClick:()=>{const ids=new Set(grupo.map(e=>e.id));updSilent(d=>({...d,agenda:d.agenda.map(a=>ids.has(a.id)?{...a,vetus:!rep.vetus}:a)}));buildEvs();}},rep.vetus?"V✓":"V"));
@@ -2621,96 +2539,6 @@ function renderMesclar(){
 
   const allCasas={...DATA.casas,...DATA.casas2||{}};
 
-  // ── SEÇÃO 0: Limpar "1" na frente ────────────────────────────────────────
-  const sec0=div({style:{background:"#fff0f9",border:"2px solid #FF6B9D",borderRadius:18,padding:"16px",marginBottom:20}});
-  sec0.appendChild(h("p",{style:{fontFamily:"'Fredoka One',sans-serif",fontSize:17,color:"#FF6B9D",marginBottom:6}},"🧹 Remover duplicados com '1' na frente"));
-  sec0.appendChild(h("p",{style:{fontSize:12,color:"#8B8FA8",fontWeight:600,marginBottom:12}},"Detecta pares como 7547 ↔ 17547 e funde automaticamente mantendo o que tem mais dados."));
-
-  const resultado0=div();
-
-  function detectarDuplicados1(){
-    const pares=[];
-    const ids=Object.keys(allCasas).map(Number);
-    ids.forEach(id=>{
-      // Verifica se existe versão sem o "1" na frente
-      const strId=String(id);
-      if(strId.startsWith("1")&&strId.length>4){
-        const semUm=Number(strId.slice(1));
-        if(semUm>0&&allCasas[semUm]){
-          // Evita duplicar par
-          if(!pares.find(p=>(p.a===id&&p.b===semUm)||(p.a===semUm&&p.b===id))){
-            pares.push({a:id,b:semUm});
-          }
-        }
-      }
-    });
-    return pares;
-  }
-
-  function quemTemMaisDados(id1,id2){
-    // Conta pets, atendimentos e valor total para decidir quem manter
-    function score(id){
-      let s=0;
-      s+=(DATA.modelos?.[id]||[]).length*2;
-      const c=(DATA.casas||{})[id]||(DATA.casas2||{})[id]||{};
-      s+=(c.pets||[]).length*2;
-      if(c.telefone)s+=3;
-      if(c.morador)s+=1;
-      MESES.forEach(m=>{
-        [DATA.cobrancas,DATA.cobrancas2||{}].forEach(src=>{
-          const cb=(src[m]||{})[id];
-          if(cb){s+=(cb.atendimentos||[]).length*3;if(cb.pago)s+=2;}
-        });
-      });
-      s+=(DATA.agenda||[]).filter(a=>a.casa===id).length;
-      return s;
-    }
-    return score(id1)>=score(id2)?{manter:id1,remover:id2}:{manter:id2,remover:id1};
-  }
-
-  const btnDetectar=btn({style:{width:"100%",padding:"14px",background:"linear-gradient(135deg,#FF6B9D,#FFD93D)",color:"#fff",fontSize:14,fontWeight:800,borderRadius:14,marginBottom:10},onClick:()=>{
-    const pares=detectarDuplicados1();
-    resultado0.innerHTML="";
-    if(!pares.length){
-      const ok=div({style:{background:"#e8fbed",border:"2px solid #2DC653",borderRadius:12,padding:"12px",fontSize:13,fontWeight:700,color:"#2DC653",textAlign:"center"}});
-      ok.textContent="✅ Nenhum duplicado com '1' encontrado!";
-      resultado0.appendChild(ok);return;
-    }
-    const info=div({style:{background:"#FFFBEE",border:"1.5px solid #FFD93D",borderRadius:12,padding:"12px",marginBottom:12,fontSize:13,fontWeight:700,color:"#E8A000",textAlign:"center"}});
-    info.textContent="⚠️ "+pares.length+" pares encontrados";
-    resultado0.appendChild(info);
-
-    // Preview dos pares
-    const prev=div({style:{maxHeight:220,overflowY:"auto",marginBottom:12,border:"1px solid #FFE4EF",borderRadius:12}});
-    pares.forEach(p=>{
-      const {manter,remover}=quemTemMaisDados(p.a,p.b);
-      const cM=allCasas[manter]||{};const cR=allCasas[remover]||{};
-      const row=div({style:{padding:"8px 12px",borderBottom:"1px solid #FFE4EF",fontSize:11}});
-      row.innerHTML=`<span style="color:#2DC653;font-weight:800">✅ ${manter}</span> ${cM.morador||"?"} <span style="color:#aaa">←</span> <span style="color:#e53e3e;font-weight:800;text-decoration:line-through">❌ ${remover}</span> ${cR.morador||"?"}`;
-      prev.appendChild(row);
-    });
-    resultado0.appendChild(prev);
-
-    resultado0.appendChild(btn({style:{width:"100%",padding:"14px",background:"linear-gradient(135deg,#e53e3e,#ff6b6b)",color:"#fff",fontSize:14,fontWeight:800,borderRadius:14},onClick:()=>{
-      if(!confirm(`Fundir ${pares.length} pares? Esta ação não pode ser desfeita.\n\nFaça um backup antes!`))return;
-      let count=0;
-      pares.forEach(p=>{
-        const {manter,remover}=quemTemMaisDados(p.a,p.b);
-        executarFusao(manter,[remover]);
-        count++;
-      });
-      DATA=loadData();
-      resultado0.innerHTML="";
-      const ok=div({style:{background:"#e8fbed",border:"2px solid #2DC653",borderRadius:12,padding:"14px",fontSize:14,fontWeight:800,color:"#2DC653",textAlign:"center"}});
-      ok.textContent="✅ "+count+" pares fundidos com sucesso!";
-      resultado0.appendChild(ok);
-    }},"🧹 Fundir todos os "+pares.length+" pares"));
-  }},"🔍 Detectar duplicados com '1'");
-
-  sec0.appendChild(btnDetectar);
-  sec0.appendChild(resultado0);
-  body.appendChild(sec0);
-
   // ── SEÇÃO 1: Automático ───────────────────────────────────────────────────
   const secAuto=div({style:{marginBottom:24}});
   secAuto.appendChild(h("p",{style:{fontFamily:"'Fredoka One',sans-serif",fontSize:17,color:"#E8A000",marginBottom:8}},"🤖 Detecção Automática"));
@@ -2844,8 +2672,9 @@ function executarFusao(idManter,idsRemover){
     const allC={...nc1,...nc2};
 
     const casaManter=allC[idManter]||{};
+    const petsManterSet=new Set(getPetsDoTutor(idManter));
 
-    // Mescla modelos (pets de serviço)
+    // Mescla modelos
     const modManterArr=[...(nd.modelos?.[idManter]||[])];
     const modNomesSet=new Set(modManterArr.map(p=>p.nome.toLowerCase()));
 
@@ -2862,85 +2691,35 @@ function executarFusao(idManter,idsRemover){
         if(nc2[idManter])nc2[idManter]={...nc2[idManter],telefone:casaRem.telefone};
       }
 
-      // Endereço: repassa se o manter não tiver
-      if(!(nd.enderecos||{})[idManter]&&(nd.enderecos||{})[idRem]){
-        if(!nd.enderecos)nd.enderecos={};
-        nd.enderecos[idManter]=(nd.enderecos||{})[idRem];
-      }
-
-      // Mescla modelos — repassa valorRef dos pets do removido
+      // Mescla modelos (pets de serviço)
       (nd.modelos?.[idRem]||[]).forEach(p=>{
-        if(!p.nome)return;
-        const nk=p.nome.toLowerCase();
-        const existeIdx=modManterArr.findIndex(m=>m.nome.toLowerCase()===nk);
-        if(existeIdx>=0){
-          // Pet já existe no manter — repassa valorRef se o manter não tem
-          if(!modManterArr[existeIdx].valorRef&&p.valorRef>0){
-            modManterArr[existeIdx]={...modManterArr[existeIdx],valorRef:p.valorRef,servicoRef:p.servicoRef,ultimaData:p.ultimaData};
-          }
-          // Repassa serviços com valor se o manter tem valor zero
-          const svManter=(modManterArr[existeIdx].servicos||[]);
-          const temValorManter=svManter.some(sv=>parseFloat(sv.valor)>0);
-          if(!temValorManter){
-            const svRem=(p.servicos||[]).filter(sv=>parseFloat(sv.valor)>0);
-            if(svRem.length)modManterArr[existeIdx]={...modManterArr[existeIdx],servicos:svRem};
-          }
-        } else {
-          modManterArr.push(p);
-          modNomesSet.add(nk);
+        if(p.nome&&!modNomesSet.has(p.nome.toLowerCase())){
+          modManterArr.push(p);modNomesSet.add(p.nome.toLowerCase());
         }
       });
 
-      // Mescla campo pets — repassa raca/nasc se faltando
+      // Mescla campo pets
       (casaRem.pets||[]).forEach(p=>{
-        if(!p.nome)return;
-        const nk=p.nome.toLowerCase();
-        const existeIdx=petsManterArr.findIndex(x=>x.nome.toLowerCase()===nk);
-        if(existeIdx>=0){
-          if(!petsManterArr[existeIdx].raca&&p.raca)petsManterArr[existeIdx]={...petsManterArr[existeIdx],raca:p.raca};
-        } else {
-          petsManterArr.push(p);
-          petsNomesSet.add(nk);
+        if(p.nome&&!petsNomesSet.has(p.nome.toLowerCase())){
+          petsManterArr.push(p);petsNomesSet.add(p.nome.toLowerCase());
         }
       });
 
-      // Mescla cobrancas — move atendimentos do idRem para idManter
-      // E repassa valores nos pets se o manter tem valor zero
+      // Mescla cobrancas: move atendimentos do idRem para idManter
       MESES.forEach(m=>{
-        [['cobrancas','cobrancas2']].flat().forEach(srcKey=>{
-          if(nd[srcKey]?.[m]?.[idRem]){
-            if(!nd[srcKey][m])nd[srcKey][m]={};
-            if(!nd[srcKey][m][idManter])nd[srcKey][m][idManter]={atendimentos:[],pago:false};
-            const atsRem=nd[srcKey][m][idRem].atendimentos||[];
-            const atsManter=nd[srcKey][m][idManter].atendimentos||[];
-
-            // Para cada atendimento do removido, verifica se já existe mesmo dia+pet no manter
-            atsRem.forEach(atRem=>{
-              const jaExiste=atsManter.some(atM=>
-                atM.data===atRem.data&&
-                (atRem.caes||[]).every(cRem=>(atM.caes||[]).some(cM=>cM.nome===cRem.nome))
-              );
-              if(!jaExiste){
-                atsManter.push(atRem);
-              } else {
-                // Já existe — repassa valores zero
-                atsManter.forEach(atM=>{
-                  if(atM.data!==atRem.data)return;
-                  (atM.caes||[]).forEach(cM=>{
-                    const cRem=(atRem.caes||[]).find(c=>c.nome===cM.nome);
-                    if(!cRem)return;
-                    const valM=(cM.servicos||[]).reduce((s,sv)=>s+(parseFloat(sv.valor)||0),0);
-                    const valR=(cRem.servicos||[]).reduce((s,sv)=>s+(parseFloat(sv.valor)||0),0);
-                    if(valM===0&&valR>0)cM.servicos=cRem.servicos;
-                  });
-                });
-              }
-            });
-
-            nd[srcKey][m][idManter].atendimentos=atsManter.sort((a,b)=>a.data.localeCompare(b.data));
-            delete nd[srcKey][m][idRem];
-          }
-        });
+        if(nd.cobrancas?.[m]?.[idRem]){
+          if(!nd.cobrancas[m][idManter])nd.cobrancas[m][idManter]={atendimentos:[],pago:false};
+          const atsRem=nd.cobrancas[m][idRem].atendimentos||[];
+          nd.cobrancas[m][idManter].atendimentos=[...(nd.cobrancas[m][idManter].atendimentos||[]),...atsRem];
+          delete nd.cobrancas[m][idRem];
+        }
+        if(nd.cobrancas2?.[m]?.[idRem]){
+          if(!nd.cobrancas2[m])nd.cobrancas2[m]={};
+          if(!nd.cobrancas2[m][idManter])nd.cobrancas2[m][idManter]={atendimentos:[],pago:false};
+          const atsRem2=nd.cobrancas2[m][idRem].atendimentos||[];
+          nd.cobrancas2[m][idManter].atendimentos=[...(nd.cobrancas2[m][idManter].atendimentos||[]),...atsRem2];
+          delete nd.cobrancas2[m][idRem];
+        }
       });
 
       // Mescla agenda
@@ -2961,89 +2740,6 @@ function executarFusao(idManter,idsRemover){
     return nd;
   });
   DATA=loadData();
-}
-
-
-// ── LANÇAMENTO EM MASSA C1 → COBRANÇA (MAIO + JUNHO, NÃO PAGO) ───────────────
-function lancamentoMassaC1(){
-  const MESES_ALVO=["Maio","Junho"];
-  const agenda=DATA.agenda||[];
-  // Filtra: apenas C1, baixados, maio ou junho
-  const evs=agenda.filter(ev=>{
-    if(!ev.buscado)return false;
-    if(!DATA.casas[ev.casa])return false; // só C1
-    const mes=MESES[new Date(ev.data+"T12:00:00").getMonth()];
-    return MESES_ALVO.includes(mes);
-  });
-
-  if(!evs.length){alert("Nenhum agendamento baixado do C1 em Maio/Junho.");return;}
-
-  // Agrupa por casa+data para montar atendimentos
-  const grupos={};
-  evs.forEach(ev=>{
-    const mes=MESES[new Date(ev.data+"T12:00:00").getMonth()];
-    const chave=mes+"|"+ev.casa+"|"+ev.data;
-    if(!grupos[chave])grupos[chave]={mes,casa:ev.casa,data:ev.data,evs:[]};
-    grupos[chave].evs.push(ev);
-  });
-
-  // Preview
-  const totalGrupos=Object.keys(grupos).length;
-  const totalPets=evs.length;
-
-  const cont=div();
-  const info=div({style:{background:"#EFF6FF",border:"2px solid #3B82F6",borderRadius:12,padding:"14px",marginBottom:14,fontSize:13,lineHeight:1.8}});
-  info.innerHTML=`<b style="color:#3B82F6">📋 ${totalGrupos} atendimentos</b> em <b>${totalPets} pets</b><br><span style="color:#8B8FA8;font-size:11px">Cadastro 1 · Maio e Junho · todos como <b>não pago</b><br>Duplicatas não serão criadas.</span>`;
-  cont.appendChild(info);
-
-  // Lista preview
-  const prev=div({style:{maxHeight:200,overflowY:"auto",marginBottom:14,border:"1px solid #f0f0f0",borderRadius:10,padding:"6px"}});
-  Object.values(grupos).slice(0,30).forEach(g=>{
-    const casa=(DATA.casas||{})[g.casa]||{};
-    const r=div({style:{fontSize:11,padding:"4px 8px",borderBottom:"1px solid #f8f8f8"}});
-    const pets=g.evs.map(e=>e.pet||"Pet").join(", ");
-    r.innerHTML=`<span style="color:#8B8FA8;min-width:55px;display:inline-block">${g.mes} ${g.data.slice(8)}</span> <b>${casa.morador||"Casa "+g.casa}</b> <span style="color:#FF6B9D">${pets}</span>`;
-    prev.appendChild(r);
-  });
-  if(totalGrupos>30){const m=div({style:{textAlign:"center",padding:"6px",color:"#8B8FA8",fontSize:11}});m.textContent="... e mais "+(totalGrupos-30);prev.appendChild(m);}
-  cont.appendChild(prev);
-
-  let mv=null;
-  cont.appendChild(btn({style:{width:"100%",padding:"15px",background:"linear-gradient(135deg,#3B82F6,#60a5fa)",color:"#fff",fontSize:15,fontWeight:700,borderRadius:14,marginBottom:10},onClick:()=>{
-    const nd=JSON.parse(JSON.stringify(DATA));
-    if(!nd.cobrancas)nd.cobrancas={};
-    let lancados=0,duplicatas=0;
-
-    Object.values(grupos).forEach(g=>{
-      const mes=g.mes;
-      if(!nd.cobrancas[mes])nd.cobrancas[mes]={};
-      if(!nd.cobrancas[mes][g.casa])nd.cobrancas[mes][g.casa]={atendimentos:[],pago:false};
-      const cbCasa=nd.cobrancas[mes][g.casa];
-
-      // Verifica duplicata: mesma data e pelo menos um pet igual
-      const jaExiste=(cbCasa.atendimentos||[]).some(at=>{
-        if(at.data!==g.data)return false;
-        return g.evs.some(ev=>(at.caes||[]).find(c=>c.nome===ev.pet));
-      });
-
-      if(jaExiste){duplicatas++;return;}
-
-      const caes=g.evs.map(ev=>{
-        const val=getValorEvento(ev);
-        return{nome:ev.pet||"Pet",raca:"",servicos:[{nome:ev.servico||"Banho",valor:String(val||0)}]};
-      });
-      const novoAt={id:Date.now()+Math.random(),data:g.data,caes,pago:false};
-      cbCasa.atendimentos=[...( cbCasa.atendimentos||[]),novoAt].sort((a,b)=>a.data.localeCompare(b.data));
-      lancados++;
-    });
-
-    saveData(nd);DATA=nd;
-    if(mv)mv.remove();
-    alert(`✅ ${lancados} atendimentos lançados!
-${duplicatas>0?"⚠️ "+duplicatas+" já existiam (não duplicados).":""}`);
-  }},"✅ LANÇAR AGORA — "+totalGrupos+" atendimentos"));
-  cont.appendChild(btn({style:{width:"100%",padding:"13px",background:"#f5f5f5",color:"#666",borderRadius:12},onClick:()=>{if(mv)mv.remove();}},"Cancelar"));
-  mv=openModal("Lançar Agenda C1 na Cobrança",cont,()=>{},true);
 }
 
 // ── EXPORTAR / RESTAURAR ──────────────────────────────────────────────────────
