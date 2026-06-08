@@ -353,6 +353,73 @@ function lancarBanhosBuscadosCad2(){
   mv=openModal("Lançar Banhos → Cad.2",cont,()=>{},true);
 }
 
+// ── IMPORTAR BANHOS DO PDF (TEMPORÁRIO) ──────────────────────────────────────
+function importarBanhosPDF(){
+  const BANHOS_PDF=[
+    {data:"2026-05-13",pet:"Prada",        tutor:"Luiz Felipe",                vetusId:623,  pago:true,  valor:0,   servico:"Banho"},
+    {data:"2026-05-20",pet:"Nick",          tutor:"Marco Antonio De Andrade",   vetusId:176,  pago:true,  valor:0,   servico:"Banho"},
+    {data:"2026-05-23",pet:"Maga",          tutor:"Márcia Freitas",             vetusId:318,  pago:true,  valor:0,   servico:"Banho"},
+    {data:"2026-06-05",pet:"Arizona",       tutor:"Douglas Luz",                vetusId:464,  pago:false, valor:0,   servico:"Banho"},
+    {data:"2026-06-05",pet:"Zeus",          tutor:"Douglas Luz",                vetusId:464,  pago:false, valor:0,   servico:"Banho"},
+    {data:"2026-06-06",pet:"Chewie",        tutor:"Roszeaine",                  vetusId:1066, pago:true,  valor:90,  servico:"Banho"},
+    {data:"2026-06-06",pet:"Augusto",       tutor:"Sueli Berneira de Freitas",  vetusId:4790, pago:true,  valor:110, servico:"Banho"},
+    {data:"2026-06-06",pet:"Rita",          tutor:"Sueli Berneira de Freitas",  vetusId:4790, pago:true,  valor:110, servico:"Banho"},
+    {data:"2026-06-06",pet:"Billy",         tutor:"Amanda Santos Dos Santos",   vetusId:3773, pago:true,  valor:100, servico:"Banho"},
+    {data:"2026-06-06",pet:"Fiona",         tutor:"Adair Camargo",              vetusId:2873, pago:true,  valor:70,  servico:"Banho"},
+    {data:"2026-06-06",pet:"Poli",          tutor:"Adair Camargo",              vetusId:2873, pago:true,  valor:70,  servico:"Banho"},
+    {data:"2026-06-06",pet:"Max",           tutor:"Camila Coleoni Ramos",       vetusId:6539, pago:false, valor:0,   servico:"Banho"},
+    {data:"2026-06-06",pet:"Bento",         tutor:"Denize Dos Santos Lopes",    vetusId:2957, pago:true,  valor:50,  servico:"Banho"},
+    {data:"2026-06-06",pet:"Pipoca",        tutor:"Adriana Silva Dos Anjos",    vetusId:1114, pago:true,  valor:50,  servico:"Banho"},
+    {data:"2026-06-06",pet:"Ted",           tutor:"Adriana Silva Dos Anjos",    vetusId:1114, pago:true,  valor:50,  servico:"Banho"},
+    {data:"2026-06-06",pet:"Mila",          tutor:"Adriana Silva Dos Anjos",    vetusId:1114, pago:true,  valor:140, servico:"Banho"},
+    {data:"2026-06-06",pet:"Maria",         tutor:"Mario Cezar Vasconcellos",   vetusId:6588, pago:false, valor:0,   servico:"Banho"},
+    {data:"2026-06-06",pet:"Bolinho",       tutor:"Stefani da Silva Davre",     vetusId:5056, pago:true,  valor:100, servico:"Banho"},
+    {data:"2026-06-06",pet:"Danone",        tutor:"Jessica Costa",              vetusId:7324, pago:true,  valor:110, servico:"Banho"},
+    {data:"2026-06-06",pet:"Lucky",         tutor:"Brhenda de Oliveira Freitas",vetusId:5447, pago:true,  valor:100, servico:"Banho"},
+    {data:"2026-06-06",pet:"Ted",           tutor:"Alexsandra Ribeiro Mantalof",vetusId:5786, pago:true,  valor:110, servico:"Banho"},
+    {data:"2026-06-06",pet:"Princesa ceza", tutor:"Carla Abreu",                vetusId:3735, pago:false, valor:0,   servico:"Banho"},
+    {data:"2026-06-06",pet:"Fred",          tutor:"Ilda Risa",                  vetusId:99999,pago:true,  valor:50,  servico:"Banho"},
+    {data:"2026-06-06",pet:"Frida",         tutor:"Ilda Risa",                  vetusId:99999,pago:true,  valor:50,  servico:"Banho"},
+    {data:"2026-06-06",pet:"Nala",          tutor:"Tiele Superti",              vetusId:2805, pago:true,  valor:90,  servico:"Banho"},
+    {data:"2026-06-06",pet:"Tininho",       tutor:"Sergio Gross",               vetusId:4528, pago:false, valor:0,   servico:"Banho"},
+    {data:"2026-06-06",pet:"Rex",           tutor:"Marcelo Rodrigues Da Silva", vetusId:3035, pago:false, valor:0,   servico:"Banho"},
+    {data:"2026-06-06",pet:"Luck",          tutor:"Marcelo Rodrigues Da Silva", vetusId:3035, pago:false, valor:0,   servico:"Banho"},
+    {data:"2026-06-06",pet:"Luna",          tutor:"Marcelo Rodrigues Da Silva", vetusId:3035, pago:false, valor:0,   servico:"Banho"},
+  ];
+  updSilent(d=>{
+    const nd={...d};
+    if(!nd.casas2)nd.casas2={};
+    if(!nd.cobrancas2)nd.cobrancas2={};
+    if(!nd.agenda)nd.agenda=[];
+    let novosAg=0,novasCob=0;
+    BANHOS_PDF.forEach(b=>{
+      // Garante cliente em casas2
+      if(!nd.casas2[b.vetusId])nd.casas2[b.vetusId]={numero:b.vetusId,morador:b.tutor,telefone:""};
+      // ── Agenda ──
+      const jaAgenda=nd.agenda.some(ev=>ev.data===b.data&&ev.pet===b.pet&&Number(ev.casa)===b.vetusId);
+      if(!jaAgenda){
+        nd.agenda.push({id:Date.now()+Math.random(),data:b.data,pet:b.pet,casa:b.vetusId,morador:b.tutor,servico:b.servico,func:"",hora:"08:00",endereco:"",telefone:"",buscado:false,status:b.pago?"finalizado":"pendente",valorCustom:b.valor>0?String(b.valor):""});
+        novosAg++;
+      }
+      // ── Cobrança Cad.2 ──
+      const mesNome=MESES[new Date(b.data+"T12:00:00").getMonth()];
+      if(!nd.cobrancas2[mesNome])nd.cobrancas2[mesNome]={};
+      if(!nd.cobrancas2[mesNome][b.vetusId])nd.cobrancas2[mesNome][b.vetusId]={atendimentos:[],pago:false};
+      const cob=nd.cobrancas2[mesNome][b.vetusId];
+      const jaCob=(cob.atendimentos||[]).some(at=>at.data===b.data&&(at.caes||[]).some(c=>c.nome===b.pet));
+      if(!jaCob){
+        cob.atendimentos.push({id:Date.now()+Math.random(),data:b.data,pago:b.pago,caes:[{nome:b.pet,raca:"",servicos:[{nome:b.servico,valor:b.valor>0?String(b.valor):""}]}]});
+        cob.atendimentos.sort((a,x)=>a.data.localeCompare(x.data));
+        if(cob.atendimentos.every(at=>at.pago))cob.pago=true;
+        novasCob++;
+      }
+    });
+    alert("✅ Pronto!\n📅 "+novosAg+" banhos na agenda\n💳 "+novasCob+" lançamentos nas cobranças\n\n(Banhos que já existiam foram ignorados)");
+    return nd;
+  });
+  render();
+}
+
 // ── HOME ──────────────────────────────────────────────────────────────────────
 function renderHome(){
   const w=div({className:"screen"});
@@ -379,6 +446,11 @@ function renderHome(){
   const lbBtn=div({className:"btn",style:{width:"100%",padding:"18px",background:"linear-gradient(135deg,#3B82F6,#60a5fa)",color:"#fff",fontSize:15,borderRadius:16,display:"flex",alignItems:"center",gap:12,cursor:"pointer"},onClick:()=>lancarBanhosBuscadosCad2()});
   lbBtn.innerHTML='<span style="font-size:26px">💳</span><div style="text-align:left"><div style="font-family:\'Fredoka One\',sans-serif;font-size:17px">Lançar Banhos → Cad.2</div><div style="font-size:11px;opacity:.85">Agenda buscada (Maio/Junho) nas cobranças</div></div>';
   extra.appendChild(lbBtn);
+
+  // ── BOTÃO TEMPORÁRIO — IMPORTAR BANHOS DO PDF ─────────────────────────────
+  const importBtn=div({className:"btn",style:{width:"100%",padding:"18px",background:"linear-gradient(135deg,#e53e3e,#ff6b6b)",color:"#fff",fontSize:15,borderRadius:16,display:"flex",alignItems:"center",gap:12,cursor:"pointer"},onClick:()=>importarBanhosPDF()});
+  importBtn.innerHTML='<span style="font-size:26px">📋</span><div style="text-align:left"><div style="font-family:\'Fredoka One\',sans-serif;font-size:17px">⚡ Importar Banhos Faltando</div><div style="font-size:11px;opacity:.85">29 banhos Maio/Junho — aperta e vai!</div></div>';
+  extra.appendChild(importBtn);
   [   [()=>go("mesclar"),"🔀","Mesclar Duplicados","linear-gradient(135deg,#E8A000,#FFD93D)"],
    [()=>go("exportar"),"📋","Exportar Dados","linear-gradient(135deg,#1A1A2E,#2d2d4e)"],
    [()=>go("restaurar"),"📂","Restaurar Backup","linear-gradient(135deg,#2DC653,#52e87b)"]
@@ -972,12 +1044,9 @@ function renderGrade(titulo,pref,mes){
       else if(isEnviado){bColor="#FFD93D";sBg="#FFFBEE";sColor="#E8A000";sTxt="Enviado";}
       else if(isSemBanho){bColor="#FFE4EF";sBg="#f9f9f9";sColor="#8B8FA8";sTxt="Sem banho";}
       const c=div({className:"btn card",style:{padding:"13px 8px",display:"flex",flexDirection:"column",alignItems:"center",gap:5,borderTop:"4px solid "+bColor,cursor:"pointer"}});
-      // Detecta se foi scroll ou tap
-      let touchStartX=0,touchStartY=0,touchMoved=false;
-      c.addEventListener("touchstart",e=>{touchStartX=e.touches[0].clientX;touchStartY=e.touches[0].clientY;touchMoved=false;},{passive:true});
-      c.addEventListener("touchmove",e=>{const dx=Math.abs(e.touches[0].clientX-touchStartX);const dy=Math.abs(e.touches[0].clientY-touchStartY);if(dx>8||dy>8)touchMoved=true;},{passive:true});
-      c.addEventListener("touchend",e=>{if(!touchMoved){e.preventDefault();go(pref+"_det",{mes,num:num});}});
-      c.addEventListener("click",()=>go(pref+"_det",{mes,num:num}));
+      function goToDet(e){e.preventDefault();e.stopPropagation();go(pref+"_det",{mes,num:num});}
+      c.addEventListener("touchstart",goToDet,{passive:false});
+      c.addEventListener("click",goToDet);
       const vetusNum=num>=10001?num-10000:num;
       const labelTopo=pref==="cad2"?`<div style="font-family:'Fredoka One',sans-serif;font-size:13px;color:${isPago?"#2DC653":"#FF6B9D"}">ID ${vetusNum}</div>`:`<div style="font-family:'Fredoka One',sans-serif;font-size:18px;color:${isPago?"#2DC653":"#FF6B9D"}">🏠${num}</div>`;
       c.innerHTML=`${labelTopo}<div style="font-weight:700;color:#1A1A2E;font-size:11px;text-align:center">${casas[num]?.morador?casas[num].morador.split(" ")[0]:""}</div>${ats.length>0?`<div style="font-weight:800;color:${isPago?"#2DC653":"#FF6B9D"};font-size:12px">R$ ${sub.toFixed(2)}</div><div style="font-size:10px;color:#8B8FA8">${ats.length} banho${ats.length>1?"s":""}</div>`:'<div style="font-size:10px;color:#8B8FA8">Sem banhos</div>'}<div style="font-size:10px;font-weight:700;color:${sColor};background:${sBg};padding:2px 6px;border-radius:8px;width:100%;text-align:center">${sTxt}</div>`;
@@ -1322,26 +1391,22 @@ function renderAgenda(gerente){
     }
     const grupos=[];const vistos=new Set();
     evsDia.forEach(ev=>{
-      if(!ev||vistos.has(ev.id))return;
-      const irmaos=evsDia.filter(e=>e&&e.casa===ev.casa&&e.func===ev.func&&e.hora===ev.hora);
-      irmaos.forEach(e=>e&&vistos.add(e.id));
-      if(irmaos.length>0)grupos.push(irmaos);
+      if(vistos.has(ev.id))return;
+      const irmaos=evsDia.filter(e=>e.casa===ev.casa&&e.func===ev.func&&e.hora===ev.hora);
+      irmaos.forEach(e=>vistos.add(e.id));grupos.push(irmaos);
     });
-    const gruposFiltrados=(filtroStatus==="todos"?grupos:grupos.filter(g=>g&&g.length>0&&(g[0].statusCor||"pendente")===filtroStatus)).filter(Boolean);
+    const gruposFiltrados=filtroStatus==="todos"?grupos:grupos.filter(g=>(g[0].statusCor||"pendente")===filtroStatus);
     if(gruposFiltrados.length===0){evSection.appendChild(div({style:{textAlign:"center",padding:"20px 0",color:"#8B8FA8",fontSize:13}},"Nenhum com este filtro"));return;}
 
     gruposFiltrados.forEach((grupo,gi)=>{
-      if(!grupo||grupo.length===0)return;
       const rep=grupo[0];
-      if(!rep)return;
       const statusAtual=rep.statusCor||"pendente";const sc2=STATUS_CORES[statusAtual]||STATUS_CORES.pendente;
       const card=div({className:"card anim",style:{marginBottom:8,animationDelay:gi*20+"ms",borderLeft:"5px solid "+sc2.faixa,background:sc2.bg}});
       const inner=div({style:{padding:"12px 14px"}});
       const petsWrap=div();
       function buildPetsWrap(){
         petsWrap.innerHTML="";
-        const ids2=new Set(grupo.map(g=>g.id));
-        const grpAtual=(DATA.agenda||[]).filter(a=>a&&ids2.has(a.id));
+        const grpAtual=(DATA.agenda||[]).filter(a=>grupo.some(g=>g.id===a.id));
         grpAtual.forEach(ev=>{
           const val=getValorEvento(ev);
           const petRow=div({style:{display:"flex",alignItems:"center",gap:8,marginBottom:4,flexWrap:"wrap"}});
