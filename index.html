@@ -213,9 +213,14 @@ function renderTopbar(){
   const tb=document.getElementById("topbar");tb.innerHTML="";
   [{k:"cad1",l:"Cad.1",i:"📁"},{k:"cad2",l:"Cad.2",i:"📂"},{k:"agenda",l:"Agenda",i:"📅"},{k:"saidas",l:"Saidas",i:"💸"},{k:"vendas",l:"Vendas",i:"🛍"},{k:"home",l:"Home",i:"🏠"}].forEach(b=>{
     const bt=h("button",{className:"topbtn"},[h("span",{},b.i),b.l]);
-    function navTo(e){e.preventDefault();e.stopPropagation();go(b.k);}
-    bt.addEventListener("touchstart",navTo,{passive:false});
-    bt.addEventListener("click",navTo);
+    function addTap(el, fn){
+      let sx=0,sy=0,moved=false;
+      el.addEventListener("touchstart",e=>{sx=e.touches[0].clientX;sy=e.touches[0].clientY;moved=false;},{passive:true});
+      el.addEventListener("touchmove",e=>{if(Math.abs(e.touches[0].clientX-sx)>6||Math.abs(e.touches[0].clientY-sy)>6)moved=true;},{passive:true});
+      el.addEventListener("touchend",e=>{if(!moved){e.preventDefault();fn(e);}},{passive:false});
+      el.addEventListener("click",fn);
+    }
+    addTap(bt,()=>go(b.k));
     tb.appendChild(bt);
   });
 }
@@ -1044,9 +1049,11 @@ function renderGrade(titulo,pref,mes){
       else if(isEnviado){bColor="#FFD93D";sBg="#FFFBEE";sColor="#E8A000";sTxt="Enviado";}
       else if(isSemBanho){bColor="#FFE4EF";sBg="#f9f9f9";sColor="#8B8FA8";sTxt="Sem banho";}
       const c=div({className:"btn card",style:{padding:"13px 8px",display:"flex",flexDirection:"column",alignItems:"center",gap:5,borderTop:"4px solid "+bColor,cursor:"pointer"}});
-      function goToDet(e){e.preventDefault();e.stopPropagation();go(pref+"_det",{mes,num:num});}
-      c.addEventListener("touchstart",goToDet,{passive:false});
-      c.addEventListener("click",goToDet);
+      let _sx=0,_sy=0,_mv=false;
+      c.addEventListener("touchstart",e=>{_sx=e.touches[0].clientX;_sy=e.touches[0].clientY;_mv=false;},{passive:true});
+      c.addEventListener("touchmove",e=>{if(Math.abs(e.touches[0].clientX-_sx)>6||Math.abs(e.touches[0].clientY-_sy)>6)_mv=true;},{passive:true});
+      c.addEventListener("touchend",e=>{if(!_mv){e.preventDefault();go(pref+"_det",{mes,num:num});}},{passive:false});
+      c.addEventListener("click",()=>go(pref+"_det",{mes,num:num}));
       const vetusNum=num>=10001?num-10000:num;
       const labelTopo=pref==="cad2"?`<div style="font-family:'Fredoka One',sans-serif;font-size:13px;color:${isPago?"#2DC653":"#FF6B9D"}">ID ${vetusNum}</div>`:`<div style="font-family:'Fredoka One',sans-serif;font-size:18px;color:${isPago?"#2DC653":"#FF6B9D"}">🏠${num}</div>`;
       c.innerHTML=`${labelTopo}<div style="font-weight:700;color:#1A1A2E;font-size:11px;text-align:center">${casas[num]?.morador?casas[num].morador.split(" ")[0]:""}</div>${ats.length>0?`<div style="font-weight:800;color:${isPago?"#2DC653":"#FF6B9D"};font-size:12px">R$ ${sub.toFixed(2)}</div><div style="font-size:10px;color:#8B8FA8">${ats.length} banho${ats.length>1?"s":""}</div>`:'<div style="font-size:10px;color:#8B8FA8">Sem banhos</div>'}<div style="font-size:10px;font-weight:700;color:${sColor};background:${sBg};padding:2px 6px;border-radius:8px;width:100%;text-align:center">${sTxt}</div>`;
@@ -1060,9 +1067,11 @@ function renderGrade(titulo,pref,mes){
       const ativo=filtroAtivo===f.k;
       const fb=btn({style:{padding:"7px 13px",borderRadius:20,fontSize:12,fontWeight:800,background:ativo?"#1A1A2E":"#fff",color:ativo?"#fff":"#1A1A2E",border:"2px solid "+(ativo?"#1A1A2E":"#FFE4EF"),whiteSpace:"nowrap"}},
         (f.emoji?(f.emoji+" "):"")+f.l);
-      function setFiltro(e){e.preventDefault();e.stopPropagation();filtroAtivo=f.k;buildFiltros();buildGrid();}
-      fb.addEventListener("touchstart",setFiltro,{passive:false});
-      fb.addEventListener("click",setFiltro);
+      let _fsx=0,_fsy=0,_fmv=false;
+      fb.addEventListener("touchstart",e=>{_fsx=e.touches[0].clientX;_fsy=e.touches[0].clientY;_fmv=false;},{passive:true});
+      fb.addEventListener("touchmove",e=>{if(Math.abs(e.touches[0].clientX-_fsx)>6||Math.abs(e.touches[0].clientY-_fsy)>6)_fmv=true;},{passive:true});
+      fb.addEventListener("touchend",e=>{if(!_fmv){e.preventDefault();filtroAtivo=f.k;buildFiltros();buildGrid();}},{passive:false});
+      fb.addEventListener("click",()=>{filtroAtivo=f.k;buildFiltros();buildGrid();});
       filtroBand.appendChild(fb);
     });
   }
