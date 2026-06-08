@@ -212,7 +212,9 @@ function go(s,extra){
 function renderTopbar(){
   const tb=document.getElementById("topbar");tb.innerHTML="";
   [{k:"cad1",l:"Cad.1",i:"📁"},{k:"cad2",l:"Cad.2",i:"📂"},{k:"agenda",l:"Agenda",i:"📅"},{k:"saidas",l:"Saidas",i:"💸"},{k:"vendas",l:"Vendas",i:"🛍"},{k:"home",l:"Home",i:"🏠"}].forEach(b=>{
-    tb.appendChild(h("button",{className:"topbtn",onClick:()=>go(b.k)},[h("span",{},b.i),b.l]));
+    const bt=h("button",{className:"topbtn"},[h("span",{},b.i),b.l]);
+    bt.addEventListener("click",e=>{e.preventDefault();e.stopPropagation();NAV={s:b.k};renderTopbar();const app=document.getElementById("app");app.innerHTML="";const screens2={home:renderHome,agenda:()=>renderAgenda(false),saidas:renderSaidas,vendas:renderVendas,farmacia:renderFarmacia,stats:renderStats,exportar:renderExportar,restaurar:renderRestaurar,notas:renderNotas,mesclar:renderMesclar,cad1:()=>renderMenuCad("Cadastro 1","cad1"),cad2:()=>renderMenuCad("Cadastro 2","cad2")};if(screens2[b.k])app.appendChild(screens2[b.k]());});
+    tb.appendChild(bt);
   });
 }
 function renderTopbarGerente(){
@@ -394,7 +396,8 @@ function renderMenuCad(titulo,pref){
   const body=div({style:{padding:"28px 20px"}});
   [{l:"Cadastrar Cliente",sub:"Novo cadastro / editar tutor",i:"🏠",fn:()=>go(pref+"_casa")},
    {l:"Cobranças por Mês",sub:"Grade mensal de atendimentos",i:"📋",fn:()=>go(pref+"_meses")},
-   {l:"Financeiro",sub:"Receitas e pagamentos",i:"💰",fn:()=>go(pref+"_fin")}
+   {l:"Financeiro",sub:"Receitas e pagamentos",i:"💰",fn:()=>go(pref+"_fin")},
+   {l:"Agenda",sub:"Ver agenda de banho e tosa",i:"📅",fn:()=>go("agenda")}
   ].forEach((it,i)=>{
     const c=div({className:"btn card anim",style:{width:"100%",padding:"20px",display:"flex",alignItems:"center",gap:14,marginBottom:16,borderLeft:"5px solid #FF6B9D",animationDelay:i*40+"ms",cursor:"pointer"},onClick:it.fn});
     c.innerHTML=`<span style="font-size:34px">${it.i}</span><div><div style="font-family:'Fredoka One',sans-serif;font-size:19px;color:#FF6B9D">${it.l}</div><div style="font-size:12px;color:#8B8FA8;margin-top:2px">${it.sub}</div></div>`;
@@ -974,7 +977,7 @@ function renderDet(pref,mes,numero){
       // Pré-seleciona o tutor e abre modal de venda
       const casaObj=(pref==="cad1"?DATA.casas:DATA.casas2||{})[numero]||{};
       // Hack: abre modal de venda com tutor já fixado
-      abrirVendaModal(null,()=>{DATA=loadData();build();},numero);
+      abrirVendaModal(null,()=>{DATA=loadData();build();},numero,pref);
     }});
     vendaRapBtn.innerHTML='<span style="font-size:16px">🛍</span> Registrar Venda para este Cliente';
     body.appendChild(vendaRapBtn);
@@ -1070,7 +1073,20 @@ function abrirModalAt(pref,mes,numero,atEdit,repetir,onDone){
     ?updSilent(d=>({...d,cobrancas:{...d.cobrancas,[m]:{...(d.cobrancas[m]||{}),[n]:cb}}}))
     :updSilent(d=>({...d,cobrancas2:{...d.cobrancas2||{},[m]:{...(d.cobrancas2||{})[m]||{},[n]:cb}}}));
   const cob=getCob();const lastAt=cob.atendimentos?.slice(-1)[0];
-  let caes=atEdit?JSON.parse(JSON.stringify(atEdit.caes)):(repetir&&lastAt?JSON.parse(JSON.stringify(lastAt.caes)):[{nome:"",raca:"",servicos:[{nome:"Banho",valor:""}]}]);
+  // Para novo banho (não repetir), tenta pré-carregar pets do tutor com valores históricos
+  let caesDefault;
+  if(atEdit)caesDefault=JSON.parse(JSON.stringify(atEdit.caes));
+  else if(repetir&&lastAt)caesDefault=JSON.parse(JSON.stringify(lastAt.caes));
+  else{
+    // Busca pets cadastrados para este cliente
+    const casaObj=(pref==="cad1"?DATA.casas:DATA.casas2||{})[numero]||{};
+    const petsConhecidos=[];const vistos=new Set();
+    (DATA.modelos?.[numero]||[]).forEach(p=>{if(p.nome&&!vistos.has(p.nome)){vistos.add(p.nome);petsConhecidos.push({nome:p.nome,raca:p.raca||"",valor:getValorPetFromCobs(numero,p.nome)});}});
+    (casaObj.pets||[]).forEach(p=>{if(p.nome&&!vistos.has(p.nome)){vistos.add(p.nome);petsConhecidos.push({nome:p.nome,raca:p.raca||"",valor:getValorPetFromCobs(numero,p.nome)});}});
+    if(petsConhecidos.length>0)caesDefault=petsConhecidos.map(p=>({nome:p.nome,raca:p.raca,servicos:[{nome:"Banho",valor:p.valor>0?String(p.valor):""}]}));
+    else caesDefault=[{nome:"",raca:"",servicos:[{nome:"Banho",valor:""}]}];
+  }
+  let caes=caesDefault;
   let dataVal=atEdit?atEdit.data:hoje();
   const cont=div();let mv=null;
   function buildForm(){
@@ -2323,7 +2339,7 @@ function renderVendas(){
   }
   build();return w;
 }
-function abrirVendaModal(vEdit,onDone,casaNumFixado){
+function abrirVendaModal(vEdit,onDone,casaNumFixado,prefFixado){
   const all={...DATA.casas,...DATA.casas2||{}};const cl2=Object.entries(all).map(([n,c])=>({num:Number(n),morador:c.morador})).sort((a,b)=>a.num-b.num);
   const cont=div();
   // Estado interno do tutor selecionado
@@ -2332,9 +2348,15 @@ function abrirVendaModal(vEdit,onDone,casaNumFixado){
   // Campo de busca de tutor igual à agenda
   const tutorWrap=div({style:{position:"relative",marginBottom:12}});
   const tutorInp=inp({className:"fi",placeholder:"🔍 Buscar tutor...",style:{marginBottom:0}});
-  // Pré-preencher se editando ou tutor fixado
+  // Pré-preencher se editando ou tutor fixado — usa cadastro correto quando pref disponível
   const casaPreench=vEdit?vEdit.casaNum:casaNumFixado;
-  if(casaPreench){const c=all[casaPreench];tutorInp.value=c?`${c.morador} (Casa ${casaPreench})`:`Casa ${casaPreench}`;}
+  if(casaPreench){
+    let c=null;
+    if(prefFixado==="cad2")c=(DATA.casas2||{})[casaPreench];
+    else if(prefFixado==="cad1")c=DATA.casas[casaPreench];
+    else c=all[casaPreench];
+    tutorInp.value=c?`${c.morador} (Casa ${casaPreench})`:`Casa ${casaPreench}`;
+  }
   const tutorDrop=div({style:{position:"absolute",top:"100%",left:0,right:0,background:"#fff",border:"2px solid #FF6B9D",borderRadius:12,maxHeight:200,overflowY:"auto",zIndex:999,display:"none",boxShadow:"0 4px 16px rgba(0,0,0,.15)"}});
   tutorWrap.appendChild(tutorInp);
   tutorWrap.appendChild(tutorDrop);
