@@ -972,9 +972,12 @@ function renderGrade(titulo,pref,mes){
       else if(isEnviado){bColor="#FFD93D";sBg="#FFFBEE";sColor="#E8A000";sTxt="Enviado";}
       else if(isSemBanho){bColor="#FFE4EF";sBg="#f9f9f9";sColor="#8B8FA8";sTxt="Sem banho";}
       const c=div({className:"btn card",style:{padding:"13px 8px",display:"flex",flexDirection:"column",alignItems:"center",gap:5,borderTop:"4px solid "+bColor,cursor:"pointer"}});
-      function goToDet(e){e.preventDefault();e.stopPropagation();go(pref+"_det",{mes,num:num});}
-      c.addEventListener("touchstart",goToDet,{passive:false});
-      c.addEventListener("click",goToDet);
+      // Detecta se foi scroll ou tap
+      let touchStartX=0,touchStartY=0,touchMoved=false;
+      c.addEventListener("touchstart",e=>{touchStartX=e.touches[0].clientX;touchStartY=e.touches[0].clientY;touchMoved=false;},{passive:true});
+      c.addEventListener("touchmove",e=>{const dx=Math.abs(e.touches[0].clientX-touchStartX);const dy=Math.abs(e.touches[0].clientY-touchStartY);if(dx>8||dy>8)touchMoved=true;},{passive:true});
+      c.addEventListener("touchend",e=>{if(!touchMoved){e.preventDefault();go(pref+"_det",{mes,num:num});}});
+      c.addEventListener("click",()=>go(pref+"_det",{mes,num:num}));
       const vetusNum=num>=10001?num-10000:num;
       const labelTopo=pref==="cad2"?`<div style="font-family:'Fredoka One',sans-serif;font-size:13px;color:${isPago?"#2DC653":"#FF6B9D"}">ID ${vetusNum}</div>`:`<div style="font-family:'Fredoka One',sans-serif;font-size:18px;color:${isPago?"#2DC653":"#FF6B9D"}">🏠${num}</div>`;
       c.innerHTML=`${labelTopo}<div style="font-weight:700;color:#1A1A2E;font-size:11px;text-align:center">${casas[num]?.morador?casas[num].morador.split(" ")[0]:""}</div>${ats.length>0?`<div style="font-weight:800;color:${isPago?"#2DC653":"#FF6B9D"};font-size:12px">R$ ${sub.toFixed(2)}</div><div style="font-size:10px;color:#8B8FA8">${ats.length} banho${ats.length>1?"s":""}</div>`:'<div style="font-size:10px;color:#8B8FA8">Sem banhos</div>'}<div style="font-size:10px;font-weight:700;color:${sColor};background:${sBg};padding:2px 6px;border-radius:8px;width:100%;text-align:center">${sTxt}</div>`;
@@ -1319,22 +1322,26 @@ function renderAgenda(gerente){
     }
     const grupos=[];const vistos=new Set();
     evsDia.forEach(ev=>{
-      if(vistos.has(ev.id))return;
-      const irmaos=evsDia.filter(e=>e.casa===ev.casa&&e.func===ev.func&&e.hora===ev.hora);
-      irmaos.forEach(e=>vistos.add(e.id));grupos.push(irmaos);
+      if(!ev||vistos.has(ev.id))return;
+      const irmaos=evsDia.filter(e=>e&&e.casa===ev.casa&&e.func===ev.func&&e.hora===ev.hora);
+      irmaos.forEach(e=>e&&vistos.add(e.id));
+      if(irmaos.length>0)grupos.push(irmaos);
     });
-    const gruposFiltrados=filtroStatus==="todos"?grupos:grupos.filter(g=>(g[0].statusCor||"pendente")===filtroStatus);
+    const gruposFiltrados=(filtroStatus==="todos"?grupos:grupos.filter(g=>g&&g.length>0&&(g[0].statusCor||"pendente")===filtroStatus)).filter(Boolean);
     if(gruposFiltrados.length===0){evSection.appendChild(div({style:{textAlign:"center",padding:"20px 0",color:"#8B8FA8",fontSize:13}},"Nenhum com este filtro"));return;}
 
     gruposFiltrados.forEach((grupo,gi)=>{
+      if(!grupo||grupo.length===0)return;
       const rep=grupo[0];
+      if(!rep)return;
       const statusAtual=rep.statusCor||"pendente";const sc2=STATUS_CORES[statusAtual]||STATUS_CORES.pendente;
       const card=div({className:"card anim",style:{marginBottom:8,animationDelay:gi*20+"ms",borderLeft:"5px solid "+sc2.faixa,background:sc2.bg}});
       const inner=div({style:{padding:"12px 14px"}});
       const petsWrap=div();
       function buildPetsWrap(){
         petsWrap.innerHTML="";
-        const grpAtual=(DATA.agenda||[]).filter(a=>grupo.some(g=>g.id===a.id));
+        const ids2=new Set(grupo.map(g=>g.id));
+        const grpAtual=(DATA.agenda||[]).filter(a=>a&&ids2.has(a.id));
         grpAtual.forEach(ev=>{
           const val=getValorEvento(ev);
           const petRow=div({style:{display:"flex",alignItems:"center",gap:8,marginBottom:4,flexWrap:"wrap"}});
