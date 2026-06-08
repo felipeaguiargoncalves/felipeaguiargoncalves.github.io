@@ -1755,8 +1755,7 @@ function abrirPagamentoModal(grupo,onDone,gwaRota){
   }
 
   const montarMsg=(formaPag)=>{
-    const labels={dinheiro:"Dinheiro 💵",cartao:"Cartao 💳",pix:"Pix 📱",naopagou:"Pendente ⚠️"};
-    // Busca ID Vetus (usa o número da casa como ID Vetus)
+    const labels={dinheiro:"Dinheiro 💵",cartao:"Cartao 💳",pix:"Pix 📱",pl:"Retirou na Loja 🏪",naopagou:"Pendente ⚠️"};
     const vetusId=rep.casa>=10001?rep.casa-10000:rep.casa;
     let msg=`📅 ${fmtD(rep.data)}\nId Vetus ${vetusId} - ${rep.morador||""}\n`;
     grupo.forEach(ev=>{
@@ -1765,6 +1764,7 @@ function abrirPagamentoModal(grupo,onDone,gwaRota){
     });
     msg+=`\n💰 Total: R$ ${totalG.toFixed(2)}\n`;
     if(formaPag==="naopagou")msg+="⚠️ Pagamento pendente";
+    else if(formaPag==="pl")msg+=`🏪 Retirou na loja · ✅ Pagou: ${labels[formaPag]}`;
     else msg+=`✅ Pagou: ${labels[formaPag]}`;
     return encodeURIComponent(msg);
   };
@@ -1847,6 +1847,7 @@ function abrirPagamentoModal(grupo,onDone,gwaRota){
     {k:"dinheiro",l:"Pagou em Dinheiro",sub:"Lança pago + reagenda",e:"💵",bg:"#e8fbed",c:"#2DC653",bc:"#2DC653"},
     {k:"cartao",l:"Pagou no Cartao",sub:"Lança pago + reagenda",e:"💳",bg:"#EFF6FF",c:"#3B82F6",bc:"#3B82F6"},
     {k:"pix",l:"Pagou via Pix",sub:"Lança pago + reagenda",e:"📱",bg:"#f0fff4",c:"#00B37E",bc:"#00B37E"},
+    {k:"pl",l:"PL — Retirou na Loja",sub:"Porta da loja · Lança pago + reagenda",e:"🏪",bg:"#FFF8E7",c:"#D97706",bc:"#F59E0B"},
     {k:"naopagou",l:"Nao Pagou",sub:"Lança em aberto, sem reagendar",e:"❌",bg:"#fff0f0",c:"#e53e3e",bc:"#e53e3e"},
   ];
   let mv=null;
