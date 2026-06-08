@@ -271,6 +271,84 @@ function getValorEvento(ev){
   return getValorPetFromCobs(ev.casa,ev.pet);
 }
 
+// ── LANÇAR BANHOS BUSCADOS CAD.2 ─────────────────────────────────────────────
+function lancarBanhosBuscadosCad2(){
+  const casas2=DATA.casas2||{};
+  const agenda=DATA.agenda||[];
+  // Filtra: tutores do Cad.2, buscado:true, data em Maio (4) ou Junho (5)
+  const evsFiltrados=agenda.filter(ev=>{
+    if(!ev.buscado||!ev.data||!ev.casa)return false;
+    if(!casas2[String(ev.casa)]&&!casas2[Number(ev.casa)])return false;
+    const mes=new Date(ev.data+"T12:00:00").getMonth();
+    return mes===4||mes===5; // 4=Maio, 5=Junho
+  });
+  if(evsFiltrados.length===0){alert("Nenhum agendamento encontrado.\n(Cad.2 + Maio/Junho + buscado)");return;}
+
+  // Agrupa por tutor+mês para mostrar preview
+  const resumo={};
+  evsFiltrados.forEach(ev=>{
+    const d=new Date(ev.data+"T12:00:00");
+    const mesIdx=d.getMonth();
+    const mesNome=MESES[mesIdx];
+    const chave=mesNome+"_"+ev.casa;
+    if(!resumo[chave])resumo[chave]={mesNome,casa:ev.casa,evs:[]};
+    resumo[chave].evs.push(ev);
+  });
+
+  const totalTutores=Object.keys(resumo).length;
+  const cont=div();
+  const info=div({style:{background:"#EFF6FF",border:"2px solid #3B82F6",borderRadius:12,padding:"14px",marginBottom:14,fontSize:13,lineHeight:1.8}});
+  info.innerHTML=`<b style="color:#3B82F6">📋 ${evsFiltrados.length} agendamentos</b> encontrados<br><b>${totalTutores} tutor/mês</b> serão lançados nas cobranças do Cad.2<br><span style="color:#8B8FA8;font-size:11px">Todos marcados como pagos ✅</span>`;
+  cont.appendChild(info);
+
+  const prev=div({style:{maxHeight:200,overflowY:"auto",marginBottom:14,border:"1px solid #f0f0f0",borderRadius:10,padding:"6px"}});
+  Object.values(resumo).slice(0,30).forEach(({mesNome,casa,evs})=>{
+    const casaObj=casas2[String(casa)]||casas2[Number(casa)]||{};
+    const nome=(casaObj.morador||"Casa "+casa).split(" ")[0];
+    const r=div({style:{fontSize:11,padding:"4px 8px",borderBottom:"1px solid #f8f8f8",display:"flex",gap:8,alignItems:"center"}});
+    r.innerHTML=`<span style="color:#8B8FA8;min-width:50px">${mesNome}</span><span style="font-weight:700;flex:1">${nome}</span><span style="background:#EFF6FF;color:#3B82F6;borderRadius:6px;padding:"2px 6px">${evs.length} banho(s)</span>`;
+    prev.appendChild(r);
+  });
+  if(totalTutores>30){const m=div({style:{textAlign:"center",padding:"6px",color:"#8B8FA8",fontSize:11}});m.textContent="... e mais "+(totalTutores-30)+" combinações";prev.appendChild(m);}
+  cont.appendChild(prev);
+
+  let mv=null;
+  cont.appendChild(btn({style:{width:"100%",padding:"16px",background:"linear-gradient(135deg,#3B82F6,#60a5fa)",color:"#fff",fontSize:15,fontWeight:700,borderRadius:14,marginBottom:10},onClick:()=>{
+    updSilent(d=>{
+      const nd={...d};
+      if(!nd.cobrancas2)nd.cobrancas2={};
+      evsFiltrados.forEach(ev=>{
+        const dObj=new Date(ev.data+"T12:00:00");
+        const mesNome=MESES[dObj.getMonth()];
+        const casaNum=Number(ev.casa);
+        const casaObj=(nd.casas2||{})[casaNum]||{};
+        const valorRef=getValorPetFromCobs(casaNum,ev.pet)||parseFloat(ev.valorCustom)||0;
+        if(!nd.cobrancas2[mesNome])nd.cobrancas2[mesNome]={};
+        if(!nd.cobrancas2[mesNome][casaNum])nd.cobrancas2[mesNome][casaNum]={atendimentos:[],pago:false};
+        // Verifica duplicata pelo id do evento da agenda
+        const jaExiste=(nd.cobrancas2[mesNome][casaNum].atendimentos||[]).some(a=>a.agendaId===ev.id);
+        if(!jaExiste){
+          const novoAt={
+            id:Date.now()+Math.random(),
+            agendaId:ev.id,
+            data:ev.data,
+            caes:[{nome:ev.pet||"Pet",raca:"",servicos:[{nome:ev.servico||"Banho",valor:valorRef>0?String(valorRef):""}]}],
+            pago:true
+          };
+          nd.cobrancas2[mesNome][casaNum].atendimentos.push(novoAt);
+          nd.cobrancas2[mesNome][casaNum].atendimentos.sort((a,b)=>a.data.localeCompare(b.data));
+        }
+      });
+      return nd;
+    });
+    if(mv)mv.remove();
+    alert("✅ Banhos lançados nas cobranças do Cad.2!\nTodos marcados como pagos.");
+    render();
+  }},"💳 Lançar "+evsFiltrados.length+" banhos nas cobranças"));
+  cont.appendChild(btn({style:{width:"100%",padding:"13px",background:"#f5f5f5",color:"#666",borderRadius:12},onClick:()=>{if(mv)mv.remove();}},"Cancelar"));
+  mv=openModal("Lançar Banhos → Cad.2",cont,()=>{},true);
+}
+
 // ── HOME ──────────────────────────────────────────────────────────────────────
 function renderHome(){
   const w=div({className:"screen"});
@@ -294,6 +372,9 @@ function renderHome(){
   const agBtn=div({className:"btn",style:{width:"100%",padding:"18px",background:"linear-gradient(135deg,#9B59B6,#FF6B9D)",color:"#fff",fontSize:15,borderRadius:16,display:"flex",alignItems:"center",gap:12,cursor:"pointer"},onClick:()=>go("agenda_gerente")});
   agBtn.innerHTML='<span style="font-size:26px">✂️</span><div style="text-align:left"><div style="font-family:\'Fredoka One\',sans-serif;font-size:17px">Agenda — Banho e Tosa</div><div style="font-size:11px;opacity:.85">Tela da gerente</div></div>';
   extra.appendChild(agBtn);
+  const lbBtn=div({className:"btn",style:{width:"100%",padding:"18px",background:"linear-gradient(135deg,#3B82F6,#60a5fa)",color:"#fff",fontSize:15,borderRadius:16,display:"flex",alignItems:"center",gap:12,cursor:"pointer"},onClick:()=>lancarBanhosBuscadosCad2()});
+  lbBtn.innerHTML='<span style="font-size:26px">💳</span><div style="text-align:left"><div style="font-family:\'Fredoka One\',sans-serif;font-size:17px">Lançar Banhos → Cad.2</div><div style="font-size:11px;opacity:.85">Agenda buscada (Maio/Junho) nas cobranças</div></div>';
+  extra.appendChild(lbBtn);
   [   [()=>go("mesclar"),"🔀","Mesclar Duplicados","linear-gradient(135deg,#E8A000,#FFD93D)"],
    [()=>go("exportar"),"📋","Exportar Dados","linear-gradient(135deg,#1A1A2E,#2d2d4e)"],
    [()=>go("restaurar"),"📂","Restaurar Backup","linear-gradient(135deg,#2DC653,#52e87b)"]
@@ -307,10 +388,12 @@ function renderHome(){
 // ── MENU CADASTRO ─────────────────────────────────────────────────────────────
 function renderMenuCad(titulo,pref){
   const w=div({className:"screen"});
-  w.appendChild(mkHdr(titulo,()=>go("home")));
+  // Botão WA "Não Pagou" apenas para Cad.2
+  const waBtn=pref==="cad2"?btn({style:{background:"linear-gradient(135deg,#25D366,#128C7E)",color:"#fff",padding:"8px 12px",fontSize:11,borderRadius:11,fontWeight:700},onClick:()=>abrirModalNaoPagouCad2()},"📲 Não Pagou"):null;
+  w.appendChild(mkHdr(titulo,()=>go("home"),waBtn||undefined));
   const body=div({style:{padding:"28px 20px"}});
-  [{l:"Cadastrar Casa",sub:"Nova casa / tutor",i:"🏠",fn:()=>go(pref+"_casa")},
-   {l:"Cobrancas por Mes",sub:"Grade mensal de atendimentos",i:"📋",fn:()=>go(pref+"_meses")},
+  [{l:"Cadastrar Cliente",sub:"Novo cadastro / editar tutor",i:"🏠",fn:()=>go(pref+"_casa")},
+   {l:"Cobranças por Mês",sub:"Grade mensal de atendimentos",i:"📋",fn:()=>go(pref+"_meses")},
    {l:"Financeiro",sub:"Receitas e pagamentos",i:"💰",fn:()=>go(pref+"_fin")}
   ].forEach((it,i)=>{
     const c=div({className:"btn card anim",style:{width:"100%",padding:"20px",display:"flex",alignItems:"center",gap:14,marginBottom:16,borderLeft:"5px solid #FF6B9D",animationDelay:i*40+"ms",cursor:"pointer"},onClick:it.fn});
@@ -318,6 +401,94 @@ function renderMenuCad(titulo,pref){
     body.appendChild(c);
   });
   w.appendChild(body);return w;
+}
+
+function abrirModalNaoPagouCad2(){
+  // Pega mês atual
+  const agora=new Date();
+  const mesAtual=MESES[agora.getMonth()];
+  const casas2=DATA.casas2||{};
+  const cobs2=DATA.cobrancas2||{};
+
+  const cont=div();
+  // Seletor de mês
+  const mesLabel=h("p",{style:{fontWeight:700,color:"#8B8FA8",fontSize:11,textTransform:"uppercase",marginBottom:6}},"Mês de referência");
+  const mesSel=sel({className:"fi",style:{marginBottom:14}},MESES.map(m=>({v:m,l:m,sel:m===mesAtual})));
+  cont.appendChild(mesLabel);cont.appendChild(mesSel);
+
+  const previewWrap=div();
+  cont.appendChild(previewWrap);
+
+  function recalcular(){
+    previewWrap.innerHTML="";
+    const mes=mesSel.value;
+    const cbMes=cobs2[mes]||{};
+    // Clientes com atendimentos no mês e NÃO pagos (pago:false no nível da cobrança OU atendimentos individuais não pagos)
+    const inadimplentes=[];
+    Object.keys(casas2).forEach(cid=>{
+      const cb=cbMes[Number(cid)]||cbMes[cid]||{};
+      const ats=cb.atendimentos||[];
+      if(ats.length===0)return;
+      const totalPendente=ats.filter(a=>!a.pago).reduce((s,a)=>s+totAts([a]),0);
+      if(totalPendente<=0)return; // Tudo pago
+      const casa=casas2[cid]||{};
+      const tel=(casa.telefone||"").replace(/\D/g,"");
+      inadimplentes.push({cid,casa,cb,ats,totalPendente,tel});
+    });
+
+    const info=div({style:{background:"#fff0f0",border:"1.5px solid #e53e3e",borderRadius:10,padding:"10px 14px",marginBottom:12,fontSize:13,fontWeight:700,color:"#e53e3e"}});
+    info.textContent=`${inadimplentes.length} cliente(s) com pendência em ${mesSel.value}`;
+    previewWrap.appendChild(info);
+
+    if(inadimplentes.length===0){return;}
+
+    // Preview lista
+    const lista=div({style:{maxHeight:200,overflowY:"auto",marginBottom:12,border:"1px solid #f0f0f0",borderRadius:10,padding:6}});
+    inadimplentes.slice(0,30).forEach(({casa,totalPendente,tel})=>{
+      const r=div({style:{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 8px",borderBottom:"1px solid #f8f8f8",fontSize:12}});
+      r.innerHTML=`<span style="font-weight:700">${casa.morador||"?"}</span><span style="color:#e53e3e;font-weight:800">R$ ${totalPendente.toFixed(2)}</span><span style="color:#8B8FA8">${tel?"✓ tel":"sem tel"}</span>`;
+      lista.appendChild(r);
+    });
+    previewWrap.appendChild(lista);
+
+    // Botão enviar WA para todos com telefone
+    const comTel=inadimplentes.filter(i=>i.tel.length>=8);
+    if(comTel.length>0){
+      previewWrap.appendChild(btn({style:{width:"100%",padding:"14px",background:"linear-gradient(135deg,#25D366,#128C7E)",color:"#fff",fontSize:14,fontWeight:800,borderRadius:14,marginBottom:8,display:"flex",alignItems:"center",justifyContent:"center",gap:10},onClick:()=>{
+        // Abre WA para cada um sequencialmente (abre o primeiro, usuário manda e volta)
+        let idx=0;
+        function proxMsg(){
+          if(idx>=comTel.length){alert("✅ Mensagens abertas para "+comTel.length+" clientes!");return;}
+          const {casa,cb,ats,totalPendente,tel,cid}=comTel[idx++];
+          const mes=mesSel.value;
+          const atsPend=ats.filter(a=>!a.pago);
+          let msg=`🐾 PLANET DOGS\n📅 ${mes}\nOlá ${casa.morador||""}!\n\n`;
+          msg+=`✂️ Banhos pendentes:\n`;
+          atsPend.forEach(at=>{
+            msg+=`📅 ${fmtD(at.data)} — R$ ${totAts([at]).toFixed(2)}\n`;
+          });
+          msg+=`\n💰 Total: *R$ ${totalPendente.toFixed(2)}*\n\nObrigado! 🐾`;
+          window.open("https://api.whatsapp.com/send?phone=55"+tel+"&text="+encodeURIComponent(msg),"_blank");
+          setTimeout(proxMsg,800);
+        }
+        proxMsg();
+      }},["📲 Enviar WA para ",h("b",{}," "+comTel.length+" clientes")]));
+    }
+
+    // Botão copiar lista resumo
+    previewWrap.appendChild(btn({style:{width:"100%",padding:"12px",background:"#f5f5f5",color:"#1A1A2E",fontSize:13,borderRadius:12},onClick:()=>{
+      const mes=mesSel.value;
+      let txt=`📋 PENDENTES — ${mes}\n`;
+      inadimplentes.forEach(({casa,totalPendente})=>{txt+=`• ${casa.morador||"?"}: R$ ${totalPendente.toFixed(2)}\n`;});
+      navigator.clipboard.writeText(txt).then(()=>alert("Lista copiada!"));
+    }},"📋 Copiar lista"));
+  }
+
+  mesSel.addEventListener("change",recalcular);
+  recalcular();
+
+  let mv=null;
+  mv=openModal("📲 Clientes que Não Pagaram",cont,()=>{});
 }
 
 // ── CADASTRAR CASA ────────────────────────────────────────────────────────────
@@ -528,84 +699,209 @@ function importarPetsVetus(onDone){
 }
 function renderCadCasa(titulo,pref){
   const isCad2=pref==="cad2";
-  const casas=isCad2?DATA.casas2||{}:DATA.casas;
+  const w=div({className:"screen"});
+
+  // ── Funções de salvar ──────────────────────────────────────────────────────
   const saveFn=(n,m,t,end)=>pref==="cad1"
     ?upd(d=>({...d,casas:{...d.casas,[n]:{numero:n,morador:m,telefone:t}},enderecos:{...d.enderecos,[n]:end}}))
     :upd(d=>({...d,casas2:{...d.casas2||{},[n]:{numero:n,morador:m,telefone:t}},enderecos:{...d.enderecos,[n]:end}}));
-  const w=div({className:"screen"});
-  const extraBtns=pref==="cad2"?h("div",{style:{display:"flex",gap:5}},[
-    btn({style:{background:"linear-gradient(135deg,#3B82F6,#60a5fa)",color:"#fff",padding:"8px 10px",fontSize:11,borderRadius:11,fontWeight:700},onClick:()=>importarClientesVetus(()=>{DATA=loadData();})},"👤 Clientes"),
+
+  // ── Header com botões Vetus para Cad.2 ────────────────────────────────────
+  const extraBtns=isCad2?h("div",{style:{display:"flex",gap:5}},[
+    btn({style:{background:"linear-gradient(135deg,#3B82F6,#60a5fa)",color:"#fff",padding:"8px 10px",fontSize:11,borderRadius:11,fontWeight:700},onClick:()=>importarClientesVetus(()=>{DATA=loadData();renderPage();})},"👤 Clientes"),
     btn({style:{background:"linear-gradient(135deg,#FF6B9D,#FFD93D)",color:"#fff",padding:"8px 10px",fontSize:11,borderRadius:11,fontWeight:700},onClick:()=>importarPetsVetus(()=>{DATA=loadData();})},"🐾 Pets")
   ]):null;
   w.appendChild(mkHdr(titulo,()=>go(pref),extraBtns||undefined));
-  const body=div({style:{padding:"20px 18px 40px"}});
-  const nums=Object.keys(casas).map(Number).sort((a,b)=>a-b);
-  if(nums.length>0){
-    const p=div({style:{marginBottom:18}});
-    p.appendChild(h("p",{style:{fontWeight:700,color:"#8B8FA8",fontSize:11,textTransform:"uppercase",marginBottom:8}},`Ja cadastrados (${nums.length})`));
-    const flex=div({style:{display:"flex",flexWrap:"wrap",gap:7,maxHeight:200,overflowY:"auto",padding:4}});
-    nums.slice(0,80).forEach(n=>{
-      const c=casas[n]||{};const end=(DATA.enderecos||{})[n]||{};
-      flex.appendChild(btn({style:{background:"linear-gradient(135deg,#FF6B9D,#FFD93D)",color:"#fff",borderRadius:12,padding:"7px 13px",fontWeight:800,fontSize:12},onClick:()=>{numInp.value=n;numInp.readOnly=true;numInp.style.background="#f0f0f0";numInp.style.color="#888";editLabelReal.style.display="block";novoBtn.style.display="block";morInp.value=c.morador||"";telInp.value=c.telefone||"";ruaInp.value=end.rua||"";numEndInp.value=end.numero||"";bairroSel.value=end.bairro||"";}},c.morador?c.morador.split(" ")[0]:"Casa "+n));
-    });
-    p.appendChild(flex);body.appendChild(p);
-  }
-  const card=div({className:"card anim",style:{padding:20}});
-  const idLabel=isCad2?"ID (deixe vazio para gerar automatico)":"Numero da casa";
-  const idPlaceholder=isCad2?"Deixe vazio = auto (15000+)":"Numero da casa";
-  const numInp=inp({className:"fi",placeholder:idPlaceholder,type:"number",style:{marginBottom:4,fontSize:22,fontWeight:800,textAlign:"center",padding:"14px",color:"#FF6B9D"}});
-  const editLabelReal=div({style:{display:"none",background:"#EFF6FF",border:"1.5px solid #3B82F6",borderRadius:10,padding:"8px 12px",marginBottom:10,fontSize:12,fontWeight:700,color:"#3B82F6"}});
-  editLabelReal.innerHTML='✏️ Modo edição — ID bloqueado';
-  const novoBtn=btn({style:{display:"none",width:"100%",padding:"9px",background:"#f5f5f5",color:"#8B8FA8",borderRadius:10,fontSize:12,marginBottom:10},onClick:()=>{numInp.value="";numInp.readOnly=false;numInp.style.background="";numInp.style.color="#FF6B9D";editLabelReal.style.display="none";novoBtn.style.display="none";morInp.value="";telInp.value="";ruaInp.value="";numEndInp.value="";bairroSel.value="";}}, "➕ Limpar para novo cadastro");
-  if(isCad2){
-    const autoHint=div({style:{fontSize:11,color:"#8B8FA8",fontWeight:700,marginBottom:14,textAlign:"center"}});
-    autoHint.textContent="Se nao preencher, ID sera gerado automaticamente a partir de 15000";
-    card.appendChild(lbl(idLabel));card.appendChild(numInp);card.appendChild(editLabelReal);card.appendChild(novoBtn);card.appendChild(autoHint);
-  } else {
-    card.appendChild(lbl(idLabel));card.appendChild(numInp);card.appendChild(editLabelReal);card.appendChild(novoBtn);
-  }
-  const morInp=inp({className:"fi",placeholder:"Nome do tutor",style:{marginBottom:14}});
-  const telInp=inp({className:"fi",placeholder:"(51) 99999-9999",type:"tel",style:{marginBottom:14}});
-  const ruaInp=inp({className:"fi",placeholder:"Rua / Avenida",style:{marginBottom:10}});
-  const numEndInp=inp({className:"fi",placeholder:"Numero",type:"number",style:{marginBottom:10}});
-  const bairroSel=sel({className:"fi",style:{marginBottom:20}},[{v:"",l:"Selecione o bairro..."},{v:"Terra Ville",l:"Terra Ville"},{v:"Lami",l:"Lami"},{v:"Chapeu do Sol",l:"Chapeu do Sol"},{v:"Ponta Grossa",l:"Ponta Grossa"},{v:"Lajeado",l:"Lajeado"},{v:"Belem Novo",l:"Belem Novo"},{v:"Restinga",l:"Restinga"},{v:"Outro",l:"Outro"}]);
-  [lbl("Tutor"),morInp,lbl("Telefone"),telInp,
-   lbl("Rua"),ruaInp,lbl("Numero do Endereco"),numEndInp,lbl("Bairro"),bairroSel
-  ].forEach(el=>card.appendChild(el));
-  let okT=null;
-  const svBtn=btn({style:{width:"100%",padding:"16px",background:"linear-gradient(135deg,#FF6B9D,#FFD93D)",color:"#fff",fontSize:16,borderRadius:16},onClick:()=>{
-    if(!morInp.value.trim()){alert("Preencha o nome do tutor!");return;}
-    let n;
-    if(numInp.value.trim()===""){
-      if(!isCad2){alert("Preencha o numero!");return;}
-      n=getProxId(DATA.casas2||{});
-    } else {
-      n=Number(numInp.value);
-    }
-    saveFn(n,morInp.value.trim(),telInp.value,{rua:ruaInp.value.trim(),numero:numEndInp.value.trim(),bairro:bairroSel.value});
-    svBtn.textContent="Tutor Salvo! ✅";svBtn.style.background="linear-gradient(135deg,#2DC653,#52e87b)";
-    clearTimeout(okT);
-    // Abre modal de pets após salvar, e ao concluir abre a agenda
-    okT=setTimeout(()=>{
-      svBtn.textContent="Salvar Tutor";svBtn.style.background="linear-gradient(135deg,#FF6B9D,#FFD93D)";
-      numInp.value="";numInp.readOnly=false;numInp.style.background="";numInp.style.color="#FF6B9D";editLabelReal.style.display="none";novoBtn.style.display="none";morInp.value="";telInp.value="";ruaInp.value="";numEndInp.value="";bairroSel.value="";
-      abrirCadastroPetModal(n,pref,(casaNumRetorno)=>{
-        if(!casaNumRetorno)return;
-        // Modal para ir à agenda após cadastrar pets
-        const cont2=div();
-        const info2=div({style:{background:"#e8fbed",border:"2px solid #2DC653",borderRadius:14,padding:"16px",marginBottom:20,textAlign:"center"}});
-        info2.innerHTML='<div style="font-size:40px;margin-bottom:8px">✅</div><div style="font-weight:800;font-size:16px;color:#2DC653">Pets cadastrados!</div><div style="font-size:13px;color:#8B8FA8;margin-top:4px">Deseja agendar um banho agora?</div>';
-        cont2.appendChild(info2);
-        let mv2=null;
-        cont2.appendChild(btn({style:{width:"100%",padding:"16px",background:"linear-gradient(135deg,#FF6B9D,#FFD93D)",color:"#fff",fontSize:15,fontWeight:800,borderRadius:14,marginBottom:10},onClick:()=>{if(mv2)mv2.remove();go("agenda");}},"📅 Ir para Agenda"));
-        cont2.appendChild(btn({style:{width:"100%",padding:"13px",background:"#f5f5f5",color:"#8B8FA8",borderRadius:12,fontSize:14},onClick:()=>{if(mv2)mv2.remove();}},"Agora não"));
-        mv2=openModal("Cadastro Completo!",cont2,()=>{},true);
+
+  const body=div({style:{padding:"16px 18px 120px"}});
+  w.appendChild(body);
+
+  let editandoId=null; // id do cliente em edição
+
+  function renderPage(){
+    body.innerHTML="";
+    DATA=loadData();
+    const casas=isCad2?DATA.casas2||{}:DATA.casas;
+    const nums=Object.keys(casas).map(Number).sort((a,b)=>a-b);
+
+    // ── BUSCA ────────────────────────────────────────────────────────────────
+    const buscaWrap=div({style:{marginBottom:14}});
+    const buscaInp=inp({className:"fi",placeholder:"🔍  Buscar por nome, ID ou telefone...",style:{background:"#FFF5F9",border:"2px solid #FFE4EF"}});
+    buscaWrap.appendChild(buscaInp);
+    body.appendChild(buscaWrap);
+
+    // ── LISTA DE CLIENTES ────────────────────────────────────────────────────
+    const listaWrap=div({style:{marginBottom:18}});
+    const listaLabel=h("p",{style:{fontWeight:700,color:"#8B8FA8",fontSize:11,textTransform:"uppercase",marginBottom:8}},`Cadastrados (${nums.length})`);
+    listaWrap.appendChild(listaLabel);
+    const listaGrid=div({style:{display:"flex",flexDirection:"column",gap:6,maxHeight:260,overflowY:"auto",padding:2}});
+    listaWrap.appendChild(listaGrid);
+    body.appendChild(listaWrap);
+
+    function filtrarLista(q){
+      listaGrid.innerHTML="";
+      const ql=q.toLowerCase();
+      const filtrados=nums.filter(n=>{
+        const c=casas[n]||{};
+        if(!q)return true;
+        return String(n).includes(q)||(c.morador||"").toLowerCase().includes(ql)||(c.telefone||"").includes(q);
       });
-    },600);
-  }},"Salvar Tutor");
-  card.appendChild(svBtn);
-  body.appendChild(card);w.appendChild(body);return w;
+      if(filtrados.length===0){
+        const nem=div({style:{textAlign:"center",padding:"14px",color:"#8B8FA8",fontSize:13}});
+        nem.textContent="Nenhum resultado";listaGrid.appendChild(nem);return;
+      }
+      filtrados.slice(0,60).forEach(n=>{
+        const c=casas[n]||{};
+        const row=div({style:{display:"flex",alignItems:"center",gap:8,background:editandoId===n?"#EFF6FF":"#FFF5F9",border:"1.5px solid "+(editandoId===n?"#3B82F6":"#FFE4EF"),borderRadius:12,padding:"10px 12px",cursor:"pointer"}});
+        const info=div({style:{flex:1,minWidth:0}});
+        info.innerHTML=`<div style="font-weight:800;font-size:13px;color:#1A1A2E;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.morador||"Sem nome"}</div><div style="font-size:11px;color:#8B8FA8">ID ${n}${c.telefone?" · "+c.telefone:""}</div>`;
+        const editarBtn=btn({style:{background:"linear-gradient(135deg,#FF6B9D,#FFD93D)",color:"#fff",padding:"6px 12px",fontSize:11,borderRadius:10,fontWeight:800,flexShrink:0},onClick:(e)=>{e.stopPropagation();carregarParaEdicao(n);}},editandoId===n?"✏️ Editando":"Editar");
+        const excluirBtn=btn({style:{background:"#fff0f0",color:"#e53e3e",padding:"6px 10px",fontSize:11,borderRadius:10,fontWeight:800,flexShrink:0},onClick:(e)=>{
+          e.stopPropagation();
+          if(!confirm(`Excluir "${c.morador||"ID "+n}"?\nIsso remove o cliente e todos os dados de cobranças dele.`))return;
+          updSilent(d=>{
+            const nd={...d};
+            // Remove do cadastro
+            if(nd.casas2){nd.casas2={...nd.casas2};delete nd.casas2[n];}
+            if(nd.casas){nd.casas={...nd.casas};delete nd.casas[n];}
+            // Remove modelos e endereços
+            if(nd.modelos){nd.modelos={...nd.modelos};delete nd.modelos[n];}
+            if(nd.enderecos){nd.enderecos={...nd.enderecos};delete nd.enderecos[n];}
+            // Remove cobranças
+            ["cobrancas","cobrancas2"].forEach(k=>{
+              if(!nd[k])return;
+              nd[k]={...nd[k]};
+              MESES.forEach(m=>{if(nd[k][m]){nd[k][m]={...nd[k][m]};delete nd[k][m][n];}});
+            });
+            // Remove da agenda
+            if(nd.agenda)nd.agenda=nd.agenda.filter(a=>Number(a.casa)!==Number(n));
+            return nd;
+          });
+          if(editandoId===n)editandoId=null;
+          renderPage();
+        }},"🗑");
+        row.appendChild(info);row.appendChild(editarBtn);row.appendChild(excluirBtn);
+        listaGrid.appendChild(row);
+      });
+      if(filtrados.length>60){const m=div({style:{textAlign:"center",padding:"6px",color:"#8B8FA8",fontSize:11}});m.textContent="... e mais "+(filtrados.length-60)+" clientes";listaGrid.appendChild(m);}
+    }
+    buscaInp.addEventListener("input",()=>filtrarLista(buscaInp.value.trim()));
+    filtrarLista("");
+
+    // ── FORMULÁRIO ───────────────────────────────────────────────────────────
+    const modoLabel=div({style:{borderRadius:10,padding:"8px 12px",marginBottom:10,fontSize:12,fontWeight:700,display:"none"}});
+    body.appendChild(modoLabel);
+
+    const card=div({className:"card anim",style:{padding:20}});
+
+    // ID — editável sempre (campo livre)
+    const idLabel=isCad2?"ID Vetus / ID Cliente":"Número da casa";
+    const numInp=inp({className:"fi",placeholder:isCad2?"Deixe vazio = auto (15000+)":"Número da casa",type:"number",style:{marginBottom:4,fontSize:22,fontWeight:800,textAlign:"center",padding:"14px",color:"#FF6B9D"}});
+
+    const idAviso=div({style:{fontSize:11,color:"#8B8FA8",fontWeight:700,marginBottom:14,textAlign:"center",display:isCad2?"block":"none"}});
+    idAviso.textContent="Se não preencher, ID será gerado automaticamente a partir de 15000";
+
+    const morInp=inp({className:"fi",placeholder:"Nome do tutor",style:{marginBottom:14}});
+    const telInp=inp({className:"fi",placeholder:"(51) 99999-9999",type:"tel",style:{marginBottom:14}});
+    const ruaInp=inp({className:"fi",placeholder:"Rua / Avenida",style:{marginBottom:10}});
+    const numEndInp=inp({className:"fi",placeholder:"Numero",type:"number",style:{marginBottom:10}});
+    const bairroSel=sel({className:"fi",style:{marginBottom:20}},[{v:"",l:"Selecione o bairro..."},{v:"Terra Ville",l:"Terra Ville"},{v:"Lami",l:"Lami"},{v:"Chapeu do Sol",l:"Chapeu do Sol"},{v:"Ponta Grossa",l:"Ponta Grossa"},{v:"Lajeado",l:"Lajeado"},{v:"Belem Novo",l:"Belem Novo"},{v:"Restinga",l:"Restinga"},{v:"Outro",l:"Outro"}]);
+
+    const limparBtn=btn({style:{display:"none",width:"100%",padding:"9px",background:"#f5f5f5",color:"#8B8FA8",borderRadius:10,fontSize:12,marginBottom:10},onClick:()=>{
+      editandoId=null;numInp.value="";morInp.value="";telInp.value="";ruaInp.value="";numEndInp.value="";bairroSel.value="";
+      modoLabel.style.display="none";limparBtn.style.display="none";
+      svBtn.textContent="Salvar Tutor";svBtn.style.background="linear-gradient(135deg,#FF6B9D,#FFD93D)";
+      filtrarLista(buscaInp.value.trim());
+    }},"➕ Limpar para novo cadastro");
+
+    [lbl(idLabel),numInp,idAviso,lbl("Tutor"),morInp,lbl("Telefone"),telInp,
+     lbl("Rua"),ruaInp,lbl("Número do Endereço"),numEndInp,lbl("Bairro"),bairroSel,
+     limparBtn
+    ].forEach(el=>card.appendChild(el));
+
+    let okT=null;
+    const svBtn=btn({style:{width:"100%",padding:"16px",background:"linear-gradient(135deg,#FF6B9D,#FFD93D)",color:"#fff",fontSize:16,borderRadius:16},onClick:()=>{
+      if(!morInp.value.trim()){alert("Preencha o nome do tutor!");return;}
+      let novoN;
+      if(numInp.value.trim()===""){
+        if(!isCad2){alert("Preencha o número!");return;}
+        novoN=getProxId(DATA.casas2||{});
+      } else {
+        novoN=Number(numInp.value);
+      }
+      const antigId=editandoId;
+      // Se mudou o ID: migra cobranças, agenda, modelos, endereços
+      if(antigId!==null&&antigId!==novoN){
+        updSilent(d=>{
+          const nd={...d};
+          const casaKey=pref==="cad1"?"casas":"casas2";
+          if(nd[casaKey]){nd[casaKey]={...nd[casaKey]};delete nd[casaKey][antigId];}
+          if(nd.modelos){nd.modelos={...nd.modelos};if(nd.modelos[antigId]){nd.modelos[novoN]=nd.modelos[antigId];delete nd.modelos[antigId];}}
+          if(nd.enderecos){nd.enderecos={...nd.enderecos};if(nd.enderecos[antigId]){nd.enderecos[novoN]=nd.enderecos[antigId];delete nd.enderecos[antigId];}}
+          ["cobrancas","cobrancas2"].forEach(k=>{
+            if(!nd[k])return;nd[k]={...nd[k]};
+            MESES.forEach(m=>{if(nd[k][m]&&nd[k][m][antigId]){nd[k][m]={...nd[k][m]};nd[k][m][novoN]=nd[k][m][antigId];delete nd[k][m][antigId];}});
+          });
+          if(nd.agenda)nd.agenda=nd.agenda.map(a=>Number(a.casa)===Number(antigId)?{...a,casa:novoN}:a);
+          return nd;
+        });
+      }
+      const end={rua:ruaInp.value.trim(),numero:numEndInp.value.trim(),bairro:bairroSel.value};
+      saveFn(novoN,morInp.value.trim(),telInp.value,end);
+      editandoId=null;
+      svBtn.textContent=antigId!==null?"Cliente Atualizado! ✅":"Tutor Salvo! ✅";
+      svBtn.style.background="linear-gradient(135deg,#2DC653,#52e87b)";
+      clearTimeout(okT);
+      okT=setTimeout(()=>{
+        svBtn.textContent="Salvar Tutor";svBtn.style.background="linear-gradient(135deg,#FF6B9D,#FFD93D)";
+        numInp.value="";morInp.value="";telInp.value="";ruaInp.value="";numEndInp.value="";bairroSel.value="";
+        modoLabel.style.display="none";limparBtn.style.display="none";
+        if(antigId===null){
+          abrirCadastroPetModal(novoN,pref,(casaNumRetorno)=>{
+            if(!casaNumRetorno)return;
+            const cont2=div();
+            const info2=div({style:{background:"#e8fbed",border:"2px solid #2DC653",borderRadius:14,padding:"16px",marginBottom:20,textAlign:"center"}});
+            info2.innerHTML='<div style="font-size:40px;margin-bottom:8px">✅</div><div style="font-weight:800;font-size:16px;color:#2DC653">Pets cadastrados!</div><div style="font-size:13px;color:#8B8FA8;margin-top:4px">Deseja agendar um banho agora?</div>';
+            cont2.appendChild(info2);
+            let mv2=null;
+            cont2.appendChild(btn({style:{width:"100%",padding:"16px",background:"linear-gradient(135deg,#FF6B9D,#FFD93D)",color:"#fff",fontSize:15,fontWeight:800,borderRadius:14,marginBottom:10},onClick:()=>{if(mv2)mv2.remove();go("agenda");}},"📅 Ir para Agenda"));
+            cont2.appendChild(btn({style:{width:"100%",padding:"13px",background:"#f5f5f5",color:"#8B8FA8",borderRadius:12,fontSize:14},onClick:()=>{if(mv2)mv2.remove();}},"Agora não"));
+            mv2=openModal("Cadastro Completo!",cont2,()=>{},true);
+          });
+        }
+        renderPage();
+      },600);
+    }},"Salvar Tutor");
+    card.appendChild(svBtn);
+    body.appendChild(card);
+
+    // Função para carregar cliente no formulário
+    function carregarParaEdicao(n){
+      const c=(isCad2?DATA.casas2||{}:DATA.casas)[n]||{};
+      const end=(DATA.enderecos||{})[n]||{};
+      editandoId=n;
+      numInp.value=n;
+      morInp.value=c.morador||"";
+      telInp.value=c.telefone||"";
+      ruaInp.value=end.rua||"";
+      numEndInp.value=end.numero||"";
+      bairroSel.value=end.bairro||"";
+      modoLabel.style.display="block";
+      modoLabel.style.background="#EFF6FF";modoLabel.style.color="#3B82F6";modoLabel.style.border="1.5px solid #3B82F6";
+      modoLabel.textContent="✏️ Modo edição — ID e dados editáveis";
+      limparBtn.style.display="block";
+      svBtn.textContent="Salvar Alterações";
+      svBtn.style.background="linear-gradient(135deg,#3B82F6,#60a5fa)";
+      filtrarLista(buscaInp.value.trim());
+      // Scroll para o formulário
+      card.scrollIntoView({behavior:"smooth",block:"start"});
+    }
+  }
+
+  renderPage();
+  return w;
 }
+
 
 // ── MESES ─────────────────────────────────────────────────────────────────────
 function renderMeses(pref){
