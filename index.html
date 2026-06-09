@@ -939,12 +939,24 @@ function renderCadCasa(titulo,pref){
         numInp.value="";morInp.value="";telInp.value="";ruaInp.value="";numEndInp.value="";bairroSel.value="";
         modoLabel.style.display="none";limparBtn.style.display="none";
         if(antigId===null){
+          const telSalvo=telInp.value.trim();
+          const nomeSalvo=morInp.value.trim();
           abrirCadastroPetModal(novoN,pref,(casaNumRetorno)=>{
             if(!casaNumRetorno)return;
             const cont2=div();
             const info2=div({style:{background:"#e8fbed",border:"2px solid #2DC653",borderRadius:14,padding:"16px",marginBottom:20,textAlign:"center"}});
             info2.innerHTML='<div style="font-size:40px;margin-bottom:8px">✅</div><div style="font-weight:800;font-size:16px;color:#2DC653">Pets cadastrados!</div><div style="font-size:13px;color:#8B8FA8;margin-top:4px">Deseja agendar um banho agora?</div>';
             cont2.appendChild(info2);
+            if(telSalvo){
+              const telNum=telSalvo.replace(/\D/g,"");
+              const primeiroNome=nomeSalvo.split(" ")[0];
+              const msgBV=encodeURIComponent("Olá "+primeiroNome+"! 🐾\nSeja bem-vindo(a) à *Planet Dogs*! 🐶\n\nSeu cadastro foi realizado com sucesso.\nQualquer dúvida sobre agendamentos, serviços ou produtos estamos à disposição!\n\n*Planet Dogs* — Cuidando do seu pet com amor 💛");
+              const waUrl="https://api.whatsapp.com/send?phone=55"+telNum+"&text="+msgBV;
+              const bWA=btn({style:{width:"100%",padding:"16px",background:"linear-gradient(135deg,#25D366,#128C7E)",color:"#fff",fontSize:15,fontWeight:800,borderRadius:14,marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:10}});
+              bWA.innerHTML='<span style="font-size:20px">💬</span> Enviar WA Boas-vindas';
+              bWA.onclick=()=>window.open(waUrl,"_blank");
+              cont2.appendChild(bWA);
+            }
             let mv2=null;
             cont2.appendChild(btn({style:{width:"100%",padding:"16px",background:"linear-gradient(135deg,#FF6B9D,#FFD93D)",color:"#fff",fontSize:15,fontWeight:800,borderRadius:14,marginBottom:10},onClick:()=>{if(mv2)mv2.remove();go("agenda");}},"📅 Ir para Agenda"));
             cont2.appendChild(btn({style:{width:"100%",padding:"13px",background:"#f5f5f5",color:"#8B8FA8",borderRadius:12,fontSize:14},onClick:()=>{if(mv2)mv2.remove();}},"Agora não"));
@@ -1100,16 +1112,6 @@ function renderDet(pref,mes,numero){
     body.innerHTML="";DATA=loadData();
     const cob=getCob();const ats=cob.atendimentos||[];const pago=!!cob.pago;const nota=!!cob.notaEnviada;
     const total=totAts(ats);const tel=(casa.telefone||"").replace(/\D/g,"");
-    // ── Botão Venda Rápida ────────────────────────────────────────────────────
-    const vendaRapBtn=btn({style:{width:"100%",padding:"11px",background:"linear-gradient(135deg,#9B59B6,#c084fc)",color:"#fff",fontSize:13,fontWeight:800,borderRadius:12,marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:8},onClick:()=>{
-      // Pré-seleciona o tutor e abre modal de venda
-      const casaObj=(pref==="cad1"?DATA.casas:DATA.casas2||{})[numero]||{};
-      // Hack: abre modal de venda com tutor já fixado
-      abrirVendaModal(null,()=>{DATA=loadData();build();},numero,pref);
-    }});
-    vendaRapBtn.innerHTML='<span style="font-size:16px">🛍</span> Registrar Venda para este Cliente';
-    body.appendChild(vendaRapBtn);
-
     const sc=div({style:{background:pago?"#e8fbed":"#FFF5F9",borderRadius:16,padding:"13px 18px",marginBottom:12,border:"1.5px solid "+(pago?"#2DC653":"#FFE4EF")}});
     const scT=div({style:{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}});
     const si=div();si.innerHTML=`<div style="font-weight:800;color:${pago?"#2DC653":"#FF6B9D"};font-size:15px">${pago?"Tudo Pago":"Aberto"}</div><div style="font-size:13px;color:#8B8FA8">Total: R$ ${total.toFixed(2)}</div>`;
@@ -1187,8 +1189,47 @@ function renderDet(pref,mes,numero){
       at.caes.forEach((c,ci)=>{const cd=div({style:{marginBottom:ci<at.caes.length-1?8:0}});cd.innerHTML=`<span style="font-weight:800;color:#1A1A2E;font-size:13px">🐶 ${c.nome||"?"}${c.raca?" - "+c.raca:""}</span><span style="color:#8B8FA8;font-size:12px;margin-left:8px">${(c.servicos||[]).map(sv=>sv.nome+" R$"+parseFloat(sv.valor||0).toFixed(2)).join(" | ")}</span>`;bot.appendChild(cd);});
       card.appendChild(bot);body.appendChild(card);
     });
+    // ── SEÇÃO DE VENDAS (dentro do build, sobrevive ao body.innerHTML="") ──
+    const vendasTutorAll=(DATA.vendas||[]).filter(v=>Number(v.casaNum)===Number(numero));
+    const totVG=vendasTutorAll.reduce((s,v)=>s+(parseFloat(v.preco)||0)*(parseInt(v.qtd)||1),0);
+    const totVP=vendasTutorAll.filter(v=>v.pago).reduce((s,v)=>s+(parseFloat(v.preco)||0)*(parseInt(v.qtd)||1),0);
+    const totVPend=totVG-totVP;
+    const sepV=div({style:{height:"2px",background:"linear-gradient(to right,#9B59B6,#c084fc)",borderRadius:2,margin:"18px 0 12px"}});
+    body.appendChild(sepV);
+    const hdrVs=div({style:{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}});
+    hdrVs.innerHTML=`<div style="font-family:'Fredoka One',sans-serif;font-size:17px;color:#9B59B6">🛍 Produtos / Vendas</div>`;
+    const addVBtn2=btn({style:{background:"linear-gradient(135deg,#9B59B6,#c084fc)",color:"#fff",padding:"8px 14px",borderRadius:12,fontSize:13,fontWeight:800},onClick:()=>abrirVendaModal(null,()=>{DATA=loadData();build();},numero,pref)},"+ Venda");
+    hdrVs.appendChild(addVBtn2);body.appendChild(hdrVs);
+    if(vendasTutorAll.length>0){
+      const smV=div({style:{background:"#F5F0FF",borderRadius:14,padding:"12px 16px",marginBottom:10,border:"1.5px solid #9B59B6"}});
+      smV.innerHTML=`<div style="font-size:10px;font-weight:700;color:#9B59B6;text-transform:uppercase;margin-bottom:6px">Totais Produtos (separado dos banhos)</div><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:6px"><div><div style="font-size:9px;font-weight:700;color:#8B8FA8">TOTAL</div><div style="font-family:'Fredoka One',sans-serif;font-size:16px;color:#9B59B6">R$ ${totVG.toFixed(2)}</div></div><div><div style="font-size:9px;font-weight:700;color:#2DC653">PAGO</div><div style="font-family:'Fredoka One',sans-serif;font-size:16px;color:#2DC653">R$ ${totVP.toFixed(2)}</div></div><div><div style="font-size:9px;font-weight:700;color:#e53e3e">PENDENTE</div><div style="font-family:'Fredoka One',sans-serif;font-size:16px;color:#e53e3e">R$ ${totVPend.toFixed(2)}</div></div></div>`;
+      body.appendChild(smV);
+      vendasTutorAll.slice().reverse().forEach(v=>{
+        const sub=(parseFloat(v.preco)||0)*(parseInt(v.qtd)||1);const vpago=!!v.pago;
+        const cv=div({className:"card",style:{marginBottom:8,borderLeft:"4px solid "+(vpago?"#2DC653":"#9B59B6")}});
+        const topV=div({style:{padding:"10px 14px 6px",display:"flex",alignItems:"flex-start",gap:8}});
+        const infV=div({style:{flex:1}});
+        infV.innerHTML=`<div style="font-weight:800;color:#1A1A2E;font-size:14px">${v.nome}${parseInt(v.qtd)>1?" x"+v.qtd:""}</div><div style="font-size:11px;color:#8B8FA8">${fmtD(v.data)}</div>`;
+        const valV=div({style:{textAlign:"right",flexShrink:0}});
+        valV.innerHTML=`<div style="font-family:'Fredoka One',sans-serif;font-size:18px;color:${vpago?"#2DC653":"#9B59B6"}">R$ ${sub.toFixed(2)}</div>`;
+        topV.appendChild(infV);topV.appendChild(valV);cv.appendChild(topV);
+        const acoesV=div({style:{padding:"0 14px 10px",display:"flex",gap:7}});
+        const bPV=btn({style:{flex:1,padding:"8px",borderRadius:11,fontSize:12,fontWeight:800,background:vpago?"#2DC653":"#fff",color:vpago?"#fff":"#2DC653",border:"2px solid #2DC653"}},vpago?"✅ Pago":"Marcar Pago");
+        bPV.onclick=()=>{updSilent(d=>({...d,vendas:(d.vendas||[]).map(x=>x.id===v.id?{...x,pago:true}:x)}));DATA=loadData();build();};
+        const bPdV=btn({style:{flex:1,padding:"8px",borderRadius:11,fontSize:12,fontWeight:800,background:!vpago?"#9B59B6":"#fff",color:!vpago?"#fff":"#9B59B6",border:"2px solid #9B59B6"}},!vpago?"⚠️ Pend.":"Desfazer");
+        bPdV.onclick=()=>{updSilent(d=>({...d,vendas:(d.vendas||[]).map(x=>x.id===v.id?{...x,pago:false}:x)}));DATA=loadData();build();};
+        const bDlV=btn({style:{padding:"8px 11px",borderRadius:11,fontSize:12,background:"#fff0f0",color:"#e53e3e",border:"2px solid #ffd0d0",fontWeight:800}},"🗑");
+        bDlV.onclick=()=>{if(confirm("Apagar?")){updSilent(d=>({...d,vendas:(d.vendas||[]).filter(x=>x.id!==v.id)}));DATA=loadData();build();}};
+        acoesV.appendChild(bPV);acoesV.appendChild(bPdV);acoesV.appendChild(bDlV);
+        cv.appendChild(acoesV);body.appendChild(cv);
+      });
+    } else {
+      const empV=div({style:{textAlign:"center",padding:"10px 0 8px",color:"#8B8FA8",fontSize:13,fontWeight:600}});
+      empV.textContent="Nenhum produto registrado para este cliente";body.appendChild(empV);
+    }
   }
   build();
+
   // Botões de ação fixos embaixo
   const fab=div({style:{position:"fixed",bottom:0,left:0,right:0,padding:"12px 18px 20px",display:"flex",gap:10,background:"linear-gradient(to top,rgba(255,255,255,1) 70%,transparent)",zIndex:100}});
   const repBtn=btn({style:{flex:1,padding:"16px",background:"linear-gradient(135deg,#1A1A2E,#2d2d4e)",color:"#fff",fontSize:15,fontWeight:800,borderRadius:16},onClick:()=>abrirModalAt(pref,mes,numero,null,true,build)},"Repetir");
@@ -1444,10 +1485,9 @@ function renderAgenda(gerente){
       const acts=div({style:{display:"flex",gap:5,marginTop:8,flexWrap:"wrap"}});
       const todosBaixados=grupo.every(e=>e.buscado);
       if(!todosBaixados)acts.appendChild(btn({style:{padding:"8px 12px",background:"linear-gradient(135deg,#FFD93D,#E8A000)",color:"#fff",borderRadius:10,fontSize:12,fontWeight:800},onClick:()=>{
-        // Abre modal de pagamento igual ao botão 💬 WA
         const ids=new Set(grupo.map(e=>e.id));
         const grupoAtual=(DATA.agenda||[]).filter(a=>ids.has(a.id));
-        abrirPagamentoModal(grupoAtual.length>0?grupoAtual:grupo,buildEvs,DATA.gruposWAPag||{});
+        abrirPagamentoModal(grupoAtual.length>0?grupoAtual:grupo,buildEvs,DATA.gruposWAPag||{},true); // true = sem WA
       }},"✓ Dar Baixa"));
       else acts.appendChild(div({style:{padding:"8px 10px",background:"#e8fbed",color:"#2DC653",borderRadius:10,fontSize:11,fontWeight:800,border:"1px solid #2DC653"}},"✅ Baixado"));
       acts.appendChild(btn({style:{background:"#EFF6FF",color:"#3B82F6",padding:"7px 10px",borderRadius:10,fontSize:12,fontWeight:800},onClick:()=>abrirEditDataModal(grupo,buildEvs)},"📅"));
@@ -1736,11 +1776,21 @@ function abrirValorModal(ev,onDone){
 }
 
 // ── MODAL PAGAMENTO WA — com renovação automática ─────────────────────────────
-function abrirPagamentoModal(grupo,onDone,gwaRota){
+function abrirPagamentoModal(grupo,onDone,gwaRota,semWA){
   const rep=grupo[0];
   const diaSemPag=new Date(rep.data+"T12:00:00").getDay();
   const linkGrupoPag=((DATA.gruposWAPag||{})[diaSemPag]||"").trim();
   const totalG=grupo.reduce((s,ev)=>s+getValorEvento(ev),0);
+
+  // Detecta cliente novo: nunca teve atendimento baixado antes desta data
+  const atendimentosAnteriores=(DATA.agenda||[]).filter(a=>
+    a.casa===rep.casa && a.buscado && a.data<rep.data
+  );
+  const isClienteNovo=atendimentosAnteriores.length===0;
+
+  // Busca telefone do cliente
+  const casaObj=(DATA.casas[rep.casa]||(DATA.casas2||{})[rep.casa])||{};
+  const telCliente=(casaObj.telefone||rep.telefone||"").trim();
 
   // Busca o último intervalo de repetição usado para este tutor
   const petsGrupo=new Set(grupo.map(e=>e.pet));
@@ -1758,6 +1808,21 @@ function abrirPagamentoModal(grupo,onDone,gwaRota){
     const labels={dinheiro:"Dinheiro 💵",cartao:"Cartao 💳",pix:"Pix 📱",pl:"Retirou na Loja 🏪",naopagou:"Pendente ⚠️"};
     const vetusId=rep.casa>=10001?rep.casa-10000:rep.casa;
     let msg=`📅 ${fmtD(rep.data)}\nId Vetus ${vetusId} - ${rep.morador||""}\n`;
+    if(isClienteNovo)msg+=`🆕 *Cliente novo*\n`;
+    if(isClienteNovo&&telCliente)msg+=`📞 ${telCliente}\n`;
+    if(isClienteNovo){
+      // Raça dos pets do grupo
+      grupo.forEach(ev=>{
+        const pets=(DATA.modelos&&DATA.modelos[rep.casa])||[];
+        const petObj=pets.find(p=>p.nome===ev.pet);
+        const raca=petObj?.raca||(ev.raca||"");
+        if(raca)msg+=`🐾 ${ev.pet}: ${raca}\n`;
+      });
+      // Endereço
+      const endObj=(DATA.enderecos&&DATA.enderecos[rep.casa])||{};
+      const endStr=casaObj.endereco||(endObj.rua?(endObj.rua+(endObj.numero?" "+endObj.numero:"")+(endObj.bairro?" - "+endObj.bairro:"")):"")|| rep.endereco||"";
+      if(endStr)msg+=`📍 ${endStr}\n`;
+    }
     grupo.forEach(ev=>{
       const val=getValorEvento(ev);
       msg+=`🐶 ${ev.pet||"Pet"} ${ev.servico||"Banho"}${val>0?"  R$ "+val.toFixed(2):""}\n`;
@@ -1860,17 +1925,18 @@ function abrirPagamentoModal(grupo,onDone,gwaRota){
       if(op.k!=="naopagou"&&repSelecionado>0){
         novaData=reagendarProximo(repSelecionado);
       }
-      // Copia mensagem e abre grupo/WA
-      const txtMsg=decodeURIComponent(msg);
-      navigator.clipboard.writeText(txtMsg).catch(()=>{});
-      if(linkGrupoPag.startsWith("https://")){
-        // Mostra aviso que mensagem foi copiada antes de abrir grupo
-        const toast=div({style:{position:"fixed",bottom:100,left:"50%",transform:"translateX(-50%)",background:"#1A1A2E",color:"#FFD93D",padding:"12px 20px",borderRadius:14,fontSize:14,fontWeight:800,zIndex:9999,textAlign:"center",boxShadow:"0 4px 20px rgba(0,0,0,.4)",maxWidth:"80vw"}});
-        toast.textContent="📋 Mensagem copiada! Cole no grupo.";
-        document.body.appendChild(toast);
-        setTimeout(()=>{toast.remove();window.open(linkGrupoPag,"_blank");},1500);
-      } else {
-        window.open("https://api.whatsapp.com/send?text="+msg,"_blank");
+      if(!semWA){
+        // Copia mensagem e abre grupo/WA
+        const txtMsg=decodeURIComponent(msg);
+        navigator.clipboard.writeText(txtMsg).catch(()=>{});
+        if(linkGrupoPag.startsWith("https://")){
+          const toast=div({style:{position:"fixed",bottom:100,left:"50%",transform:"translateX(-50%)",background:"#1A1A2E",color:"#FFD93D",padding:"12px 20px",borderRadius:14,fontSize:14,fontWeight:800,zIndex:9999,textAlign:"center",boxShadow:"0 4px 20px rgba(0,0,0,.4)",maxWidth:"80vw"}});
+          toast.textContent="📋 Mensagem copiada! Cole no grupo.";
+          document.body.appendChild(toast);
+          setTimeout(()=>{toast.remove();window.open(linkGrupoPag,"_blank");},1500);
+        } else {
+          window.open("https://api.whatsapp.com/send?text="+msg,"_blank");
+        }
       }
       if(mv)mv.remove();
       if(novaData)setTimeout(()=>alert(`✅ Próximo agendamento criado para ${fmtD(novaData)}!`),700);
