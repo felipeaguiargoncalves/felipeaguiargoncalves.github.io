@@ -239,7 +239,7 @@ function render(){
   const screens={
     home:renderHome,
     agenda:()=>renderAgenda(false),agenda_gerente:()=>renderAgenda(true),
-    saidas:renderSaidas,vendas:renderVendas,farmacia:renderFarmacia,
+    saidas:renderSaidas,vendas:renderVendas,farmacia:renderFarmacia,bolao:renderBolao,
     stats:renderStats,exportar:renderExportar,restaurar:renderRestaurar,notas:renderNotas,mesclar:renderMesclar,
     cad1:()=>renderMenuCad("Cadastro 1","cad1"),cad2:()=>renderMenuCad("Cadastro 2","cad2"),
     cad1_casa:()=>renderCadCasa("Cadastro 1","cad1"),cad2_casa:()=>renderCadCasa("Cadastro 2","cad2"),
@@ -443,6 +443,10 @@ function renderHome(){
     c.innerHTML=`<span style="font-size:30px">${it.i}</span><span style="font-family:'Fredoka One',sans-serif;font-size:15px;color:${it.c}">${it.l}</span>`;
     grid.appendChild(c);
   });
+  // Botão Bolão Copa largura total
+  const bolaoGridBtn=div({className:"card btn anim",style:{gridColumn:"1/-1",padding:"16px",display:"flex",alignItems:"center",gap:12,cursor:"pointer",background:"linear-gradient(135deg,#15803d,#16a34a,#22c55e)",border:"none",borderRadius:16,animationDelay:"200ms"},onClick:()=>go("bolao")});
+  bolaoGridBtn.innerHTML=`<span style="font-size:36px">⚽</span><div style="flex:1"><div style="font-family:'Fredoka One',sans-serif;font-size:20px;color:#fff;letter-spacing:.5px">Bolão Copa 2026</div><div style="font-size:11px;color:rgba(255,255,255,.85);font-weight:700;margin-top:2px">🇧🇷 Brasil no Grupo C · Palpite dos Tutores</div></div><span style="font-size:22px">🏆</span>`;
+  grid.appendChild(bolaoGridBtn);
   w.appendChild(grid);
   const extra=div({style:{padding:"0 18px 28px",display:"flex",flexDirection:"column",gap:10}});
   const agBtn=div({className:"btn",style:{width:"100%",padding:"18px",background:"linear-gradient(135deg,#9B59B6,#FF6B9D)",color:"#fff",fontSize:15,borderRadius:16,display:"flex",alignItems:"center",gap:12,cursor:"pointer"},onClick:()=>go("agenda_gerente")});
@@ -3327,6 +3331,535 @@ function renderRestaurar(){
   }},"Validar JSON");
   [fileI,selB,msg,rB,lblC,ta,valB].forEach(el=>body.appendChild(el));
   w.appendChild(body);return w;
+}
+
+
+
+// ── BOLÃO COPA 2026 ───────────────────────────────────────────────────────────
+const BOLAO_JOGOS=[
+  {id:"g1",fase:"Grupo C",data:"2026-06-13",hora:"19:00",mandante:"Brasil",visitante:"Marrocos",local:"Nova Jersey"},
+  {id:"g2",fase:"Grupo C",data:"2026-06-19",hora:"21:30",mandante:"Brasil",visitante:"Haiti",local:"Filadélfia"},
+  {id:"g3",fase:"Grupo C",data:"2026-06-24",hora:"19:00",mandante:"Escócia",visitante:"Brasil",local:"Miami"},
+  {id:"o1",fase:"Oitavas",data:"2026-06-29",hora:"?",mandante:"Brasil",visitante:"Grupo F",local:"Houston/Monterrey"},
+];
+
+// Só atacantes — quem pode fazer gol no bolão
+const ATACANTES_BR=[
+  {n:"Vinicius Junior", clube:"Real Madrid",   num:7,  emoji:"⚡"},
+  {n:"Neymar",          clube:"Santos",         num:10, emoji:"🎩"},
+  {n:"Raphinha",        clube:"Barcelona",      num:11, emoji:"🔥"},
+  {n:"Endrick",         clube:"Lyon",           num:9,  emoji:"💥"},
+  {n:"Gabriel Martinelli",clube:"Arsenal",      num:11, emoji:"🚀"},
+  {n:"Matheus Cunha",   clube:"Man. United",    num:9,  emoji:"🎯"},
+  {n:"Luiz Henrique",   clube:"Zenit",          num:17, emoji:"💨"},
+  {n:"Igor Thiago",     clube:"Brentford",      num:19, emoji:"🦁"},
+  {n:"Rayan",           clube:"Bournemouth",    num:18, emoji:"⭐"},
+];
+
+function getBolao(){
+  if(!DATA.bolao)DATA.bolao={palpites:{},placar:{}};
+  return DATA.bolao;
+}
+
+function proximoJogoBR(){
+  const hj=hoje();
+  return BOLAO_JOGOS.find(j=>j.data>=hj)||(BOLAO_JOGOS[BOLAO_JOGOS.length-1]);
+}
+
+// ── Calcula vencedor de um jogo (prêmio banho grátis) ─────────────────────────
+// Regra: goleador certo = GANHA (desempata por placar exato)
+// Se ninguém acertou goleador → quem acertou placar exato ganha
+// Se ninguém acertou placar → quem acertou resultado (V/E/D) ganha
+function calcularVencedores(jogoId,real,palpites){
+  if(!real||real.golM===""||real.golV==="")return[];
+  const rm=parseInt(real.golM),rv=parseInt(real.golV);
+  const resReal=rm>rv?"M":rm<rv?"V":"E";
+  const candidatos=Object.entries(palpites[jogoId]||{}).map(([uid,pal])=>{
+    const pm=parseInt(pal.golM),pv=parseInt(pal.golV);
+    const acertouGol=pal.jogador&&real.goleador&&pal.jogador===real.goleador;
+    const acertouExato=!isNaN(pm)&&!isNaN(pv)&&pm===rm&&pv===rv;
+    const resPal=pm>pv?"M":pm<pv?"V":"E";
+    const acertouRes=!isNaN(pm)&&!isNaN(pv)&&resPal===resReal;
+    return{uid,nome:pal.nome,acertouGol,acertouExato,acertouRes,pal};
+  });
+  // 1º critério: acertou goleador
+  const comGol=candidatos.filter(c=>c.acertouGol);
+  if(comGol.length){
+    // desempata por placar exato
+    const comGolExato=comGol.filter(c=>c.acertouExato);
+    return(comGolExato.length?comGolExato:comGol).map(c=>({...c,motivo:c.acertouExato?"⚽🎯 Gol + Placar exato!":"⚽ Acertou o goleador!"}));
+  }
+  // 2º critério: placar exato
+  const exatos=candidatos.filter(c=>c.acertouExato);
+  if(exatos.length)return exatos.map(c=>({...c,motivo:"🎯 Placar exato!"}));
+  // 3º critério: resultado certo
+  const resOk=candidatos.filter(c=>c.acertouRes);
+  if(resOk.length)return resOk.map(c=>({...c,motivo:"✅ Resultado certo"}));
+  return[];
+}
+
+function renderBolao(){
+  const w=div({className:"screen"});
+  const bolao=getBolao();
+  const jogo=proximoJogoBR();
+
+  // ── Topo banner próximo jogo ─────────────────────────────────────────────
+  const d=new Date(jogo.data+"T12:00:00");
+  const diasSem=["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
+  const diaS=diasSem[d.getDay()];
+  const dd=String(d.getDate()).padStart(2,"0");
+  const mm=String(d.getMonth()+1).padStart(2,"0");
+  const real=(bolao.placar||{})[jogo.id]||{};
+  const temPlacar=real.golM!==""&&real.golV!==""&&real.golM!=null;
+  const flagVisit=jogo.visitante==="Brasil"?"🇧🇷":
+    jogo.visitante==="Marrocos"?"🇲🇦":
+    jogo.visitante==="Haiti"?"🇭🇹":
+    jogo.visitante==="Escócia"?"🏴󠁧󠁢󠁳󠁣󠁴󠁿":"🌍";
+  const flagMand=jogo.mandante==="Brasil"?"🇧🇷":
+    jogo.mandante==="Escócia"?"🏴󠁧󠁢󠁳󠁣󠁴󠁿":"🌍";
+
+  // Monta lista de palpites do próximo jogo
+  const palpitesJogo=bolao.palpites?.[jogo.id]||{};
+  const listaPalpites=Object.entries(palpitesJogo)
+    .filter(([,p])=>p.golM!==""||p.jogador)
+    .sort((a,b)=>a[1].nome.localeCompare(b[1].nome));
+
+  const topo=div({style:{background:"linear-gradient(160deg,#064e26 0%,#15803d 60%,#166534 100%)",padding:"20px 18px 22px"}});
+
+  // Monta o HTML de palpites inline
+  let palpitesHTML="";
+  if(listaPalpites.length>0){
+    const linhas=listaPalpites.map(([uid,p])=>{
+      const primeiroNome=(p.nome||"?").split(" ")[0];
+      const placarStr=(p.golM!==""&&p.golV!=="")?`<span style="background:rgba(255,255,255,.2);border-radius:6px;padding:1px 7px;font-weight:900;font-size:12px;color:#FFD93D">${p.golM}×${p.golV}</span>`:"";
+      const goleadorStr=p.jogador?`<span style="background:rgba(0,0,0,.25);border-radius:6px;padding:1px 7px;font-size:11px;color:#86efac">⚽ ${p.jogador.split(" ")[0]}</span>`:`<span style="font-size:11px;color:rgba(255,255,255,.35)">sem goleador</span>`;
+      return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.08)">
+        <div style="width:28px;height:28px;border-radius:14px;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#fff;flex-shrink:0">${primeiroNome[0].toUpperCase()}</div>
+        <div style="font-weight:700;font-size:12px;color:#fff;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${primeiroNome}</div>
+        <div style="display:flex;align-items:center;gap:5px">${placarStr}${goleadorStr}</div>
+      </div>`;
+    }).join("");
+    palpitesHTML=`
+      <div style="margin-top:12px;background:rgba(0,0,0,.2);border-radius:14px;padding:10px 12px">
+        <div style="font-size:9px;font-weight:800;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">🎯 ${listaPalpites.length} palpite(s) recebido(s)</div>
+        ${linhas}
+      </div>`;
+  } else {
+    palpitesHTML=`<div style="margin-top:10px;text-align:center;font-size:11px;color:rgba(255,255,255,.4)">Nenhum palpite ainda para este jogo</div>`;
+  }
+
+  topo.innerHTML=`
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+      <span style="font-size:22px">⚽</span>
+      <div>
+        <div style="font-family:'Fredoka One',sans-serif;font-size:13px;color:rgba(255,255,255,.75);letter-spacing:1.2px;text-transform:uppercase">${temPlacar?"Resultado":"Próximo Jogo"} · ${jogo.fase}</div>
+        <div style="font-size:10px;color:rgba(255,255,255,.55)">${jogo.local}</div>
+      </div>
+    </div>
+    <div style="background:rgba(0,0,0,.3);border-radius:18px;padding:16px 14px;display:flex;align-items:center;gap:8px">
+      <div style="flex:1;text-align:center">
+        <div style="font-size:32px">${flagMand}</div>
+        <div style="font-family:'Fredoka One',sans-serif;font-size:15px;color:#fff;margin-top:4px">${jogo.mandante}</div>
+      </div>
+      <div style="text-align:center;min-width:70px">
+        ${temPlacar
+          ?`<div style="font-family:'Fredoka One',sans-serif;font-size:36px;color:#FFD93D;line-height:1">${real.golM} × ${real.golV}</div>
+             ${real.goleador?`<div style="font-size:10px;color:rgba(255,255,255,.8);margin-top:4px;font-weight:700">⚽ ${real.goleador}</div>`:""}`
+          :`<div style="font-family:'Fredoka One',sans-serif;font-size:20px;color:#FFD93D">${diaS} ${dd}/${mm}</div>
+            <div style="font-size:14px;color:rgba(255,255,255,.85);font-weight:700;margin-top:2px">${jogo.hora}h</div>`
+        }
+      </div>
+      <div style="flex:1;text-align:center">
+        <div style="font-size:32px">${flagVisit}</div>
+        <div style="font-family:'Fredoka One',sans-serif;font-size:15px;color:#fff;margin-top:4px">${jogo.visitante}</div>
+      </div>
+    </div>
+    ${palpitesHTML}`;
+  w.appendChild(topo);
+
+  // ── Header com voltar ────────────────────────────────────────────────────
+  w.appendChild(mkHdr("⚽ Bolão Copa 2026",()=>go("home")));
+
+  const body=div({style:{padding:"14px 16px 60px",display:"flex",flexDirection:"column",gap:14}});
+
+  // ── Tabs ─────────────────────────────────────────────────────────────────
+  let tabAtiva="palpites";
+  const tabWrap=div({style:{display:"flex",gap:6,background:"#f3f4f6",borderRadius:14,padding:"4px"}});
+  function mkTab(id,label){
+    const t=btn({style:{flex:1,padding:"9px 4px",background:id==="palpites"?"#15803d":"transparent",color:id==="palpites"?"#fff":"#6b7280",borderRadius:10,fontSize:12,fontWeight:800,transition:"all .2s"},onClick:()=>{tabAtiva=id;atualizarTabs();renderConteudo();}},label);
+    return t;
+  }
+  const tabPal=mkTab("palpites","🎯 Palpites");
+  const tabRank=mkTab("ranking","🏆 Ranking");
+  const tabJogos=mkTab("jogos","📅 Jogos");
+  [tabPal,tabRank,tabJogos].forEach(t=>tabWrap.appendChild(t));
+  body.appendChild(tabWrap);
+
+  function atualizarTabs(){
+    [[tabPal,"palpites"],[tabRank,"ranking"],[tabJogos,"jogos"]].forEach(([t,id])=>{
+      t.style.background=tabAtiva===id?"#15803d":"transparent";
+      t.style.color=tabAtiva===id?"#fff":"#6b7280";
+    });
+  }
+
+  const conteudoWrap=div();
+  body.appendChild(conteudoWrap);
+
+  function renderConteudo(){
+    conteudoWrap.innerHTML="";
+    if(tabAtiva==="palpites")conteudoWrap.appendChild(renderPalpitesTab(bolao,jogo));
+    if(tabAtiva==="ranking")conteudoWrap.appendChild(renderRankingTab(bolao));
+    if(tabAtiva==="jogos")conteudoWrap.appendChild(renderJogosTab(bolao));
+  }
+  renderConteudo();
+  w.appendChild(body);
+  return w;
+}
+
+// ── Tab Palpites ──────────────────────────────────────────────────────────────
+function renderPalpitesTab(bolao,jogoAtual){
+  const wrap=div();
+  // Seletor de jogo
+  const jogoSel=sel({className:"fi",style:{marginBottom:10,fontWeight:700}},
+    BOLAO_JOGOS.map(j=>({v:j.id,l:`${fmtD(j.data)} · ${j.mandante} × ${j.visitante}`,sel:j.id===jogoAtual.id}))
+  );
+  let jogoId=jogoAtual.id;
+  wrap.appendChild(jogoSel);
+
+  // ── Busca igual à agenda: cao (nome) + tutor/tel, lado a lado ──────────────
+  const buscaDupla=div({style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}});
+  const colNome=div();
+  colNome.appendChild(h("span",{style:{fontWeight:700,color:"#15803d",fontSize:10,textTransform:"uppercase",letterSpacing:.8,display:"block",marginBottom:4}},"Nome do tutor"));
+  const bNome=inp({className:"fi",placeholder:"Ex: Maria, João...",style:{border:"2px solid #FF6B9D"}});
+  colNome.appendChild(bNome);
+  const colId=div();
+  colId.appendChild(h("span",{style:{fontWeight:700,color:"#15803d",fontSize:10,textTransform:"uppercase",letterSpacing:.8,display:"block",marginBottom:4}},"ID / Telefone"));
+  const bId=inp({className:"fi",placeholder:"Ex: 608, 51999...",style:{border:"2px solid #4285F4"}});
+  colId.appendChild(bId);
+  buscaDupla.appendChild(colNome);buscaDupla.appendChild(colId);
+  wrap.appendChild(buscaDupla);
+
+  const listaWrap=div();
+  wrap.appendChild(listaWrap);
+
+  // Montar lista de tutores
+  const todosTutores=[];
+  const adicionados=new Set();
+  [[DATA.casas||{},"cad1"],[DATA.casas2||{},"cad2"]].forEach(([casas,cad])=>{
+    Object.entries(casas).forEach(([id,c])=>{
+      const chave=String(id);
+      if(!adicionados.has(chave)&&c.morador){adicionados.add(chave);todosTutores.push({id:chave,nome:c.morador,tel:c.telefone||"",cad});}
+    });
+  });
+  todosTutores.sort((a,b)=>a.nome.localeCompare(b.nome));
+
+  jogoSel.addEventListener("change",()=>{jogoId=jogoSel.value;renderLista();});
+
+  function filtrarTutores(){
+    const qNome=bNome.value.trim().toLowerCase();
+    const qId=bId.value.trim();
+    const qIdDig=qId.replace(/\D/g,"");
+    if(!qNome&&!qId)return todosTutores.slice(0,40);
+    return todosTutores.filter(t=>{
+      const nomeOk=!qNome||t.nome.toLowerCase().includes(qNome);
+      const idOk=!qId||(t.id.includes(qId)||(qIdDig&&t.tel.replace(/\D/g,"").includes(qIdDig)));
+      return nomeOk&&idOk;
+    }).slice(0,60);
+  }
+
+  function renderLista(){
+    listaWrap.innerHTML="";
+    const lista=filtrarTutores();
+    if(!lista.length){
+      listaWrap.innerHTML=`<div style="text-align:center;padding:20px;color:#8B8FA8;font-size:13px">Nenhum tutor encontrado</div>`;
+      return;
+    }
+    const real=(bolao.placar||{})[jogoId]||{};
+    const temPlacar=real.golM!=null&&real.golM!=="";
+    const vencedores=temPlacar?calcularVencedores(jogoId,real,bolao.palpites||{}).map(v=>v.uid):[];
+
+    lista.forEach(tutor=>{
+      const pal=((bolao.palpites||{})[jogoId]||{})[tutor.id]||{};
+      const eVencedor=vencedores.includes(tutor.id);
+      const card=div({className:"card",style:{marginBottom:8,overflow:"hidden",border:eVencedor?"2.5px solid #FFD93D":"1.5px solid #f0f0f0"}});
+
+      const cabeca=div({style:{display:"flex",alignItems:"center",gap:10,padding:"11px 14px",cursor:"pointer",
+        background:eVencedor?"linear-gradient(135deg,#fef9c3,#fef08a)":pal.golM!=null&&pal.golM!==""?"#f0fdf4":"#fff"},
+        onClick:()=>{const b=card.querySelector(".pal-body");b.style.display=b.style.display==="none"?"block":"none";}});
+
+      const nomeShort=tutor.nome.split(" ").slice(0,2).join(" ");
+      const iniciais=tutor.nome.split(" ").filter(Boolean).slice(0,2).map(p=>p[0].toUpperCase()).join("");
+      const avatarBg=tutor.cad==="cad1"?"linear-gradient(135deg,#FF6B9D,#ffb347)":"linear-gradient(135deg,#9B59B6,#6366F1)";
+      const placarStr=(pal.golM!=null&&pal.golM!==""&&pal.golV!=null&&pal.golV!=="")?`${pal.golM}×${pal.golV}`:"";
+
+      cabeca.innerHTML=`
+        <div style="width:38px;height:38px;border-radius:19px;background:${avatarBg};display:flex;align-items:center;justify-content:center;font-family:'Fredoka One',sans-serif;font-size:14px;color:#fff;flex-shrink:0;font-weight:900">${iniciais}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:800;font-size:13px;color:#1A1A2E;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${nomeShort}${eVencedor?" 🏆":""}</div>
+          <div style="font-size:10px;color:#8B8FA8">ID ${tutor.id}${tutor.tel?" · "+tutor.tel:""}</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0;display:flex;flex-direction:column;align-items:flex-end;gap:2px">
+          ${placarStr?`<span style="background:#dcfce7;color:#15803d;border-radius:8px;padding:2px 8px;font-weight:900;font-size:13px">${placarStr}</span>`:""}
+          ${pal.jogador?`<span style="font-size:10px;color:#3B82F6;font-weight:700">⚽ ${pal.jogador.split(" ")[0]}</span>`:""}
+          ${!placarStr&&!pal.jogador?`<span style="font-size:10px;color:#d1d5db">Sem palpite</span>`:""}
+        </div>
+        <span style="color:#8B8FA8;font-size:16px;margin-left:6px">›</span>`;
+      card.appendChild(cabeca);
+
+      // Corpo expandível — NOVO: só goleador (resultado vai junto automático)
+      const body2=div({className:"pal-body",style:{display:"none",padding:"14px 14px 16px",borderTop:"1px solid #f0f0f0",background:"#fafafa"}});
+
+      // ── Placar — campos numéricos simples ────────────────────────────────
+      body2.appendChild(h("div",{style:{fontWeight:800,fontSize:11,color:"#8B8FA8",textTransform:"uppercase",letterSpacing:1,marginBottom:8}},"Placar do jogo"));
+      const palRow=div({style:{display:"flex",alignItems:"center",gap:8,marginBottom:14,justifyContent:"center"}});
+      const g1=inp({type:"number",min:"0",max:"20",style:{width:56,padding:"12px 6px",borderRadius:14,border:"2px solid #e5e7eb",textAlign:"center",fontSize:22,fontWeight:900,color:"#1A1A2E"},value:pal.golM||""});
+      const g2=inp({type:"number",min:"0",max:"20",style:{width:56,padding:"12px 6px",borderRadius:14,border:"2px solid #e5e7eb",textAlign:"center",fontSize:22,fontWeight:900,color:"#1A1A2E"},value:pal.golV||""});
+      const xSpan=h("span",{style:{fontSize:24,fontWeight:900,color:"#8B8FA8",margin:"0 4px"}},"×");
+      const jAtual=BOLAO_JOGOS.find(j=>j.id===jogoId)||jogoAtual;
+      const fM2=jAtual.mandante==="Brasil"?"🇧🇷":jAtual.mandante==="Escócia"?"🏴󠁧󠁢󠁳󠁣󠁴󠁿":"🌍";
+      const fV2=jAtual.visitante==="Brasil"?"🇧🇷":jAtual.visitante==="Haiti"?"🇭🇹":jAtual.visitante==="Marrocos"?"🇲🇦":"🌍";
+      const mn=h("div",{style:{fontSize:11,fontWeight:700,color:"#1A1A2E",textAlign:"center",flex:1}});mn.innerHTML=`<div style="font-size:20px">${fM2}</div>${jAtual.mandante}`;
+      const vn=h("div",{style:{fontSize:11,fontWeight:700,color:"#1A1A2E",textAlign:"center",flex:1}});vn.innerHTML=`<div style="font-size:20px">${fV2}</div>${jAtual.visitante}`;
+      [mn,g1,xSpan,g2,vn].forEach(el=>palRow.appendChild(el));
+      body2.appendChild(palRow);
+
+      // ── Goleador — CHIPS horizontais simples, sem cards ────────────────
+      body2.appendChild(h("div",{style:{fontWeight:800,fontSize:11,color:"#8B8FA8",textTransform:"uppercase",letterSpacing:1,marginBottom:8}},"Quem vai fazer gol? ⚽"));
+      const chipsWrap=div({style:{display:"flex",flexWrap:"wrap",gap:7,marginBottom:14}});
+      let jogSelecionado=pal.jogador||"";
+      const chipEls={};
+
+      function atualizarChips(){
+        Object.entries(chipEls).forEach(([nome,el])=>{
+          const sel2=jogSelecionado===nome;
+          el.style.background=sel2?"#15803d":"#fff";
+          el.style.color=sel2?"#fff":"#1A1A2E";
+          el.style.border="2px solid "+(sel2?"#15803d":"#e5e7eb");
+          el.style.fontWeight=sel2?"900":"700";
+        });
+        // chip nenhum
+        if(chipEls["__nenhum__"]){
+          const s=jogSelecionado==="";
+          chipEls["__nenhum__"].style.background=s?"#6b7280":"#fff";
+          chipEls["__nenhum__"].style.color=s?"#fff":"#6b7280";
+          chipEls["__nenhum__"].style.border="2px solid "+(s?"#6b7280":"#e5e7eb");
+        }
+      }
+
+      ATACANTES_BR.forEach(j=>{
+        const chip=btn({style:{padding:"7px 12px",borderRadius:20,fontSize:12,border:"2px solid #e5e7eb",background:"#fff",color:"#1A1A2E",fontWeight:700,display:"flex",alignItems:"center",gap:5},onClick:()=>{
+          jogSelecionado=jogSelecionado===j.n?"":j.n;atualizarChips();
+        }});
+        chip.innerHTML=`<span style="font-size:14px">${j.emoji}</span><span>${j.n.split(" ")[0]}</span>`;
+        chipEls[j.n]=chip;
+        chipsWrap.appendChild(chip);
+      });
+      // Chip "Nenhum"
+      const chipNenhum=btn({style:{padding:"7px 12px",borderRadius:20,fontSize:12,border:"2px solid #e5e7eb",background:"#fff",color:"#6b7280",fontWeight:700},onClick:()=>{jogSelecionado="";atualizarChips();}});
+      chipNenhum.textContent="❌ Nenhum";
+      chipEls["__nenhum__"]=chipNenhum;
+      chipsWrap.appendChild(chipNenhum);
+      atualizarChips();
+      body2.appendChild(chipsWrap);
+
+      // Botão salvar
+      const salvarBtn=btn({style:{width:"100%",padding:"13px",background:"linear-gradient(135deg,#15803d,#22c55e)",color:"#fff",fontSize:14,fontWeight:800,borderRadius:13},onClick:()=>{
+        const golM=g1.value.trim();const golV=g2.value.trim();
+        if(!golM&&!golV&&!jogSelecionado){alert("Preencha o placar ou escolha um goleador!");return;}
+        updSilent(d=>{
+          if(!d.bolao)d.bolao={palpites:{},placar:{}};
+          if(!d.bolao.palpites[jogoId])d.bolao.palpites[jogoId]={};
+          d.bolao.palpites[jogoId][tutor.id]={golM,golV,jogador:jogSelecionado,nome:tutor.nome};
+          return d;
+        });
+        DATA=loadData();
+        salvarBtn.textContent="✅ Palpite salvo!";
+        salvarBtn.style.background="linear-gradient(135deg,#16a34a,#15803d)";
+        setTimeout(()=>{body2.style.display="none";renderLista();},700);
+      }},"💾 Salvar Palpite");
+      body2.appendChild(salvarBtn);
+      card.appendChild(body2);
+      listaWrap.appendChild(card);
+    });
+
+    const qTotal=bNome.value.trim()||bId.value.trim();
+    if(!qTotal&&todosTutores.length>40){
+      const m=div({style:{textAlign:"center",padding:"10px",color:"#8B8FA8",fontSize:12}});
+      m.textContent="Mostrando 40 de "+todosTutores.length+" — use a busca para filtrar";
+      listaWrap.appendChild(m);
+    }
+  }
+
+  let debT=null;
+  function onBusca(){clearTimeout(debT);debT=setTimeout(renderLista,260);}
+  bNome.addEventListener("input",onBusca);
+  bId.addEventListener("input",onBusca);
+  renderLista();
+  return wrap;
+}
+
+// ── Tab Ranking ───────────────────────────────────────────────────────────────
+function renderRankingTab(bolao){
+  const wrap=div();
+  const palpites=bolao.palpites||{};
+  const placarReal=bolao.placar||{};
+
+  // Para cada jogo com resultado, mostra bloco de ganhador(es)
+  let temAlgumResultado=false;
+  BOLAO_JOGOS.forEach(jogo=>{
+    const real=placarReal[jogo.id];
+    if(!real||real.golM==null||real.golM==="")return;
+    temAlgumResultado=true;
+    const vencedores=calcularVencedores(jogo.id,real,palpites);
+    const qtPal=Object.keys(palpites[jogo.id]||{}).length;
+    const bloco=div({className:"card",style:{marginBottom:14,overflow:"hidden"}});
+
+    // Cabeçalho do jogo
+    bloco.innerHTML=`<div style="background:linear-gradient(135deg,#15803d,#166534);padding:10px 14px;display:flex;align-items:center;justify-content:space-between">
+      <div>
+        <div style="font-family:'Fredoka One',sans-serif;font-size:14px;color:#fff">${jogo.mandante} × ${jogo.visitante}</div>
+        <div style="font-size:10px;color:rgba(255,255,255,.7)">${fmtD(jogo.data)} · ${jogo.local}</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-family:'Fredoka One',sans-serif;font-size:22px;color:#FFD93D">${real.golM} × ${real.golV}</div>
+        ${real.goleador?`<div style="font-size:10px;color:rgba(255,255,255,.8)">⚽ ${real.goleador}</div>`:""}
+      </div>
+    </div>`;
+
+    const corpo=div({style:{padding:"12px 14px 14px"}});
+    if(!vencedores.length){
+      corpo.innerHTML=`<div style="text-align:center;padding:12px;color:#8B8FA8;font-size:13px">😔 Ninguém ganhou o banho nesse jogo<br><span style="font-size:11px">${qtPal} palpite(s) recebidos</span></div>`;
+    } else {
+      const tit=h("div",{style:{fontWeight:800,fontSize:12,color:"#15803d",textTransform:"uppercase",letterSpacing:1,marginBottom:8}},"🏆 GANHADOR(ES) DO BANHO GRÁTIS");
+      corpo.appendChild(tit);
+      vencedores.forEach((v,i)=>{
+        const vCard=div({style:{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:i===0?"linear-gradient(135deg,#fef9c3,#fef08a)":"#f9fafb",borderRadius:12,marginBottom:6,border:"1.5px solid "+(i===0?"#FFD93D":"#e5e7eb")}});
+        const iniciais=v.nome.split(" ").filter(Boolean).slice(0,2).map(p=>p[0].toUpperCase()).join("");
+        vCard.innerHTML=`
+          <div style="width:40px;height:40px;border-radius:20px;background:linear-gradient(135deg,#FFD93D,#f59e0b);display:flex;align-items:center;justify-content:center;font-family:'Fredoka One',sans-serif;font-size:15px;color:#fff;flex-shrink:0">${i===0?"🏆":iniciais}</div>
+          <div style="flex:1">
+            <div style="font-weight:800;font-size:14px;color:#1A1A2E">${v.nome.split(" ").slice(0,2).join(" ")}</div>
+            <div style="font-size:11px;color:#15803d;font-weight:700">${v.motivo}</div>
+            <div style="font-size:10px;color:#8B8FA8">Palpite: ${v.pal.placar||"—"}${v.pal.jogador?" · ⚽ "+v.pal.jogador:""}</div>
+          </div>
+          <div style="font-size:28px">🐕</div>`;
+        corpo.appendChild(vCard);
+      });
+      const obs=h("div",{style:{fontSize:10,color:"#8B8FA8",textAlign:"center",marginTop:6}});
+      obs.textContent=`${qtPal} palpite(s) · Prêmio: banho grátis 🛁`;
+      corpo.appendChild(obs);
+    }
+    bloco.appendChild(corpo);
+    wrap.appendChild(bloco);
+  });
+
+  if(!temAlgumResultado){
+    const em=div({style:{textAlign:"center",padding:"36px 20px",color:"#8B8FA8"}});
+    em.innerHTML=`<div style="font-size:40px;margin-bottom:10px">🏆</div><div style="font-weight:800;font-size:14px;color:#1A1A2E;margin-bottom:4px">Aguardando os jogos!</div><div style="font-size:12px">Quando você lançar o resultado na aba Jogos,<br>o ganhador do banho aparece aqui.</div>`;
+    wrap.appendChild(em);
+    const regras=div({style:{background:"#f0fdf4",border:"1.5px solid #16a34a",borderRadius:14,padding:"14px 16px",marginTop:4}});
+    regras.innerHTML=`<div style="font-weight:800;color:#15803d;font-size:12px;margin-bottom:8px;text-transform:uppercase;letter-spacing:.8px">🏅 Como funciona o prêmio</div>
+      <div style="font-size:12px;line-height:2.2;color:#1A1A2E">
+        ⚽ <b>Acertou o goleador</b> → <b style="color:#15803d">GANHA o banho</b><br>
+        🎯 Empate? Quem também acertou o <b>placar exato</b> leva<br>
+        ✅ Se ninguém acertou gol → quem acertou o <b>resultado</b> ganha
+      </div>`;
+    wrap.appendChild(regras);
+  }
+  return wrap;
+}
+
+// ── Tab Jogos + lançar resultado real ─────────────────────────────────────────
+function renderJogosTab(bolao){
+  const wrap=div();
+  BOLAO_JOGOS.forEach(jogo=>{
+    const real=(bolao.placar||{})[jogo.id]||{};
+    const qtPal=Object.keys((bolao.palpites||{})[jogo.id]||{}).length;
+    const temPlacar=real.golM!=null&&real.golM!=="";
+    const isBR=jogo.mandante==="Brasil"||jogo.visitante==="Brasil";
+    const card=div({className:"card",style:{marginBottom:14,overflow:"hidden"}});
+
+    const fM=jogo.mandante==="Brasil"?"🇧🇷":jogo.mandante==="Escócia"?"🏴󠁧󠁢󠁳󠁣󠁴󠁿":"🌍";
+    const fV=jogo.visitante==="Brasil"?"🇧🇷":jogo.visitante==="Haiti"?"🇭🇹":jogo.visitante==="Marrocos"?"🇲🇦":"🌍";
+
+    const hdr=div({style:{background:isBR?"linear-gradient(135deg,#15803d,#166534)":"linear-gradient(135deg,#1A1A2E,#2d2d4e)",padding:"12px 14px",display:"flex",alignItems:"center",justifyContent:"space-between"}});
+    hdr.innerHTML=`
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:20px">${fM}</span>
+        <div>
+          <div style="font-family:'Fredoka One',sans-serif;font-size:14px;color:#fff">${jogo.mandante} × ${jogo.visitante} <span style="font-size:14px">${fV}</span></div>
+          <div style="font-size:10px;color:rgba(255,255,255,.65)">${fmtD(jogo.data)} ${jogo.hora}h · ${jogo.local}</div>
+        </div>
+      </div>
+      <div style="text-align:right">
+        ${temPlacar?`<div style="font-family:'Fredoka One',sans-serif;font-size:22px;color:#FFD93D">${real.golM} × ${real.golV}</div>
+          ${real.goleador?`<div style="font-size:10px;color:rgba(255,255,255,.8)">⚽ ${real.goleador}</div>`:""}`:
+          `<div style="font-size:11px;color:rgba(255,255,255,.5)">Aguardando</div>`}
+        <div style="font-size:9px;color:rgba(255,255,255,.4);margin-top:2px">${qtPal} palpite(s)</div>
+      </div>`;
+    card.appendChild(hdr);
+
+    // Form lançar resultado
+    const form=div({style:{padding:"14px 14px 16px"}});
+    form.appendChild(h("div",{style:{fontWeight:800,fontSize:11,color:"#8B8FA8",textTransform:"uppercase",letterSpacing:.8,marginBottom:10}},"⚙️ Lançar resultado real"));
+
+    // Placar row
+    const row=div({style:{display:"flex",alignItems:"center",gap:8,marginBottom:12,justifyContent:"center"}});
+    const gm=inp({type:"number",min:"0",max:"20",style:{width:52,padding:"10px 6px",borderRadius:12,border:"2px solid #e5e7eb",textAlign:"center",fontSize:20,fontWeight:900,color:"#1A1A2E"},value:real.golM||""});
+    const gv=inp({type:"number",min:"0",max:"20",style:{width:52,padding:"10px 6px",borderRadius:12,border:"2px solid #e5e7eb",textAlign:"center",fontSize:20,fontWeight:900,color:"#1A1A2E"},value:real.golV||""});
+    const xS=h("span",{style:{fontSize:22,fontWeight:900,color:"#8B8FA8",margin:"0 6px"}},"×");
+    const mnL=h("div",{style:{fontSize:11,fontWeight:700,textAlign:"center",flex:1}});mnL.innerHTML=`<div style="font-size:20px">${fM}</div>${jogo.mandante}`;
+    const vnL=h("div",{style:{fontSize:11,fontWeight:700,textAlign:"center",flex:1}});vnL.innerHTML=`<div style="font-size:20px">${fV}</div>${jogo.visitante}`;
+    [mnL,gm,xS,gv,vnL].forEach(el=>row.appendChild(el));
+    form.appendChild(row);
+
+    // Goleador real — chips simples (igual ao palpite)
+    form.appendChild(h("div",{style:{fontWeight:800,fontSize:11,color:"#8B8FA8",textTransform:"uppercase",letterSpacing:.8,marginBottom:8}},"Quem fez o gol? ⚽"));
+    const gChipsWrap=div({style:{display:"flex",flexWrap:"wrap",gap:7,marginBottom:12}});
+    let goleadorSel=real.goleador||"";
+    const gChipEls={};
+    function atualizarGChips(){
+      Object.entries(gChipEls).forEach(([nome,el])=>{
+        const s=goleadorSel===nome;
+        el.style.background=s?"#15803d":"#fff";
+        el.style.color=s?"#fff":"#1A1A2E";
+        el.style.border="2px solid "+(s?"#15803d":"#e5e7eb");
+        el.style.fontWeight=s?"900":"700";
+      });
+      if(gChipEls["__nenhum__"]){
+        const s=goleadorSel==="";
+        gChipEls["__nenhum__"].style.background=s?"#6b7280":"#fff";
+        gChipEls["__nenhum__"].style.color=s?"#fff":"#6b7280";
+        gChipEls["__nenhum__"].style.border="2px solid "+(s?"#6b7280":"#e5e7eb");
+      }
+    }
+    ATACANTES_BR.forEach(j=>{
+      const gc=btn({style:{padding:"7px 12px",borderRadius:20,fontSize:12,border:"2px solid #e5e7eb",background:"#fff",color:"#1A1A2E",fontWeight:700,display:"flex",alignItems:"center",gap:5},onClick:()=>{goleadorSel=goleadorSel===j.n?"":j.n;atualizarGChips();}});
+      gc.innerHTML=`<span style="font-size:14px">${j.emoji}</span><span>${j.n.split(" ")[0]}</span>`;
+      gChipEls[j.n]=gc;gChipsWrap.appendChild(gc);
+    });
+    const gcNenhum=btn({style:{padding:"7px 12px",borderRadius:20,fontSize:12,border:"2px solid #e5e7eb",background:"#fff",color:"#6b7280",fontWeight:700},onClick:()=>{goleadorSel="";atualizarGChips();}});
+    gcNenhum.textContent="❌ Sem gol";
+    gChipEls["__nenhum__"]=gcNenhum;gChipsWrap.appendChild(gcNenhum);
+    atualizarGChips();
+    form.appendChild(gChipsWrap);
+
+    const svBtn=btn({style:{width:"100%",padding:"13px",background:"linear-gradient(135deg,#15803d,#22c55e)",color:"#fff",fontSize:14,fontWeight:800,borderRadius:13},onClick:()=>{
+      updSilent(d=>{
+        if(!d.bolao)d.bolao={palpites:{},placar:{}};
+        d.bolao.placar[jogo.id]={golM:gm.value,golV:gv.value,goleador:goleadorSel};
+        return d;
+      });
+      DATA=loadData();
+      svBtn.textContent="✅ Resultado salvo! Ranking atualizado.";
+      svBtn.style.background="linear-gradient(135deg,#16a34a,#15803d)";
+      setTimeout(()=>{svBtn.textContent="💾 Salvar Resultado";},2000);
+    }},"💾 Salvar Resultado");
+    form.appendChild(svBtn);
+    card.appendChild(form);
+    wrap.appendChild(card);
+  });
+  return wrap;
 }
 
 render();
