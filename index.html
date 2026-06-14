@@ -444,44 +444,41 @@ function abrirModalUtilitariosEndereco(){
   }},"🔍 Detectar e Corrigir Bairros C2"));
   cont.appendChild(sec1);
 
-  // ── Ação 2: Marcar Terra Ville no C1 (por rua Juca Batista / Terra Ville) ─
+  // ── Ação 2: TODOS do C1 → bairro Terra Ville + rua "Avenida Juca Batista" ─
   const sec2=div({style:{background:"#fff7ed",border:"2px solid #f59e0b",borderRadius:14,padding:"14px",marginBottom:14}});
-  sec2.appendChild(h("div",{style:{fontWeight:800,color:"#d97706",fontSize:14,marginBottom:4}},"🏘️ 2. Marcar Terra Ville no Cad.1"));
-  sec2.appendChild(h("div",{style:{fontSize:12,color:"#6b7280",marginBottom:10}},"Clientes do Cad.1 que estão no bairro Terra Ville (sem bairro preenchido)"));
+  sec2.appendChild(h("div",{style:{fontWeight:800,color:"#d97706",fontSize:14,marginBottom:4}},"🏘️ 2. Todos do Cad.1 → Terra Ville"));
+  sec2.appendChild(h("div",{style:{fontSize:12,color:"#6b7280",marginBottom:10}},"Define bairro = Terra Ville e rua = Avenida Juca Batista para TODOS do Cad.1, mantendo o número da casa"));
   sec2.appendChild(btn({style:{width:"100%",padding:"13px",background:"linear-gradient(135deg,#f59e0b,#fbbf24)",color:"#fff",fontSize:13,fontWeight:800,borderRadius:12},onClick:()=>{
+    if(!confirm("Isso vai mudar o bairro e a rua de TODOS os clientes do Cad.1 para Terra Ville / Av. Juca Batista.\n\nContinuar?"))return;
     let corrigidos=0;const log2=[];
     updSilent(d=>{
       const nd={...d};nd.enderecos={...(nd.enderecos||{})};nd.casas={...(nd.casas||{})};
       Object.keys(nd.casas).forEach(cid=>{
         const casa=nd.casas[cid]||{};
         const end=nd.enderecos[cid]||{};
-        const bairroAtual=(end.bairro||"").trim();
-        if(bairroAtual&&bairroAtual.toLowerCase()!=="outro")return;// já tem
-        const rua=(end.rua||casa.endereco||"").trim();
-        const bairroDetectado=detectarBairro(rua);
-        if(bairroDetectado==="Terra Ville"||bairroDetectado==="Chapéu do Sol"){
-          nd.enderecos[cid]={...end,bairro:bairroDetectado};
-          corrigidos++;
-          log2.push({nome:casa.morador||"?",rua,bairro:bairroDetectado});
-        }
+        // Mantém o número da casa, troca rua e bairro
+        const numCasa=end.numero||"";
+        nd.enderecos[cid]={...end,rua:"Avenida Juca Batista",numero:numCasa,bairro:"Terra Ville"};
+        corrigidos++;
+        log2.push({nome:casa.morador||"?",num:numCasa});
       });
       return nd;
     });
     DATA=loadData();
     resultDiv.innerHTML="";
     const info2=div({style:{background:"#fff7ed",border:"2px solid #f59e0b",borderRadius:10,padding:"12px 14px",marginBottom:10,fontSize:13,fontWeight:700}});
-    info2.innerHTML='✅ <b>'+corrigidos+' clientes</b> do Cad.1 marcados com Terra Ville / Chapéu do Sol.';
+    info2.innerHTML='✅ <b>'+corrigidos+' clientes</b> do Cad.1 → Av. Juca Batista, Terra Ville.';
     resultDiv.appendChild(info2);
     if(log2.length>0){
-      const lista2=div({style:{maxHeight:160,overflowY:"auto",border:"1px solid #e5e7eb",borderRadius:10,padding:"6px"}});
+      const lista2=div({style:{maxHeight:200,overflowY:"auto",border:"1px solid #e5e7eb",borderRadius:10,padding:"6px"}});
       log2.forEach(l=>{
         const r=div({style:{fontSize:11,padding:"4px 8px",borderBottom:"1px solid #f5f5f5",display:"flex",gap:8}});
-        r.innerHTML='<span style="color:#d97706;font-weight:700;flex:1">'+l.nome+'</span><span style="color:#8B8FA8;font-size:10px">'+l.rua.slice(0,28)+'</span><span style="font-weight:800;color:#15803d;min-width:80px;text-align:right">→ '+l.bairro+'</span>';
+        r.innerHTML='<span style="color:#d97706;font-weight:700;flex:1">'+l.nome+'</span><span style="color:#8B8FA8">nº '+( l.num||"—")+'</span><span style="font-weight:800;color:#15803d">→ Av. Juca Batista, Terra Ville</span>';
         lista2.appendChild(r);
       });
       resultDiv.appendChild(lista2);
     }
-  }},"🏘️ Marcar Terra Ville no Cad.1"));
+  }},"🏘️ Aplicar Terra Ville em TODOS do Cad.1"));
   cont.appendChild(sec2);
 
   // ── Ação 3: Listar todos C1 com endereço de Terra Ville ──────────────────
