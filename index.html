@@ -1738,8 +1738,18 @@ function darBaixaGrupo(grupo,onDone){
     }
     return{nome:ev.pet||"Pet",raca:"",servicos:[{nome:ev.servico||"Banho",valor:valorFinal}]};
   });
-  const novoAt={id:Date.now(),data:rep.data,caes,pago:false};
-  const novosAts=[...(cbCasa.atendimentos||[]),novoAt].sort((a,b)=>a.data.localeCompare(b.data));
+  // ── Anti-duplicata: mesmo dia → substitui, não acumula ─────────────────────
+  const jaExisteDia=(cbCasa.atendimentos||[]).some(at=>at.data===rep.data&&grupo.some(ev=>(at.caes||[]).find(c=>c.nome===ev.pet)));
+  let novosAts;
+  if(jaExisteDia){
+    novosAts=(cbCasa.atendimentos||[]).map(at=>{
+      const isEste=at.data===rep.data&&grupo.some(ev=>(at.caes||[]).find(c=>c.nome===ev.pet));
+      return isEste?{...at,caes}:at;
+    });
+  } else {
+    const novoAt={id:Date.now(),data:rep.data,caes,pago:false};
+    novosAts=[...(cbCasa.atendimentos||[]),novoAt].sort((a,b)=>a.data.localeCompare(b.data));
+  }
   const novaCb={...cbCasa,atendimentos:novosAts};
   if(isCad1)updSilent(d=>({...d,cobrancas:{...d.cobrancas,[mesNome]:{...(d.cobrancas[mesNome]||{}),[rep.casa]:novaCb}}}));
   else updSilent(d=>({...d,cobrancas2:{...d.cobrancas2||{},[mesNome]:{...(d.cobrancas2||{})[mesNome]||{},[rep.casa]:novaCb}}}));
@@ -2494,6 +2504,9 @@ function abrirSaidaModal(cat,onDone){
   const svB=btn({style:{width:"100%",padding:"17px",background:"linear-gradient(135deg,#FF6B9D,#FFD93D)",color:"#fff",fontSize:16,borderRadius:16,marginTop:4},onClick:()=>{
     if(!vI.value){alert("Informe o valor!");return;}
     const descFinal=dcI.value.trim()||subtipoSel||ci.l;
+    // ── Anti-duplicata: alerta se mesma categ+valor+data já existe ──
+    const jaDupl=(DATA.saidas||[]).some(s=>s.cat===cat&&String(s.val)===String(vI.value)&&s.data===dI.value&&(s.func||'')===(funcSel||''));
+    if(jaDupl){if(!confirm('⚠️ Já existe uma saída com mesmo tipo, valor e data.\nLançar mesmo assim?'))return;}
     updSilent(d=>({...d,saidas:[...(d.saidas||[]),{cat,subtipo:subtipoSel,func:funcSel,val:vI.value,desc:descFinal,data:dI.value,id:Date.now()}]}));
     DATA=loadData();if(mv)mv.remove();onDone();
   }},"Salvar");
@@ -2864,6 +2877,7 @@ function renderStats(){
     {k:"pets",l:"🐾 Top Pets"},
     {k:"clientes",l:"👤 Clientes"},
     {k:"mes",l:"📋 Por Mês"},
+    {k:"bairros",l:"🗺️ Bairros"},
     {k:"texto",l:"📋 Relatório"},
   ];
 
@@ -2915,22 +2929,40 @@ function renderStats(){
       });
 
     }else if(abaAtiva==="mes"){
-      // ── Tabela de meses clicáveis ─────────────────────────────────────────
+      // ── Tabela de meses clicáveis (com split Cad1/Cad2) ──────────────────────
+      // Calcula receita separada por cadastro
+      function getReceitaMesSplit(mesNome){
+        let c1=0,c2=0,p1=0,p2=0,pets1=0,pets2=0;
+        Object.values(DATA.cobrancas[mesNome]||{}).forEach(cb=>{
+          const v=totAts(cb.atendimentos);const vp=totAts((cb.atendimentos||[]).filter(a=>a.pago));
+          const np=(cb.atendimentos||[]).reduce((s,a)=>s+(a.caes||[]).length,0);
+          c1+=v;p1+=vp;pets1+=np;
+        });
+        Object.values((DATA.cobrancas2||{})[mesNome]||{}).forEach(cb=>{
+          const v=totAts(cb.atendimentos);const vp=totAts((cb.atendimentos||[]).filter(a=>a.pago));
+          const np=(cb.atendimentos||[]).reduce((s,a)=>s+(a.caes||[]).length,0);
+          c2+=v;p2+=vp;pets2+=np;
+        });
+        return{c1,c2,p1,p2,pets1,pets2,total:c1+c2};
+      }
+
       const tbl=div({style:{background:"#fff",borderRadius:14,overflow:"hidden",boxShadow:"0 1px 8px rgba(0,0,0,.06)",marginBottom:mesSel?16:0}});
-      const hdr2=div({style:{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",background:"#FF6B9D",padding:"10px 14px"}});
-      ["Mês","Faturado","Var."].forEach(t=>hdr2.appendChild(h("span",{style:{fontWeight:800,color:"#fff",fontSize:11,textTransform:"uppercase"}},t)));
+      const hdr2=div({style:{display:"grid",gridTemplateColumns:"1.2fr 1fr 1fr 0.8fr",background:"#FF6B9D",padding:"10px 14px"}});
+      ["Mês","C1","C2","Var."].forEach(t=>hdr2.appendChild(h("span",{style:{fontWeight:800,color:"#fff",fontSize:11,textTransform:"uppercase"}},t)));
       tbl.appendChild(hdr2);
       MESES.forEach((m,mi)=>{
-        const v=recMes[m].faturado;
-        const vAnt=mi>0?recMes[MESES[mi-1]].faturado:0;
+        const sp=getReceitaMesSplit(m);
+        const v=sp.total;
+        const vAnt=mi>0?getReceitaMesSplit(MESES[mi-1]).total:0;
         const varPct=vAnt>0?((v-vAnt)/vAnt*100):0;
         const isAt=mi===mesAt;
         const isSel=mesSel===m;
-        const row=div({style:{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",padding:"9px 14px",borderBottom:"1px solid #FFE4EF",background:isSel?"#FFF0F7":(isAt?"#FFF5F9":"#fff"),cursor:"pointer"},onClick:()=>{mesSel=isSel?null:m;buildAbaContent();}});
+        const row=div({style:{display:"grid",gridTemplateColumns:"1.2fr 1fr 1fr 0.8fr",padding:"9px 14px",borderBottom:"1px solid #FFE4EF",background:isSel?"#FFF0F7":(isAt?"#FFF5F9":"#fff"),cursor:"pointer"},onClick:()=>{mesSel=isSel?null:m;buildAbaContent();}});
         row.appendChild(h("span",{style:{fontWeight:isSel||isAt?800:600,fontSize:12,color:isSel?"#FF6B9D":(isAt?"#FF6B9D":"#1A1A2E")}},m.slice(0,3)+(isAt?" ◀":"")+(isSel?" 🔍":"")));
-        row.appendChild(h("span",{style:{fontWeight:700,fontSize:12,color:"#1A1A2E"}},fmtR(v)));
+        row.appendChild(h("span",{style:{fontWeight:700,fontSize:11,color:"#FF6B9D"}},sp.c1>0?fmtR(sp.c1):"—"));
+        row.appendChild(h("span",{style:{fontWeight:700,fontSize:11,color:"#9B59B6"}},sp.c2>0?fmtR(sp.c2):"—"));
         const vc=varPct>=0?"#2DC653":"#e53e3e";
-        row.appendChild(h("span",{style:{fontWeight:700,fontSize:11,color:vAnt===0?"#ccc":vc}},vAnt===0?"—":(varPct>=0?"▲":"▼")+Math.abs(varPct).toFixed(0)+"%"));
+        row.appendChild(h("span",{style:{fontWeight:700,fontSize:10,color:vAnt===0?"#ccc":vc}},vAnt===0?"—":(varPct>=0?"▲":"▼")+Math.abs(varPct).toFixed(0)+"%"));
         tbl.appendChild(row);
       });
       abaContent.appendChild(tbl);
@@ -2938,10 +2970,27 @@ function renderStats(){
       // ── Detalhes por semana do mês selecionado ────────────────────────────
       if(mesSel){
         const miSel=MESES.indexOf(mesSel);
+        const spMes=getReceitaMesSplit(mesSel);
         const detWrap=div({style:{background:"#fff",borderRadius:18,padding:"16px",boxShadow:"0 2px 12px rgba(0,0,0,.07)",border:"2px solid #FF6B9D"}});
         detWrap.appendChild(h("p",{style:{fontFamily:"'Fredoka One',sans-serif",fontSize:16,color:"#FF6B9D",marginBottom:12}},"📊 "+mesSel+" — por semana"));
 
-        // Coleta atendimentos do mês
+        // ── Mini cards Cad1 vs Cad2 ──────────────────────────────────────────
+        const cadGrid=div({style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}});
+        const mkCadCard=(label,val,rec,pets,cor)=>{
+          const c=div({style:{background:cor+"15",borderRadius:12,padding:"10px",border:"1.5px solid "+cor+"44"}});
+          c.innerHTML='<div style="font-size:9px;font-weight:800;color:'+cor+';text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">'+label+'</div><div style="font-weight:800;color:'+cor+';font-size:13px">'+fmtR(val)+'</div><div style="font-size:10px;color:#8B8FA8;margin-top:2px">Rec: '+fmtR(rec)+'</div><div style="font-size:10px;color:#8B8FA8">'+pets+' pets</div>';
+          return c;
+        };
+        cadGrid.appendChild(mkCadCard("📁 Cadastro 1",spMes.c1,spMes.p1,spMes.pets1,"#FF6B9D"));
+        cadGrid.appendChild(mkCadCard("📂 Cadastro 2",spMes.c2,spMes.p2,spMes.pets2,"#9B59B6"));
+        detWrap.appendChild(cadGrid);
+
+        // ── Resumo total do mês com médias ───────────────────────────────────
+        const totalM=spMes.total;
+        const pagosM=spMes.p1+spMes.p2;
+        const totalPetsM=spMes.pets1+spMes.pets2;
+
+        // Coleta atendimentos do mês para semanas
         function getAtsDoMes(mesNome){
           const ats=[];
           [DATA.cobrancas[mesNome]||{},(DATA.cobrancas2||{})[mesNome]||{}].forEach(cbM=>{
@@ -2954,33 +3003,35 @@ function renderStats(){
           });
           return ats.sort((a,b)=>a.data.localeCompare(b.data));
         }
-
         const atsM=getAtsDoMes(mesSel);
-        const totalM=atsM.reduce((s,a)=>s+a.valor,0);
-        const pagosM=atsM.filter(a=>a.pago).reduce((s,a)=>s+a.valor,0);
-        const totalPetsM=atsM.reduce((s,a)=>s+a.caes,0);
 
-        // Resumo do mês
-        const resumoMes=div({style:{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:16}});
+        // Médias
+        const diasComMov=new Set(atsM.map(a=>a.data)).size||1;
+        const mediaDia=totalPetsM/Math.max(diasComMov,1);
+        const ticketMedio=totalPetsM>0?totalM/totalPetsM:0;
+
+        const resumoMes=div({style:{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}});
         [{l:"Faturado",v:fmtR(totalM),c:"#FF6B9D"},{l:"Recebido",v:fmtR(pagosM),c:"#2DC653"},{l:"Pets",v:totalPetsM+" banhos",c:"#3B82F6"}].forEach(it=>{
           const c=div({style:{background:it.c+"18",borderRadius:12,padding:"10px 8px",textAlign:"center"}});
-          c.innerHTML=`<div style="font-size:10px;font-weight:700;color:${it.c};text-transform:uppercase;letter-spacing:.6px">${it.l}</div><div style="font-weight:800;color:${it.c};font-size:13px;margin-top:3px">${it.v}</div>`;
+          c.innerHTML='<div style="font-size:10px;font-weight:700;color:'+it.c+';text-transform:uppercase;letter-spacing:.6px">'+it.l+'</div><div style="font-weight:800;color:'+it.c+';font-size:13px;margin-top:3px">'+it.v+'</div>';
           resumoMes.appendChild(c);
         });
         detWrap.appendChild(resumoMes);
 
-        // Dividir em semanas (Seg a Dom)
-        const ano2=new Date().getFullYear();
-        const primDiaMes=new Date(ano2,miSel,1);
-        const ultDiaMes=new Date(ano2,miSel+1,0);
+        // Médias em linha
+        const mediasRow=div({style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}});
+        [{l:"🐾 Média/dia",v:mediaDia.toFixed(1)+" pets",c:"#E8A000"},{l:"💰 Ticket médio",v:fmtR(ticketMedio),c:"#8B8FA8"}].forEach(it=>{
+          const c=div({style:{background:it.c+"18",borderRadius:10,padding:"8px",textAlign:"center"}});
+          c.innerHTML='<div style="font-size:9px;font-weight:700;color:'+it.c+';text-transform:uppercase">'+it.l+'</div><div style="font-weight:800;color:'+it.c+';font-size:12px;margin-top:2px">'+it.v+'</div>';
+          mediasRow.appendChild(c);
+        });
+        detWrap.appendChild(mediasRow);
 
-        // Agrupa por semana do mês
+        // Dividir em semanas
         function semanaDoMes(dataStr){
           const d=new Date(dataStr+"T12:00:00");
-          const dia=d.getDate();
-          return Math.ceil(dia/7);
+          return Math.ceil(d.getDate()/7);
         }
-
         const semanas={};
         atsM.forEach(at=>{
           const s=semanaDoMes(at.data);
@@ -2994,27 +3045,24 @@ function renderStats(){
         const nSems=Object.keys(semanas).map(Number).sort((a,b)=>a-b);
         if(nSems.length===0){detWrap.appendChild(div({style:{textAlign:"center",padding:"20px",color:"#8B8FA8",fontSize:13}},"Sem atendimentos em "+mesSel));}
         else{
-          // encontra semana com maior faturamento
           const melhorSem=nSems.reduce((best,s)=>semanas[s].valor>semanas[best].valor?s:best,nSems[0]);
-
           nSems.forEach(s=>{
             const sm=semanas[s];
             const isMelhor=s===melhorSem&&sm.valor>0;
             const semRow=div({style:{marginBottom:10,background:isMelhor?"#FFFBEE":"#f8f8f8",borderRadius:14,padding:"10px 12px",border:isMelhor?"2px solid #FFD93D":"1.5px solid #f0f0f0"}});
             const topSem=div({style:{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}});
-            topSem.innerHTML=`<div><span style="font-weight:800;color:#1A1A2E;font-size:13px">Semana ${s}</span>${isMelhor?'<span style="background:#FFD93D;color:#1A1A2E;font-size:9px;font-weight:800;padding:2px 6px;border-radius:6px;margin-left:6px">⭐ MELHOR</span>':""}</div><span style="font-weight:800;color:#FF6B9D;font-size:14px">${fmtR(sm.valor)}</span>`;
+            topSem.innerHTML='<div><span style="font-weight:800;color:#1A1A2E;font-size:13px">Semana '+s+'</span>'+( isMelhor?'<span style="background:#FFD93D;color:#1A1A2E;font-size:9px;font-weight:800;padding:2px 6px;border-radius:6px;margin-left:6px">⭐ MELHOR</span>':"")+('</div><span style="font-weight:800;color:#FF6B9D;font-size:14px">'+fmtR(sm.valor)+'</span>');
             semRow.appendChild(topSem);
-            // Barra progresso
             const pct=totalM>0?sm.valor/totalM:0;
             const barWrap=div({style:{background:"#FFE4EF",borderRadius:6,height:8,marginBottom:6}});
             barWrap.appendChild(div({style:{background:isMelhor?"#FFD93D":"#FF6B9D",borderRadius:6,height:8,width:(pct*100).toFixed(1)+"%",minWidth:"4px"}}));
             semRow.appendChild(barWrap);
             const info2=div({style:{display:"flex",gap:12,fontSize:11,color:"#8B8FA8",fontWeight:700}});
-            info2.innerHTML=`<span>✅ Rec: ${fmtR(sm.pago)}</span><span>🐾 ${sm.pets} pets</span><span>📅 ${sm.dias.size} dia${sm.dias.size>1?"s":""}</span>`;
+            const mediaSem=sm.pets>0?sm.valor/sm.pets:0;
+            info2.innerHTML='<span>✅ Rec: '+fmtR(sm.pago)+'</span><span>🐾 '+sm.pets+' pets</span><span>📅 '+sm.dias.size+' dia'+(sm.dias.size>1?"s":"")+'</span><span>💰 '+fmtR(mediaSem)+'/pet</span>';
             semRow.appendChild(info2);
             detWrap.appendChild(semRow);
           });
-
           // Comparativo entre semanas
           if(nSems.length>=2){
             const compWrap=div({style:{background:"linear-gradient(135deg,#1A1A2E,#2d3561)",borderRadius:14,padding:"12px 14px",marginTop:8}});
@@ -3035,7 +3083,147 @@ function renderStats(){
         }
         abaContent.appendChild(detWrap);
       }
+    }else if(abaAtiva==="bairros"){
+      // ── Gráfico de pizza por bairro ─────────────────────────────────────────
+      // Lista de bairros conhecidos para matching
+      const BAIRROS_CONHECIDOS=["Terra Ville","Lami","Chapéu do Sol","Chapeu do Sol","Belém Novo","Belem Novo","Bom Jesus","Espírito Santo","Espirito Santo","Ipanema","Guarujá","Guaruja","Jardim Isabel","Camaquã","Camaqua","Tristeza","Cavalhada","Aberta dos Morros","Restinga","Ponta Grossa","Sarandi","Rubem Berta","Bom Fim","Cidade Baixa","Moinhos","Petrópolis","Petropolis","Auxiliadora","Boa Vista","Mont Serrat","Rio Branco","Menino Deus","Teresópolis","Teresopolis","Cristal","Nonoai","Santa Tereza","Centro","Floresta","Independência","Independencia","Passo das Pedras","Partenon"];
 
+      function getBairroDoCliente(casaNum){
+        const casa=(DATA.casas||{})[casaNum]||(DATA.casas2||{})[casaNum]||{};
+        const endObj=(DATA.enderecos||{})[casaNum]||{};
+        // Junta todas as fontes de endereço
+        const endStr=[
+          casa.endereco||"",
+          typeof endObj==="string"?endObj:"",
+          typeof endObj==="object"?(endObj.bairro||endObj.rua||""):"",
+        ].join(" ");
+        if(!endStr.trim())return"Não informado";
+        // Tenta match com bairros conhecidos
+        for(const b of BAIRROS_CONHECIDOS){
+          if(endStr.toLowerCase().includes(b.toLowerCase()))return b;
+        }
+        // Tenta extrair última parte após vírgula ou hífen que não seja CEP/cidade/UF
+        const partes=endStr.split(/[,\-–]/);
+        for(let i=partes.length-1;i>=0;i--){
+          const p=partes[i].trim();
+          if(p.length>3&&!/^\d/.test(p)&&!/porto alegre/i.test(p)&&!/^RS$/i.test(p)&&p.split(" ").length<=4){
+            return p;
+          }
+        }
+        return"Não informado";
+      }
+
+      // Agrupa receita e pets por bairro (todos os meses)
+      const bairroMap={};
+      MESES.forEach(m=>{
+        [DATA.cobrancas[m]||{},(DATA.cobrancas2||{})[m]||{}].forEach(cbM=>{
+          Object.entries(cbM).forEach(([casaNum,cb])=>{
+            const v=totAts(cb.atendimentos);
+            if(v<=0)return;
+            const bairro=getBairroDoCliente(casaNum);
+            if(!bairroMap[bairro])bairroMap[bairro]={valor:0,pets:0,clientes:new Set()};
+            bairroMap[bairro].valor+=v;
+            bairroMap[bairro].clientes.add(String(casaNum));
+            (cb.atendimentos||[]).forEach(at=>bairroMap[bairro].pets+=(at.caes||[]).length);
+          });
+        });
+      });
+
+      const bairrosArr=Object.entries(bairroMap).sort((a,b)=>b[1].valor-a[1].valor);
+      const totalBairros=bairrosArr.reduce((s,[,b])=>s+b.valor,0);
+      const CORES=["#FF6B9D","#FFD93D","#3B82F6","#2DC653","#9B59B6","#E8A000","#e53e3e","#06b6d4","#84cc16","#f59e0b","#ec4899","#8b5cf6"];
+
+      if(bairrosArr.length===0||totalBairros===0){
+        const aviso=div({style:{textAlign:"center",padding:"40px 20px",color:"#8B8FA8",fontSize:13,background:"#fff",borderRadius:18,padding:"30px 20px"}});
+        aviso.innerHTML='<div style="font-size:40px;margin-bottom:10px">🗺️</div><div style="font-weight:800;color:#1A1A2E;font-size:14px;margin-bottom:8px">Sem dados de bairro ainda</div><div style="font-size:12px;color:#8B8FA8">Adicione o endereço dos clientes<br>no cadastro para ver o mapa por bairro</div>';
+        abaContent.appendChild(aviso);
+      } else {
+        // ── Gráfico de pizza SVG tipo donut ──────────────────────────────────
+        const pizzaWrap=div({style:{background:"#fff",borderRadius:18,padding:"16px",boxShadow:"0 2px 12px rgba(0,0,0,.07)",marginBottom:14}});
+        pizzaWrap.appendChild(h("p",{style:{fontFamily:"'Fredoka One',sans-serif",fontSize:15,color:"#1A1A2E",marginBottom:12,textAlign:"center"}},"🗺️ Receita por Bairro"));
+
+        const SZ=220,cx=110,cy=110,R=90,ri=45;
+        const ns="http://www.w3.org/2000/svg";
+        const svg=document.createElementNS(ns,"svg");
+        svg.setAttribute("viewBox","0 0 "+SZ+" "+SZ);
+        svg.setAttribute("width","100%");svg.setAttribute("height",SZ);
+        svg.style.cssText="display:block;max-width:"+SZ+"px;margin:0 auto";
+
+        const top10=bairrosArr.slice(0,10);
+        // Se houver mais de 10, agrupa o resto em "Outros"
+        if(bairrosArr.length>10){
+          const outrosVal=bairrosArr.slice(10).reduce((s,[,b])=>s+b.valor,0);
+          const outrosPets=bairrosArr.slice(10).reduce((s,[,b])=>s+b.pets,0);
+          const outrosCl=new Set(bairrosArr.slice(10).flatMap(([,b])=>[...b.clientes]));
+          top10.push(["Outros",{valor:outrosVal,pets:outrosPets,clientes:outrosCl}]);
+        }
+
+        let angS=-Math.PI/2;
+        top10.forEach(([bairro,data],i)=>{
+          const pct=data.valor/totalBairros;
+          if(pct<=0)return;
+          const angE=angS+pct*2*Math.PI;
+          const x1=cx+R*Math.cos(angS),y1=cy+R*Math.sin(angS);
+          const x2=cx+R*Math.cos(angE),y2=cy+R*Math.sin(angE);
+          const xi1=cx+ri*Math.cos(angS),yi1=cy+ri*Math.sin(angS);
+          const xi2=cx+ri*Math.cos(angE),yi2=cy+ri*Math.sin(angE);
+          const large=pct>0.5?1:0;
+          const path=document.createElementNS(ns,"path");
+          path.setAttribute("d","M"+xi1+","+yi1+" L"+x1+","+y1+" A"+R+","+R+" 0 "+large+",1 "+x2+","+y2+" L"+xi2+","+yi2+" A"+ri+","+ri+" 0 "+large+",0 "+xi1+","+yi1+" Z");
+          path.setAttribute("fill",CORES[i%CORES.length]);
+          path.setAttribute("stroke","#fff");path.setAttribute("stroke-width","2");
+          svg.appendChild(path);
+          angS=angE;
+        });
+
+        // Texto central
+        const tc=document.createElementNS(ns,"text");
+        tc.setAttribute("x",cx);tc.setAttribute("y",cy-8);
+        tc.setAttribute("text-anchor","middle");tc.setAttribute("font-size","9");
+        tc.setAttribute("font-weight","800");tc.setAttribute("fill","#8B8FA8");
+        tc.setAttribute("font-family","Nunito,sans-serif");tc.textContent="RECEITA TOTAL";
+        const tv=document.createElementNS(ns,"text");
+        tv.setAttribute("x",cx);tv.setAttribute("y",cy+10);
+        tv.setAttribute("text-anchor","middle");tv.setAttribute("font-size","13");
+        tv.setAttribute("font-weight","800");tv.setAttribute("fill","#1A1A2E");
+        tv.setAttribute("font-family","Nunito,sans-serif");tv.textContent=fmtR(totalBairros);
+        [tc,tv].forEach(t=>svg.appendChild(t));
+        pizzaWrap.appendChild(svg);
+
+        // Legenda colorida
+        const leg=div({style:{display:"flex",flexWrap:"wrap",gap:6,marginTop:10,justifyContent:"center"}});
+        top10.forEach(([bairro,],i)=>{
+          const li=div({style:{display:"flex",alignItems:"center",gap:4,fontSize:10,fontWeight:700,color:"#1A1A2E"}});
+          const dot=div({style:{width:10,height:10,borderRadius:5,background:CORES[i%CORES.length],flexShrink:0}});
+          li.appendChild(dot);
+          li.appendChild(document.createTextNode(bairro.split(" ").slice(0,2).join(" ")));
+          leg.appendChild(li);
+        });
+        pizzaWrap.appendChild(leg);
+        abaContent.appendChild(pizzaWrap);
+
+        // ── Lista detalhada por bairro ──────────────────────────────────────
+        const listaDiv=div({style:{background:"#fff",borderRadius:18,padding:"16px",boxShadow:"0 2px 12px rgba(0,0,0,.06)"}});
+        listaDiv.appendChild(h("p",{style:{fontFamily:"'Fredoka One',sans-serif",fontSize:14,color:"#1A1A2E",marginBottom:10}},"🏘️ Detalhes por Bairro"));
+        top10.forEach(([bairro,data],i)=>{
+          const pct=totalBairros>0?(data.valor/totalBairros*100):0;
+          const row=div({style:{marginBottom:10,borderRadius:14,padding:"10px 12px",background:"#f8f8f8",border:"1.5px solid #f0f0f0"}});
+          const topR=div({style:{display:"flex",alignItems:"center",gap:8,marginBottom:5}});
+          const badge=div({style:{width:12,height:12,borderRadius:6,background:CORES[i%CORES.length],flexShrink:0}});
+          const nm=h("span",{style:{fontWeight:800,fontSize:13,color:"#1A1A2E",flex:1}},bairro);
+          const vl=h("span",{style:{fontWeight:800,fontSize:12,color:CORES[i%CORES.length]}},fmtR(data.valor));
+          [badge,nm,vl].forEach(el=>topR.appendChild(el));
+          row.appendChild(topR);
+          const bar=div({style:{background:"#f0f0f0",borderRadius:6,height:6,marginBottom:5}});
+          bar.appendChild(div({style:{background:CORES[i%CORES.length],borderRadius:6,height:6,width:pct.toFixed(1)+"%",minWidth:"4px"}}));
+          row.appendChild(bar);
+          const sub=div({style:{display:"flex",gap:10,fontSize:11,color:"#8B8FA8",fontWeight:700}});
+          sub.innerHTML="<span>"+pct.toFixed(1)+"% do total</span><span>🐾 "+data.pets+" pets</span><span>👤 "+data.clientes.size+" clientes</span>";
+          row.appendChild(sub);
+          listaDiv.appendChild(row);
+        });
+        abaContent.appendChild(listaDiv);
+      }
     }else if(abaAtiva==="texto"){
       let tR2=0,tP2=0;
       MESES.forEach(m=>{[DATA.cobrancas[m]||{},(DATA.cobrancas2||{})[m]||{}].forEach(cbM=>Object.values(cbM).forEach(cb=>{const v=totAts(cb.atendimentos);tR2+=v;if(cb.pago)tP2+=v;}));});
@@ -3426,56 +3614,64 @@ function renderBolao(){
 
   const topo=div({style:{background:"linear-gradient(160deg,#064e26 0%,#15803d 60%,#166534 100%)",padding:"20px 18px 22px"}});
 
-  // Monta o HTML de palpites inline
-  let palpitesHTML="";
-  if(listaPalpites.length>0){
-    const linhas=listaPalpites.map(([uid,p])=>{
-      const primeiroNome=(p.nome||"?").split(" ")[0];
-      const placarStr=(p.golM!==""&&p.golV!=="")?`<span style="background:rgba(255,255,255,.2);border-radius:6px;padding:1px 7px;font-weight:900;font-size:12px;color:#FFD93D">${p.golM}×${p.golV}</span>`:"";
-      const goleadorStr=p.jogador?`<span style="background:rgba(0,0,0,.25);border-radius:6px;padding:1px 7px;font-size:11px;color:#86efac">⚽ ${p.jogador.split(" ")[0]}</span>`:`<span style="font-size:11px;color:rgba(255,255,255,.35)">sem goleador</span>`;
-      return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.08)">
-        <div style="width:28px;height:28px;border-radius:14px;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#fff;flex-shrink:0">${primeiroNome[0].toUpperCase()}</div>
-        <div style="font-weight:700;font-size:12px;color:#fff;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${primeiroNome}</div>
-        <div style="display:flex;align-items:center;gap:5px">${placarStr}${goleadorStr}</div>
-      </div>`;
-    }).join("");
-    palpitesHTML=`
-      <div style="margin-top:12px;background:rgba(0,0,0,.2);border-radius:14px;padding:10px 12px">
-        <div style="font-size:9px;font-weight:800;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">🎯 ${listaPalpites.length} palpite(s) recebido(s)</div>
-        ${linhas}
-      </div>`;
-  } else {
-    palpitesHTML=`<div style="margin-top:10px;text-align:center;font-size:11px;color:rgba(255,255,255,.4)">Nenhum palpite ainda para este jogo</div>`;
-  }
+  // ── Monta o topo inteiramente em DOM (sem innerHTML + injeção) ────────────
+  const topoHeader=div({style:{display:"flex",alignItems:"center",gap:8,marginBottom:12}});
+  topoHeader.innerHTML='<span style="font-size:22px">⚽</span><div><div style="font-family:Fredoka One,sans-serif;font-size:13px;color:rgba(255,255,255,.75);letter-spacing:1.2px;text-transform:uppercase">'+( temPlacar?"Resultado":"Próximo Jogo")+' · '+jogo.fase+'</div><div style="font-size:10px;color:rgba(255,255,255,.55)">'+jogo.local+'</div></div>';
+  topo.appendChild(topoHeader);
 
-  topo.innerHTML=`
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
-      <span style="font-size:22px">⚽</span>
-      <div>
-        <div style="font-family:'Fredoka One',sans-serif;font-size:13px;color:rgba(255,255,255,.75);letter-spacing:1.2px;text-transform:uppercase">${temPlacar?"Resultado":"Próximo Jogo"} · ${jogo.fase}</div>
-        <div style="font-size:10px;color:rgba(255,255,255,.55)">${jogo.local}</div>
-      </div>
-    </div>
-    <div style="background:rgba(0,0,0,.3);border-radius:18px;padding:16px 14px;display:flex;align-items:center;gap:8px">
-      <div style="flex:1;text-align:center">
-        <div style="font-size:32px">${flagMand}</div>
-        <div style="font-family:'Fredoka One',sans-serif;font-size:15px;color:#fff;margin-top:4px">${jogo.mandante}</div>
-      </div>
-      <div style="text-align:center;min-width:70px">
-        ${temPlacar
-          ?`<div style="font-family:'Fredoka One',sans-serif;font-size:36px;color:#FFD93D;line-height:1">${real.golM} × ${real.golV}</div>
-             ${real.goleador?`<div style="font-size:10px;color:rgba(255,255,255,.8);margin-top:4px;font-weight:700">⚽ ${real.goleador}</div>`:""}`
-          :`<div style="font-family:'Fredoka One',sans-serif;font-size:20px;color:#FFD93D">${diaS} ${dd}/${mm}</div>
-            <div style="font-size:14px;color:rgba(255,255,255,.85);font-weight:700;margin-top:2px">${jogo.hora}h</div>`
+  const topoScorebox=div({style:{background:"rgba(0,0,0,.3)",borderRadius:18,padding:"16px 14px",display:"flex",alignItems:"center",gap:8}});
+  const boxM=div({style:{flex:1,textAlign:"center"}});
+  boxM.innerHTML='<div style="font-size:32px">'+flagMand+'</div><div style="font-family:Fredoka One,sans-serif;font-size:15px;color:#fff;margin-top:4px">'+jogo.mandante+'</div>';
+  const boxC=div({style:{textAlign:"center",minWidth:70}});
+  if(temPlacar){
+    boxC.innerHTML='<div style="font-family:Fredoka One,sans-serif;font-size:36px;color:#FFD93D;line-height:1">'+real.golM+' × '+real.golV+'</div>'+( real.goleador?'<div style="font-size:10px;color:rgba(255,255,255,.8);margin-top:4px;font-weight:700">⚽ '+real.goleador+'</div>':"");
+  } else {
+    boxC.innerHTML='<div style="font-family:Fredoka One,sans-serif;font-size:20px;color:#FFD93D">'+diaS+' '+dd+'/'+mm+'</div><div style="font-size:14px;color:rgba(255,255,255,.85);font-weight:700;margin-top:2px">'+jogo.hora+'h</div>';
+  }
+  const boxV=div({style:{flex:1,textAlign:"center"}});
+  boxV.innerHTML='<div style="font-size:32px">'+flagVisit+'</div><div style="font-family:Fredoka One,sans-serif;font-size:15px;color:#fff;margin-top:4px">'+jogo.visitante+'</div>';
+  [boxM,boxC,boxV].forEach(b=>topoScorebox.appendChild(b));
+  topo.appendChild(topoScorebox);
+
+  // ── Lista de palpites com botão apagar ────────────────────────────────────
+  if(listaPalpites.length>0){
+    const palWrap=div({style:{marginTop:12,background:"rgba(0,0,0,.2)",borderRadius:14,padding:"10px 12px"}});
+    palWrap.appendChild(h("div",{style:{fontSize:9,fontWeight:800,color:"rgba(255,255,255,.5)",textTransform:"uppercase",letterSpacing:1,marginBottom:6}},
+      "🎯 "+listaPalpites.length+" palpite(s) recebido(s)"));
+    listaPalpites.forEach(([uid,p])=>{
+      const primeiroNome=(p.nome||"?").split(" ")[0];
+      const linha=div({style:{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:"1px solid rgba(255,255,255,.08)"}});
+      const av=div({style:{width:28,height:28,borderRadius:14,background:"rgba(255,255,255,.15)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,color:"#fff",flexShrink:0}});
+      av.textContent=primeiroNome[0].toUpperCase();
+      const nm=div({style:{fontWeight:700,fontSize:12,color:"#fff",flex:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}});
+      nm.textContent=primeiroNome;
+      const inf=div({style:{display:"flex",alignItems:"center",gap:5}});
+      if(p.golM!==""&&p.golV!==""){const pl=document.createElement("span");pl.style.cssText='background:rgba(255,255,255,.2);border-radius:6px;padding:1px 7px;font-weight:900;font-size:12px;color:#FFD93D';pl.textContent=p.golM+"×"+p.golV;inf.appendChild(pl);}
+      const gl=document.createElement("span");
+      if(p.jogador){gl.style.cssText='background:rgba(0,0,0,.25);border-radius:6px;padding:1px 7px;font-size:11px;color:#86efac';gl.textContent="⚽ "+p.jogador.split(" ")[0];}
+      else{gl.style.cssText='font-size:11px;color:rgba(255,255,255,.35)';gl.textContent="sem goleador";}
+      inf.appendChild(gl);
+      const delBtn=document.createElement("button");
+      delBtn.textContent="🗑";
+      delBtn.style.cssText='background:rgba(220,0,0,.45);border:none;border-radius:8px;color:#fff;font-size:13px;padding:3px 7px;cursor:pointer;flex-shrink:0';
+      delBtn.onclick=(e)=>{
+        e.stopPropagation();
+        if(confirm("Apagar palpite de "+primeiroNome+"?")){
+          updSilent(d=>{if(d.bolao&&d.bolao.palpites&&d.bolao.palpites[jogo.id])delete d.bolao.palpites[jogo.id][uid];return d;});
+          DATA=loadData();go("bolao");
         }
-      </div>
-      <div style="flex:1;text-align:center">
-        <div style="font-size:32px">${flagVisit}</div>
-        <div style="font-family:'Fredoka One',sans-serif;font-size:15px;color:#fff;margin-top:4px">${jogo.visitante}</div>
-      </div>
-    </div>
-    ${palpitesHTML}`;
+      };
+      [av,nm,inf,delBtn].forEach(el=>linha.appendChild(el));
+      palWrap.appendChild(linha);
+    });
+    topo.appendChild(palWrap);
+  } else {
+    const semPal=div({style:{marginTop:10,textAlign:"center",fontSize:11,color:"rgba(255,255,255,.4)"}});
+    semPal.textContent="Nenhum palpite ainda para este jogo";
+    topo.appendChild(semPal);
+  }
   w.appendChild(topo);
+
 
   // ── Header com voltar ────────────────────────────────────────────────────
   w.appendChild(mkHdr("⚽ Bolão Copa 2026",()=>go("home")));
@@ -3704,6 +3900,41 @@ function renderRankingTab(bolao){
   const palpites=bolao.palpites||{};
   const placarReal=bolao.placar||{};
 
+  // ── Botão rápido lançar placar ──────────────────────────────────────────────
+  const btnLancar=btn({style:{width:"100%",padding:"13px",background:"linear-gradient(135deg,#3B82F6,#60a5fa)",color:"#fff",fontSize:13,fontWeight:800,borderRadius:13,marginBottom:14,display:"flex",alignItems:"center",justifyContent:"center",gap:8},onClick:()=>{
+    const cont=div();
+    const jogoSel2=document.createElement("select");
+    jogoSel2.className="fi";jogoSel2.style.marginBottom="14px";jogoSel2.style.width="100%";
+    BOLAO_JOGOS.forEach(j=>{const op=document.createElement("option");op.value=j.id;op.textContent=j.mandante+" x "+j.visitante+" ("+j.data.slice(8,10)+"/"+j.data.slice(5,7)+")";jogoSel2.appendChild(op);});
+    cont.appendChild(jogoSel2);
+    const row2=div({style:{display:"flex",alignItems:"center",gap:8,marginBottom:14,justifyContent:"center"}});
+    const gm2=inp({type:"number",min:"0",max:"20",style:{width:56,padding:"10px 6px",borderRadius:12,border:"2px solid #3B82F6",textAlign:"center",fontSize:22,fontWeight:900,color:"#1A1A2E"},placeholder:"0"});
+    const gv2=inp({type:"number",min:"0",max:"20",style:{width:56,padding:"10px 6px",borderRadius:12,border:"2px solid #3B82F6",textAlign:"center",fontSize:22,fontWeight:900,color:"#1A1A2E"},placeholder:"0"});
+    row2.innerHTML="";
+    row2.appendChild(h("span",{style:{fontSize:13,fontWeight:700,color:"#8B8FA8"}},"Mandante"));
+    row2.appendChild(gm2);
+    row2.appendChild(h("span",{style:{fontSize:22,fontWeight:900,color:"#8B8FA8",margin:"0 8px"}},"x"));
+    row2.appendChild(gv2);
+    row2.appendChild(h("span",{style:{fontSize:13,fontWeight:700,color:"#8B8FA8"}},"Visitante"));
+    cont.appendChild(row2);
+    cont.appendChild(h("div",{style:{fontWeight:800,fontSize:11,color:"#8B8FA8",textTransform:"uppercase",marginBottom:8}},"Goleador (opcional) ⚽"));
+    const chW2=div({style:{display:"flex",flexWrap:"wrap",gap:6,marginBottom:14}});
+    let golSel2="";const chips2={};
+    function updC2(){Object.entries(chips2).forEach(([n,el])=>{const s=golSel2===n;el.style.background=s?"#15803d":"#fff";el.style.color=s?"#fff":"#1A1A2E";el.style.border="2px solid "+(s?"#15803d":"#e5e7eb");});}
+    ATACANTES_BR.forEach(j=>{const c2=btn({style:{padding:"6px 10px",borderRadius:18,fontSize:11,border:"2px solid #e5e7eb",background:"#fff",color:"#1A1A2E",fontWeight:700},onClick:()=>{golSel2=golSel2===j.n?"":j.n;updC2();}});c2.textContent=j.emoji+" "+j.n.split(" ")[0];chips2[j.n]=c2;chW2.appendChild(c2);});
+    cont.appendChild(chW2);
+    let mv2=null;
+    cont.appendChild(btn({style:{width:"100%",padding:"14px",background:"linear-gradient(135deg,#15803d,#22c55e)",color:"#fff",fontSize:14,fontWeight:800,borderRadius:13},onClick:()=>{
+      const jid=jogoSel2.value;
+      if(gm2.value===""&&gv2.value===""){alert("Preencha o placar!");return;}
+      updSilent(d=>{if(!d.bolao)d.bolao={palpites:{},placar:{}};d.bolao.placar[jid]={golM:gm2.value,golV:gv2.value,goleador:golSel2};return d;});
+      DATA=loadData();if(mv2)mv2.remove();
+      wrap.innerHTML="";wrap.appendChild(renderRankingTab(DATA.bolao||{}));
+    }},"💾 Salvar e Ver Ranking"));
+    mv2=openModal("⚽ Lançar Resultado",cont,()=>{},true);
+  }},"📅 Lançar Placar de um Jogo");
+  wrap.appendChild(btnLancar);
+
   // Para cada jogo com resultado, mostra bloco de ganhador(es)
   let temAlgumResultado=false;
   BOLAO_JOGOS.forEach(jogo=>{
@@ -3717,53 +3948,84 @@ function renderRankingTab(bolao){
     // Cabeçalho do jogo
     bloco.innerHTML=`<div style="background:linear-gradient(135deg,#15803d,#166534);padding:10px 14px;display:flex;align-items:center;justify-content:space-between">
       <div>
-        <div style="font-family:'Fredoka One',sans-serif;font-size:14px;color:#fff">${jogo.mandante} × ${jogo.visitante}</div>
+        <div style="font-family:'Fredoka One',sans-serif;font-size:14px;color:#fff">${jogo.mandante} x ${jogo.visitante}</div>
         <div style="font-size:10px;color:rgba(255,255,255,.7)">${fmtD(jogo.data)} · ${jogo.local}</div>
       </div>
       <div style="text-align:right">
-        <div style="font-family:'Fredoka One',sans-serif;font-size:22px;color:#FFD93D">${real.golM} × ${real.golV}</div>
-        ${real.goleador?`<div style="font-size:10px;color:rgba(255,255,255,.8)">⚽ ${real.goleador}</div>`:""}
+        <div style="font-family:'Fredoka One',sans-serif;font-size:22px;color:#FFD93D">${real.golM} x ${real.golV}</div>
+        ${real.goleador?'<div style="font-size:10px;color:rgba(255,255,255,.8)">⚽ '+real.goleador+'</div>':""}
       </div>
     </div>`;
 
     const corpo=div({style:{padding:"12px 14px 14px"}});
     if(!vencedores.length){
-      corpo.innerHTML=`<div style="text-align:center;padding:12px;color:#8B8FA8;font-size:13px">😔 Ninguém ganhou o banho nesse jogo<br><span style="font-size:11px">${qtPal} palpite(s) recebidos</span></div>`;
+      corpo.innerHTML='<div style="text-align:center;padding:12px;color:#8B8FA8;font-size:13px">😔 Ninguém ganhou o banho nesse jogo<br><span style="font-size:11px">'+qtPal+' palpite(s) recebidos</span></div>';
     } else {
       const tit=h("div",{style:{fontWeight:800,fontSize:12,color:"#15803d",textTransform:"uppercase",letterSpacing:1,marginBottom:8}},"🏆 GANHADOR(ES) DO BANHO GRÁTIS");
       corpo.appendChild(tit);
       vencedores.forEach((v,i)=>{
         const vCard=div({style:{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:i===0?"linear-gradient(135deg,#fef9c3,#fef08a)":"#f9fafb",borderRadius:12,marginBottom:6,border:"1.5px solid "+(i===0?"#FFD93D":"#e5e7eb")}});
         const iniciais=v.nome.split(" ").filter(Boolean).slice(0,2).map(p=>p[0].toUpperCase()).join("");
-        vCard.innerHTML=`
-          <div style="width:40px;height:40px;border-radius:20px;background:linear-gradient(135deg,#FFD93D,#f59e0b);display:flex;align-items:center;justify-content:center;font-family:'Fredoka One',sans-serif;font-size:15px;color:#fff;flex-shrink:0">${i===0?"🏆":iniciais}</div>
-          <div style="flex:1">
-            <div style="font-weight:800;font-size:14px;color:#1A1A2E">${v.nome.split(" ").slice(0,2).join(" ")}</div>
-            <div style="font-size:11px;color:#15803d;font-weight:700">${v.motivo}</div>
-            <div style="font-size:10px;color:#8B8FA8">Palpite: ${v.pal.placar||"—"}${v.pal.jogador?" · ⚽ "+v.pal.jogador:""}</div>
-          </div>
-          <div style="font-size:28px">🐕</div>`;
+        vCard.innerHTML='<div style="width:40px;height:40px;border-radius:20px;background:linear-gradient(135deg,#FFD93D,#f59e0b);display:flex;align-items:center;justify-content:center;font-family:Fredoka One,sans-serif;font-size:15px;color:#fff;flex-shrink:0">'+( i===0?"🏆":iniciais)+'</div><div style="flex:1"><div style="font-weight:800;font-size:14px;color:#1A1A2E">'+v.nome.split(" ").slice(0,2).join(" ")+'</div><div style="font-size:11px;color:#15803d;font-weight:700">'+v.motivo+'</div><div style="font-size:10px;color:#8B8FA8">Palpite: '+( v.pal.placar||"—")+(v.pal.jogador?" · ⚽ "+v.pal.jogador:"")+'</div></div><div style="font-size:28px">🐕</div>';
         corpo.appendChild(vCard);
       });
       const obs=h("div",{style:{fontSize:10,color:"#8B8FA8",textAlign:"center",marginTop:6}});
-      obs.textContent=`${qtPal} palpite(s) · Prêmio: banho grátis 🛁`;
+      obs.textContent=qtPal+" palpite(s) · Prêmio: banho grátis 🛁";
       corpo.appendChild(obs);
     }
-    bloco.appendChild(corpo);
+
+    // ── Separador: todos os palpites desse jogo ─────────────────────────────
+    const allPalsJogo=Object.entries(palpites[jogo.id]||{});
+    if(allPalsJogo.length>0){
+      const sepDiv=div({style:{padding:"0 14px 10px"}});
+      sepDiv.appendChild(h("div",{style:{fontWeight:800,fontSize:11,color:"#8B8FA8",textTransform:"uppercase",letterSpacing:.8,marginTop:6,marginBottom:6}},"📋 Todos os Palpites"));
+      const rm2=parseInt(real.golM),rv2=parseInt(real.golV);
+      const resReal2=rm2>rv2?"M":rm2<rv2?"V":"E";
+      allPalsJogo.sort((a,b)=>(a[1].nome||"").localeCompare(b[1].nome||"")).forEach(([uid,pal])=>{
+        const pm=parseInt(pal.golM),pv=parseInt(pal.golV);
+        const acGol=pal.jogador&&real.goleador&&pal.jogador===real.goleador;
+        const acExato=!isNaN(pm)&&!isNaN(pv)&&pm===rm2&&pv===rv2;
+        const acRes=!isNaN(pm)&&!isNaN(pv)&&(pm>pv?"M":pm<pv?"V":"E")===resReal2;
+        const ganhouBg=acGol?"#dcfce7":acExato?"#dbeafe":acRes?"#fef9c3":"#f9fafb";
+        const pr=div({style:{display:"flex",alignItems:"center",gap:8,padding:"7px 10px",background:ganhouBg,borderRadius:10,marginBottom:4,border:"1px solid "+(acGol?"#86efac":acExato?"#bfdbfe":acRes?"#fde68a":"#f0f0f0")}});
+        const nomeP=(pal.nome||"?").split(" ")[0];
+        const placarP=(pal.golM!==""&&pal.golV!=="")?(pal.golM+"x"+pal.golV):"?";
+        const jogP=pal.jogador?(" ⚽"+pal.jogador.split(" ")[0]):"";
+        const icon=acGol?"🏆":acExato?"🎯":acRes?"✅":"❌";
+        pr.innerHTML='<span style="font-weight:800;font-size:12px;color:#1A1A2E;flex:1">'+nomeP+'</span><span style="font-size:11px;font-weight:700;color:#374151">'+placarP+jogP+'</span><span style="font-size:14px">'+icon+'</span>';
+        sepDiv.appendChild(pr);
+      });
+      bloco.appendChild(corpo);
+      bloco.appendChild(sepDiv);
+    } else {
+      bloco.appendChild(corpo);
+    }
+
+    // ── Card divulgação para redes sociais ──────────────────────────────────
+    const nomeVenc=vencedores.length?vencedores.map(v=>v.nome.split(" ")[0]).join(" e "):"Ninguém";
+    const linhasVenc=vencedores.length?vencedores.map((v,i)=>(i===0?"🥇":"🥈")+" "+v.nome.split(" ").slice(0,2).join(" ")+" — "+v.motivo).join("\n"):"Sem ganhador nesse jogo";
+    const textoDivulg="🐕 Bolão Copa 2026 — Planet Dogs 🏆\n\n⚽ "+jogo.mandante+" x "+jogo.visitante+"\n📊 Resultado: "+real.golM+" x "+real.golV+(real.goleador?" · ⚽ "+real.goleador:"")+"\n\n"+(vencedores.length?"🎉 GANHADOR DO BANHO GRÁTIS:\n"+linhasVenc+"\n\n🛁 Parabéns! O banho grátis é seu!":"😔 Ninguém acertou esse jogo.\nA disputa continua! 💪")+"\n\nPlanet Dogs 🐾 Porto Alegre";
+    const divulgDiv=div({style:{margin:"0 0 0",background:"linear-gradient(135deg,#fef9c3,#fef3c7)",border:"2px solid #FFD93D",borderRadius:"0 0 14px 14px",padding:"12px 14px"}});
+    divulgDiv.appendChild(h("div",{style:{fontWeight:800,fontSize:11,color:"#92400e",textTransform:"uppercase",letterSpacing:.8,marginBottom:8}},"📣 Divulgação para Redes Sociais"));
+    const taDiv=h("textarea",{style:{width:"100%",height:130,padding:"10px",borderRadius:10,border:"1.5px solid #FFD93D",fontSize:11,fontFamily:"monospace",resize:"none",background:"#fff",color:"#1A1A2E",lineHeight:1.6,marginBottom:8}});
+    taDiv.value=textoDivulg;
+    divulgDiv.appendChild(taDiv);
+    const btsDiv=div({style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}});
+    const cpBtn=btn({style:{padding:"10px",background:"linear-gradient(135deg,#1A1A2E,#2d2d4e)",color:"#fff",fontSize:12,borderRadius:10,fontWeight:800},onClick:()=>{navigator.clipboard.writeText(textoDivulg).then(()=>{cpBtn.textContent="✅ Copiado!";setTimeout(()=>cpBtn.textContent="📋 Copiar",2000);});}},["📋 Copiar"]);
+    const waBtn2=btn({style:{padding:"10px",background:"linear-gradient(135deg,#25D366,#128C7E)",color:"#fff",fontSize:12,borderRadius:10,fontWeight:800},onClick:()=>{window.open("https://wa.me/?text="+encodeURIComponent(textoDivulg),"_blank");}},["💬 WhatsApp"]);
+    btsDiv.appendChild(cpBtn);btsDiv.appendChild(waBtn2);
+    divulgDiv.appendChild(btsDiv);
+    bloco.appendChild(divulgDiv);
+
     wrap.appendChild(bloco);
   });
 
   if(!temAlgumResultado){
     const em=div({style:{textAlign:"center",padding:"36px 20px",color:"#8B8FA8"}});
-    em.innerHTML=`<div style="font-size:40px;margin-bottom:10px">🏆</div><div style="font-weight:800;font-size:14px;color:#1A1A2E;margin-bottom:4px">Aguardando os jogos!</div><div style="font-size:12px">Quando você lançar o resultado na aba Jogos,<br>o ganhador do banho aparece aqui.</div>`;
+    em.innerHTML='<div style="font-size:40px;margin-bottom:10px">🏆</div><div style="font-weight:800;font-size:14px;color:#1A1A2E;margin-bottom:4px">Aguardando os jogos!</div><div style="font-size:12px">Use o botão acima para lançar um resultado,<br>ou vá na aba Jogos.</div>';
     wrap.appendChild(em);
     const regras=div({style:{background:"#f0fdf4",border:"1.5px solid #16a34a",borderRadius:14,padding:"14px 16px",marginTop:4}});
-    regras.innerHTML=`<div style="font-weight:800;color:#15803d;font-size:12px;margin-bottom:8px;text-transform:uppercase;letter-spacing:.8px">🏅 Como funciona o prêmio</div>
-      <div style="font-size:12px;line-height:2.2;color:#1A1A2E">
-        ⚽ <b>Acertou o goleador</b> → <b style="color:#15803d">GANHA o banho</b><br>
-        🎯 Empate? Quem também acertou o <b>placar exato</b> leva<br>
-        ✅ Se ninguém acertou gol → quem acertou o <b>resultado</b> ganha
-      </div>`;
+    regras.innerHTML='<div style="font-weight:800;color:#15803d;font-size:12px;margin-bottom:8px;text-transform:uppercase;letter-spacing:.8px">🏅 Como funciona o prêmio</div><div style="font-size:12px;line-height:2.2;color:#1A1A2E">⚽ <b>Acertou o goleador</b> → <b style="color:#15803d">GANHA o banho</b><br>🎯 Empate? Quem também acertou o <b>placar exato</b> leva<br>✅ Se ninguém acertou gol → quem acertou o <b>resultado</b> ganha</div>';
     wrap.appendChild(regras);
   }
   return wrap;
