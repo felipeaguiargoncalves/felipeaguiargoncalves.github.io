@@ -2191,7 +2191,6 @@ function abrirPagamentoModal(grupo,onDone,gwaRota,semWA){
         const txtMsg=decodeURIComponent(msg);
         if(mv)mv.remove();
         const cont2=div();
-        // Preview da mensagem
         const pre2=h("textarea",{style:{width:"100%",height:120,padding:"10px",borderRadius:12,border:"1.5px solid #FFE4EF",fontSize:11,fontFamily:"monospace",resize:"none",background:"#FAFAFA",color:"#1A1A2E",marginBottom:12}});
         pre2.value=txtMsg;pre2.readOnly=true;
         cont2.appendChild(pre2);
@@ -2200,7 +2199,19 @@ function abrirPagamentoModal(grupo,onDone,gwaRota,semWA){
           copiarTexto(txtMsg,cpBtn2);
         }},"📋 Copiar Mensagem");
         cont2.appendChild(cpBtn2);
-        // Botão 2: Abrir WA com Mensagem (igual ao de Rota)
+        // Botão 2: Copiar + Abrir Grupo (se tiver link cadastrado)
+        if(linkGrupoPag.startsWith("https://")){
+          const grpBtn2=btn({style:{width:"100%",padding:"13px",background:"linear-gradient(135deg,#25D366,#128C7E)",color:"#fff",fontSize:14,fontWeight:800,borderRadius:12,marginBottom:10},onClick:()=>{
+            copiarTexto(txtMsg,grpBtn2);
+            const toast2=div({style:{position:"fixed",bottom:100,left:"50%",transform:"translateX(-50%)",background:"#1A1A2E",color:"#FFD93D",padding:"12px 20px",borderRadius:14,fontSize:14,fontWeight:800,zIndex:9999,textAlign:"center",boxShadow:"0 4px 20px rgba(0,0,0,.4)",maxWidth:"80vw"}});
+            toast2.textContent="📋 Mensagem copiada! Cole no grupo.";
+            document.body.appendChild(toast2);
+            setTimeout(()=>{toast2.remove();},3000);
+            window.open(linkGrupoPag,"_blank");
+          }},"📲 Copiar + Abrir Grupo");
+          cont2.appendChild(grpBtn2);
+        }
+        // Botão 3: Abrir WA com Mensagem
         const waBtn3=btn({style:{width:"100%",padding:"13px",background:"linear-gradient(135deg,#3B82F6,#60a5fa)",color:"#fff",fontSize:14,fontWeight:800,borderRadius:12},onClick:()=>{
           window.open("https://api.whatsapp.com/send?text="+msg,"_blank");
         }},"💬 Abrir WA com Mensagem");
