@@ -254,6 +254,22 @@ function render(){
 
 // ── UTILS ─────────────────────────────────────────────────────────────────────
 const hoje=()=>new Date().toISOString().slice(0,10);
+function copiarTexto(txt,btn){
+  // Tenta clipboard API primeiro, fallback para execCommand
+  const ok=()=>{const t=btn.textContent;btn.textContent="✅ Copiado!";setTimeout(()=>btn.textContent=t,2000);};
+  try{
+    if(navigator.clipboard&&navigator.clipboard.writeText){
+      navigator.clipboard.writeText(txt).then(ok).catch(()=>copiarFallback(txt,btn,ok));
+    } else {copiarFallback(txt,btn,ok);}
+  }catch(e){copiarFallback(txt,btn,ok);}
+}
+function copiarFallback(txt,btn,ok){
+  const ta=document.createElement("textarea");
+  ta.value=txt;ta.style.cssText="position:fixed;top:0;left:0;opacity:0;font-size:16px";
+  document.body.appendChild(ta);ta.focus();ta.select();
+  try{document.execCommand("copy");ok();}catch(e){alert("Não foi possível copiar. Selecione e copie manualmente:\n\n"+txt);}
+  document.body.removeChild(ta);
+}
 const fmtD=d=>{if(!d)return"--";const[y,m,dd]=d.split("-");return dd+"/"+m+"/"+y;};
 const addD=(ds,n)=>{const d=new Date(ds+"T12:00:00");d.setDate(d.getDate()+n);return d.toISOString().slice(0,10);};
 const mapsUrl=e=>"https://www.google.com/maps/search/?api=1&query="+encodeURIComponent(e+", Porto Alegre RS");
@@ -1874,8 +1890,11 @@ function abrirGruposModal(){
   secRota.appendChild(h("p",{style:{fontSize:11,color:"#8B8FA8",fontWeight:600,marginBottom:12}},"Link do grupo que recebe a mensagem de rota/busca"));
   DIAS_FULL.forEach((dia,i)=>{
     secRota.appendChild(lbl(dia));
-    const inp2=inp({className:"fi",placeholder:"https://chat.whatsapp.com/...",value:ge[i]||""});
-    inp2.addEventListener("input",()=>ge[i]=inp2.value);secRota.appendChild(inp2);secRota.appendChild(div({style:{height:6}}));
+    const inp2=document.createElement("input");
+    inp2.className="fi";inp2.placeholder="https://chat.whatsapp.com/...";inp2.value=ge[i]||"";inp2.type="url";
+    inp2.addEventListener("input",()=>{ge[i]=inp2.value.trim();});
+    inp2.addEventListener("paste",e=>{setTimeout(()=>{ge[i]=inp2.value.trim();},50);});
+    secRota.appendChild(inp2);secRota.appendChild(div({style:{height:6}}));
   });
   cont.appendChild(secRota);
   // Seção Pagamento
@@ -1884,12 +1903,18 @@ function abrirGruposModal(){
   secPag.appendChild(h("p",{style:{fontSize:11,color:"#8B8FA8",fontWeight:600,marginBottom:12}},"Link do grupo que recebe a mensagem de forma de pagamento"));
   DIAS_FULL.forEach((dia,i)=>{
     secPag.appendChild(lbl(dia));
-    const inp3=inp({className:"fi",placeholder:"https://chat.whatsapp.com/...",value:gpe[i]||""});
-    inp3.addEventListener("input",()=>gpe[i]=inp3.value);secPag.appendChild(inp3);secPag.appendChild(div({style:{height:6}}));
+    const inp3=document.createElement("input");
+    inp3.className="fi";inp3.placeholder="https://chat.whatsapp.com/...";inp3.value=gpe[i]||"";inp3.type="url";
+    inp3.addEventListener("input",()=>{gpe[i]=inp3.value.trim();});
+    inp3.addEventListener("paste",e=>{setTimeout(()=>{gpe[i]=inp3.value.trim();},50);});
+    secPag.appendChild(inp3);secPag.appendChild(div({style:{height:6}}));
   });
   cont.appendChild(secPag);
   let mv=null;
   cont.appendChild(btn({style:{width:"100%",padding:"16px",background:"linear-gradient(135deg,#FF6B9D,#FFD93D)",color:"#fff",fontSize:15,borderRadius:14,marginTop:4},onClick:()=>{updSilent(d=>({...d,gruposWA:{...ge},gruposWAPag:{...gpe}}));if(mv)mv.remove();}},"💾 Salvar Grupos"));
+  const obs=div({style:{background:"#FFFBEE",border:"1.5px solid #FFD93D",borderRadius:12,padding:"12px 14px",fontSize:12,color:"#92400e",fontWeight:700,lineHeight:1.7,marginBottom:4}});
+  obs.innerHTML="ℹ️ Ambos os grupos funcionam igual:<br>• Copia mensagem automaticamente<br>• Abre o WA pessoal com mensagem<br>• Após 1,5s abre o grupo para colar";
+  cont.appendChild(obs);
   mv=openModal("Grupos WA por Dia",cont);
 }
 
@@ -1914,7 +1939,7 @@ function abrirWATelebusca(grupo,gwa){
 
   // Botão copiar
   const cpBtn=btn({style:{width:"100%",padding:"13px",background:"linear-gradient(135deg,#1A1A2E,#2d2d4e)",color:"#fff",fontSize:14,fontWeight:800,borderRadius:12,marginBottom:10},onClick:()=>{
-    navigator.clipboard.writeText(msg).then(()=>{cpBtn.textContent="✅ Copiado!";setTimeout(()=>cpBtn.textContent="📋 Copiar Mensagem",2000);});
+    copiarTexto(msg,cpBtn);
   }},"📋 Copiar Mensagem");
   cont.appendChild(cpBtn);
 
@@ -2163,17 +2188,24 @@ function abrirPagamentoModal(grupo,onDone,gwaRota,semWA){
         novaData=reagendarProximo(repSelecionado);
       }
       if(!semWA){
-        // Copia mensagem e abre grupo/WA
         const txtMsg=decodeURIComponent(msg);
-        navigator.clipboard.writeText(txtMsg).catch(()=>{});
-        if(linkGrupoPag.startsWith("https://")){
-          const toast=div({style:{position:"fixed",bottom:100,left:"50%",transform:"translateX(-50%)",background:"#1A1A2E",color:"#FFD93D",padding:"12px 20px",borderRadius:14,fontSize:14,fontWeight:800,zIndex:9999,textAlign:"center",boxShadow:"0 4px 20px rgba(0,0,0,.4)",maxWidth:"80vw"}});
-          toast.textContent="📋 Mensagem copiada! Cole no grupo.";
-          document.body.appendChild(toast);
-          setTimeout(()=>{toast.remove();window.open(linkGrupoPag,"_blank");},1500);
-        } else {
+        if(mv)mv.remove();
+        const cont2=div();
+        // Preview da mensagem
+        const pre2=h("textarea",{style:{width:"100%",height:120,padding:"10px",borderRadius:12,border:"1.5px solid #FFE4EF",fontSize:11,fontFamily:"monospace",resize:"none",background:"#FAFAFA",color:"#1A1A2E",marginBottom:12}});
+        pre2.value=txtMsg;pre2.readOnly=true;
+        cont2.appendChild(pre2);
+        // Botão 1: Copiar Mensagem
+        const cpBtn2=btn({style:{width:"100%",padding:"13px",background:"linear-gradient(135deg,#1A1A2E,#2d2d4e)",color:"#fff",fontSize:14,fontWeight:800,borderRadius:12,marginBottom:10},onClick:()=>{
+          copiarTexto(txtMsg,cpBtn2);
+        }},"📋 Copiar Mensagem");
+        cont2.appendChild(cpBtn2);
+        // Botão 2: Abrir WA com Mensagem (igual ao de Rota)
+        const waBtn3=btn({style:{width:"100%",padding:"13px",background:"linear-gradient(135deg,#3B82F6,#60a5fa)",color:"#fff",fontSize:14,fontWeight:800,borderRadius:12},onClick:()=>{
           window.open("https://api.whatsapp.com/send?text="+msg,"_blank");
-        }
+        }},"💬 Abrir WA com Mensagem");
+        cont2.appendChild(waBtn3);
+        openModal("💬 Pagamento — "+rep.morador,cont2,()=>{},true);
       }
       if(mv)mv.remove();
       if(novaData)setTimeout(()=>alert(`✅ Próximo agendamento criado para ${fmtD(novaData)}!`),700);
