@@ -2404,13 +2404,19 @@ function abrirAgModal(dataInicial,onDone,getAllPets,gerente){
   const svSel2=sel({className:"fi",style:{marginBottom:12}},SERVICOS.map(s=>({v:s,l:s})));svSel2.addEventListener("change",()=>servicoSel=svSel2.value);
   const fSel2=sel({className:"fi",style:{marginBottom:12}},FUNCS.map((f,i)=>({v:i,l:f.n+" - "+f.c})));fSel2.addEventListener("change",()=>funcIdx=Number(fSel2.value));
   const hI=inp({className:"fi",type:"time",value:"08:00",style:{marginBottom:14}});
+  let repetir=0;
   const repGrid=div({style:{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:8,marginBottom:16}});
-  REPS.forEach(r=>{
-    const b=btn({style:{padding:"10px 4px",fontSize:12,background:"#fff",color:"#1A1A2E",border:"2px solid #FFE4EF",borderRadius:12},onClick:()=>{
-      repetir=repetir===r.d?null:r.d;
-      repGrid.querySelectorAll("button").forEach((bb,i)=>{bb.style.background=REPS[i].d===repetir?"#FF6B9D":"#fff";bb.style.color=REPS[i].d===repetir?"#fff":"#1A1A2E";bb.style.border="2px solid "+(REPS[i].d===repetir?"#FF6B9D":"#FFE4EF");});
-    }},r.l);repGrid.appendChild(b);
-  });
+  function buildRepGrid2(){
+    repGrid.innerHTML="";
+    REPS.forEach(r=>{
+      const b=btn({style:{padding:"10px 4px",fontSize:12,background:repetir===r.d?"#FF6B9D":"#fff",color:repetir===r.d?"#fff":"#1A1A2E",border:"2px solid "+(repetir===r.d?"#FF6B9D":"#FFE4EF"),borderRadius:12},onClick:()=>{
+        repetir=repetir===r.d?0:r.d;
+        buildRepGrid2();
+      }},r.l);
+      repGrid.appendChild(b);
+    });
+  }
+  buildRepGrid2();
   const selRow=div({style:{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}});
   selRow.appendChild(lbl("Selecione os pets"));selRow.appendChild(selTodos);
   // linha de busca dupla: cao + tutor lado a lado
