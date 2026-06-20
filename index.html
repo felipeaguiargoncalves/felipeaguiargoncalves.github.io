@@ -4217,6 +4217,8 @@ function renderPalpitesTab(bolao,jogoAtual){
     } else {
       vencedores.forEach((v,i)=>{
         const tel=v.pal.tel||"";
+        const primeiroNomeV=(v.nome||"").trim().split(" ")[0]||"";
+        const msgGanhador="🏆 "+primeiroNomeV+", você GANHOU o Bolão Planet Dogs! 🐾\n\n⚽ "+jogo.mandante+" "+real.golM+"×"+real.golV+" "+jogo.visitante+(goleadoresCurto(real)?"\nGol: ⚽ "+goleadoresCurto(real):"")+"\n\nSeu palpite: "+v.pal.golM+"×"+v.pal.golV+(getJogadores(v.pal).length?" · ⚽ "+getJogadores(v.pal).join(", "):"")+"\n"+v.motivo+"\n\n🛁 Vem buscar seu banho grátis! Parabéns! 🎉";
         const gCard=div({style:{background:i===0?"linear-gradient(135deg,#fef9c3,#fef08a)":"#f0fdf4",border:"2.5px solid "+(i===0?"#FFD93D":"#16a34a"),borderRadius:16,padding:"16px",marginBottom:10}});
         const ini=(v.nome||"?").split(" ").filter(Boolean).slice(0,2).map(x=>x[0].toUpperCase()).join("");
         gCard.innerHTML='<div style="display:flex;align-items:center;gap:12px">'+
@@ -4224,11 +4226,25 @@ function renderPalpitesTab(bolao,jogoAtual){
           '<div style="flex:1;min-width:0">'+
             '<div style="font-weight:900;font-size:16px;color:#1A1A2E">'+v.nome+'</div>'+
             '<div style="font-size:10px;color:#15803d;font-weight:700;margin-top:2px">'+v.motivo+'</div>'+
-            (tel?'<a href="https://wa.me/55'+tel.replace(/\D/g,"")+'" target="_blank" style="display:inline-block;margin-top:5px;background:#25D366;color:#fff;border-radius:8px;padding:4px 10px;font-size:11px;font-weight:800;text-decoration:none">💬 '+tel+'</a>':"")+'</div>'+
+            (tel?'<a href="https://api.whatsapp.com/send?phone=55'+tel.replace(/\D/g,"")+'&text='+encodeURIComponent(msgGanhador)+'" target="_blank" style="display:inline-block;margin-top:5px;background:#25D366;color:#fff;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:800;text-decoration:none">🎉 Avisar '+primeiroNomeV+' no WhatsApp</a>':'<div style="margin-top:5px;font-size:10px;color:#e53e3e;font-weight:700">⚠️ Sem telefone cadastrado</div>')+'</div>'+
           '<div style="font-size:36px">🛁</div></div>'+
           '<div style="margin-top:10px;font-size:11px;color:#6b7280">Palpite: <b>'+( v.pal.golM+"×"+v.pal.golV)+'</b>'+(getJogadores(v.pal).length?" · ⚽ "+getJogadores(v.pal).join(", "):"")+'</div>';
         cont.appendChild(gCard);
       });
+      // Botão para avisar TODOS os ganhadores de uma vez (abre uma aba por ganhador, já com a msg de parabéns)
+      const ganhadoresComTel=vencedores.filter(v=>v.pal.tel);
+      if(ganhadoresComTel.length>1){
+        const avisarTodosBtn=btn({style:{width:"100%",padding:"12px",background:"linear-gradient(135deg,#15803d,#22c55e)",color:"#fff",fontSize:13,fontWeight:800,borderRadius:13,marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:8},onClick:()=>{
+          ganhadoresComTel.forEach((v,idx)=>{
+            const telV=v.pal.tel.replace(/\D/g,"");
+            const primeiroNomeV2=(v.nome||"").trim().split(" ")[0]||"";
+            const msgV="🏆 "+primeiroNomeV2+", você GANHOU o Bolão Planet Dogs! 🐾\n\n⚽ "+jogo.mandante+" "+real.golM+"×"+real.golV+" "+jogo.visitante+(goleadoresCurto(real)?"\nGol: ⚽ "+goleadoresCurto(real):"")+"\n\nSeu palpite: "+v.pal.golM+"×"+v.pal.golV+(getJogadores(v.pal).length?" · ⚽ "+getJogadores(v.pal).join(", "):"")+"\n"+v.motivo+"\n\n🛁 Vem buscar seu banho grátis! Parabéns! 🎉";
+            setTimeout(()=>{window.open("https://api.whatsapp.com/send?phone=55"+telV+"&text="+encodeURIComponent(msgV),"_blank");},idx*350);
+          });
+        }});
+        avisarTodosBtn.innerHTML="🎉 Avisar TODOS os ganhadores ("+ganhadoresComTel.length+")";
+        cont.appendChild(avisarTodosBtn);
+      }
       // Botão copiar lista para WA
       const total=Object.keys(palpitesJogo).length;
       const txtDivulg="🏆 BOLÃO COPA 2026 — Planet Dogs 🐾\n\n⚽ "+jogo.mandante+" "+real.golM+"×"+real.golV+" "+jogo.visitante+(goleadoresCurto(real)?"\nGol: ⚽ "+goleadoresCurto(real):"")+"\n\n🎉 GANHADOR(ES) DO BANHO GRÁTIS:\n"+vencedores.map((v,i)=>(i===0?"🥇":"🥈")+" "+v.nome+" ("+v.pal.golM+"×"+v.pal.golV+") — "+v.motivo).join("\n")+"\n\nParabéns! Venham buscar o prêmio! 🛁\n📍 Planet Dogs — Porto Alegre\n("+total+" participantes)";
