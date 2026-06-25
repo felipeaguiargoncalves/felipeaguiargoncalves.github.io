@@ -311,6 +311,17 @@ function copiarFallback(txt,btn,ok){
 const fmtD=d=>{if(!d)return"--";const[y,m,dd]=d.split("-");return dd+"/"+m+"/"+y;};
 const addD=(ds,n)=>{const d=new Date(ds+"T12:00:00");d.setDate(d.getDate()+n);return d.toISOString().slice(0,10);};
 const mapsUrl=e=>"https://www.google.com/maps/search/?api=1&query="+encodeURIComponent(e+", Porto Alegre RS");
+// Normaliza texto p/ busca: minúsculo, sem acentos, espaços colapsados
+const normTxt=s=>(s||"").toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/\s+/g," ").trim();
+// Busca flexível: cada palavra digitada deve aparecer em algum lugar do alvo (ordem livre, sem acento)
+// alvo pode ser string ou array de strings (ex: nome + endereço + telefone)
+function matchBusca(q,alvo){
+  const termos=normTxt(q).split(" ").filter(Boolean);
+  if(!termos.length)return true;
+  const campos=Array.isArray(alvo)?alvo:[alvo];
+  const blob=campos.map(normTxt).join(" ");
+  return termos.every(t=>blob.includes(t));
+}
 const totAts=ats=>(ats||[]).reduce((s,a)=>s+(a.caes||[]).reduce((ss,c)=>ss+(c.servicos||[]).reduce((sss,sv)=>sss+(parseFloat(sv.valor)||0),0),0),0);
 
 function getValorPetFromCobs(casaNum,petNome){
@@ -439,12 +450,30 @@ const RUAS_BAIRROS={
 
 function detectarBairro(rua){
   if(!rua)return"";
-  const r=rua.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+  const r=normTxt(rua);
+  // palavras "fracas" que não ajudam a identificar a rua
+  const STOP=new Set(["rua","r","avenida","av","travessa","tv","estrada","estr","beco","bc","do","da","de","dos","das","e","n","numero","nro","casa","apto","ap","bloco","lote","quadra","s","sn"]);
+  const palavrasEnd=new Set(r.replace(/\d+/g," ").split(" ").filter(Boolean));
+  let melhor="",melhorScore=0;
   for(const [chave,bairro] of Object.entries(RUAS_BAIRROS)){
-    const c=chave.normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+    const c=normTxt(chave);
+    // 1) match direto contíguo (comportamento original)
     if(r.includes(c))return bairro;
+    // 2) match por palavras fortes: ignora "rua/avenida/do/da" e números.
+    //    casa se TODAS as palavras fortes da chave aparecem no endereço,
+    //    OU se todas as palavras fortes do endereço aparecem na chave (ex: usuário digitou só parte do nome)
+    const fortesChave=c.split(" ").filter(p=>p&&!STOP.has(p));
+    const fortesEnd=[...palavrasEnd].filter(p=>!STOP.has(p));
+    if(!fortesChave.length||!fortesEnd.length)continue;
+    const chaveNoEnd=fortesChave.every(p=>palavrasEnd.has(p));
+    const endNaChave=fortesEnd.every(p=>fortesChave.includes(p));
+    if(chaveNoEnd||endNaChave){
+      // pontua pelo nº de palavras fortes em comum (mais específico ganha)
+      const comuns=fortesChave.filter(p=>palavrasEnd.has(p)).length;
+      if(comuns>melhorScore){melhor=bairro;melhorScore=comuns;}
+    }
   }
-  return"";
+  return melhor;
 }
 
 function abrirModalDedupAgenda(){
@@ -1076,7 +1105,7 @@ function renderCadCasa(titulo,pref){
 
     // ── BUSCA ────────────────────────────────────────────────────────────────
     const buscaWrap=div({style:{marginBottom:14}});
-    const buscaInp=inp({className:"fi",placeholder:"🔍  Buscar por nome, ID ou telefone...",style:{background:"#FFF5F9",border:"2px solid #FFE4EF"}});
+    const buscaInp=inp({className:"fi",placeholder:"🔍  Buscar por nome, endereço, ID ou telefone...",style:{background:"#FFF5F9",border:"2px solid #FFE4EF"}});
     buscaWrap.appendChild(buscaInp);
     body.appendChild(buscaWrap);
 
@@ -1090,11 +1119,16 @@ function renderCadCasa(titulo,pref){
 
     function filtrarLista(q){
       listaGrid.innerHTML="";
-      const ql=q.toLowerCase();
+      const ends=DATA.enderecos||{};
       const filtrados=nums.filter(n=>{
         const c=casas[n]||{};
-        if(!q)return true;
-        return String(n).includes(q)||(c.morador||"").toLowerCase().includes(ql)||(c.telefone||"").includes(q);
+        if(!q.trim())return true;
+        const e=ends[n]||{};
+        const endStr=[e.rua,e.numero,e.bairro,c.endereco].filter(Boolean).join(" ");
+        // ID/telefone: busca por dígitos crus; nome/endereço: busca flexível sem acento e ordem livre
+        const qDig=q.replace(/\D/g,"");
+        if(qDig&&(String(n).includes(qDig)||(c.telefone||"").replace(/\D/g,"").includes(qDig)))return true;
+        return matchBusca(q,[c.morador,endStr]);
       });
       if(filtrados.length===0){
         const nem=div({style:{textAlign:"center",padding:"14px",color:"#8B8FA8",fontSize:13}});
