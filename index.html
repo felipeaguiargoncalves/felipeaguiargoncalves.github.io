@@ -3830,6 +3830,7 @@ const BOLAO_JOGOS=[
   {id:"g2",fase:"Grupo C",data:"2026-06-19",hora:"21:30",mandante:"Brasil",visitante:"Haiti",local:"Filadélfia"},
   {id:"g3",fase:"Grupo C",data:"2026-06-24",hora:"19:00",mandante:"Escócia",visitante:"Brasil",local:"Miami"},
   {id:"o1",fase:"Oitavas",data:"2026-06-29",hora:"?",mandante:"Brasil",visitante:"Grupo F",local:"Houston/Monterrey"},
+  {id:"arg1",fase:"Argentina",data:"2026-06-27",hora:"?",mandante:"Argentina",visitante:"Jordânia",local:"—"},
 ];
 
 // Só atacantes — quem pode fazer gol no bolão
@@ -3872,34 +3873,24 @@ function jogadoresCurto(pal){return getJogadores(pal).map(n=>n.split(" ")[0]).jo
 function goleadoresCurto(real){return getGoleadores(real).join(", ");}
 
 // ── Calcula vencedor de um jogo (prêmio banho grátis) ─────────────────────────
-// Regra: goleador certo = GANHA (desempata por placar exato)
-// Se ninguém acertou goleador → quem acertou placar exato ganha
-// Se ninguém acertou placar → quem acertou resultado (V/E/D) ganha
+// Regra (GOLEADOR NÃO CONTA MAIS):
+// 1º) quem acertou o placar exato ganha
+// 2º) se ninguém acertou o placar → quem acertou o resultado (V/E/D) ganha
 function calcularVencedores(jogoId,real,palpites){
   if(!real||real.golM===""||real.golV==="")return[];
   const rm=parseInt(real.golM),rv=parseInt(real.golV);
   const resReal=rm>rv?"M":rm<rv?"V":"E";
   const candidatos=Object.entries(palpites[jogoId]||{}).map(([uid,pal])=>{
     const pm=parseInt(pal.golM),pv=parseInt(pal.golV);
-    const golsReais=getGoleadores(real);
-    const golsPal=getJogadores(pal);
-    const acertouGol=golsPal.length>0&&golsReais.length>0&&golsPal.some(j=>golsReais.includes(j));
     const acertouExato=!isNaN(pm)&&!isNaN(pv)&&pm===rm&&pv===rv;
     const resPal=pm>pv?"M":pm<pv?"V":"E";
     const acertouRes=!isNaN(pm)&&!isNaN(pv)&&resPal===resReal;
-    return{uid,nome:pal.nome,acertouGol,acertouExato,acertouRes,pal};
+    return{uid,nome:pal.nome,acertouExato,acertouRes,pal};
   });
-  // 1º critério: acertou goleador
-  const comGol=candidatos.filter(c=>c.acertouGol);
-  if(comGol.length){
-    // desempata por placar exato
-    const comGolExato=comGol.filter(c=>c.acertouExato);
-    return(comGolExato.length?comGolExato:comGol).map(c=>({...c,motivo:c.acertouExato?"⚽🎯 Gol + Placar exato!":"⚽ Acertou o goleador!"}));
-  }
-  // 2º critério: placar exato
+  // 1º critério: placar exato
   const exatos=candidatos.filter(c=>c.acertouExato);
   if(exatos.length)return exatos.map(c=>({...c,motivo:"🎯 Placar exato!"}));
-  // 3º critério: resultado certo
+  // 2º critério: resultado certo
   const resOk=candidatos.filter(c=>c.acertouRes);
   if(resOk.length)return resOk.map(c=>({...c,motivo:"✅ Resultado certo"}));
   return[];
@@ -4226,6 +4217,7 @@ function renderPalpitesTab(bolao,jogoAtual){
           '<div style="flex:1;min-width:0">'+
             '<div style="font-weight:900;font-size:16px;color:#1A1A2E">'+v.nome+'</div>'+
             '<div style="font-size:10px;color:#15803d;font-weight:700;margin-top:2px">'+v.motivo+'</div>'+
+            (tel?'<div style="font-size:11px;color:#128C7E;font-weight:800;margin-top:3px">📱 '+tel+'</div>':'')+
             (tel?'<a href="https://api.whatsapp.com/send?phone=55'+tel.replace(/\D/g,"")+'&text='+encodeURIComponent(msgGanhador)+'" target="_blank" style="display:inline-block;margin-top:5px;background:#25D366;color:#fff;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:800;text-decoration:none">🎉 Avisar '+primeiroNomeV+' no WhatsApp</a>':'<div style="margin-top:5px;font-size:10px;color:#e53e3e;font-weight:700">⚠️ Sem telefone cadastrado</div>')+'</div>'+
           '<div style="font-size:36px">🛁</div></div>'+
           '<div style="margin-top:10px;font-size:11px;color:#6b7280">Palpite: <b>'+( v.pal.golM+"×"+v.pal.golV)+'</b>'+(getJogadores(v.pal).length?" · ⚽ "+getJogadores(v.pal).join(", "):"")+'</div>';
@@ -4247,7 +4239,7 @@ function renderPalpitesTab(bolao,jogoAtual){
       }
       // Botão copiar lista para WA
       const total=Object.keys(palpitesJogo).length;
-      const txtDivulg="🏆 BOLÃO COPA 2026 — Planet Dogs 🐾\n\n⚽ "+jogo.mandante+" "+real.golM+"×"+real.golV+" "+jogo.visitante+(goleadoresCurto(real)?"\nGol: ⚽ "+goleadoresCurto(real):"")+"\n\n🎉 GANHADOR(ES) DO BANHO GRÁTIS:\n"+vencedores.map((v,i)=>(i===0?"🥇":"🥈")+" "+v.nome+" ("+v.pal.golM+"×"+v.pal.golV+") — "+v.motivo).join("\n")+"\n\nParabéns! Venham buscar o prêmio! 🛁\n📍 Planet Dogs — Porto Alegre\n("+total+" participantes)";
+      const txtDivulg="🏆 BOLÃO COPA 2026 — Planet Dogs 🐾\n\n⚽ "+jogo.mandante+" "+real.golM+"×"+real.golV+" "+jogo.visitante+(goleadoresCurto(real)?"\nGol: ⚽ "+goleadoresCurto(real):"")+"\n\n🎉 GANHADOR(ES) DO BANHO GRÁTIS:\n"+vencedores.map((v,i)=>(i===0?"🥇":"🥈")+" "+v.nome+" ("+v.pal.golM+"×"+v.pal.golV+")"+(v.pal.tel?" 📱 "+v.pal.tel:"")+" — "+v.motivo).join("\n")+"\n\nParabéns! Venham buscar o prêmio! 🛁\n📍 Planet Dogs — Porto Alegre\n("+total+" participantes)";
       const cpBtn=btn({style:{width:"100%",padding:"13px",background:"linear-gradient(135deg,#25D366,#128C7E)",color:"#fff",fontSize:13,fontWeight:800,borderRadius:13,marginTop:6,display:"flex",alignItems:"center",justifyContent:"center",gap:8},onClick:()=>{
         navigator.clipboard.writeText(txtDivulg).then(()=>{cpBtn.textContent="✅ Copiado! Cole no grupo WA";setTimeout(()=>cpBtn.innerHTML="💬 Copiar e divulgar no WA",2000);});
         window.open("https://wa.me/?text="+encodeURIComponent(txtDivulg),"_blank");
