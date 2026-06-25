@@ -3880,6 +3880,33 @@ const ATACANTES_BR=[
   {n:"Rayan",           clube:"Bournemouth",    num:18, emoji:"⭐"},
 ];
 
+// Atacantes da Argentina — usados quando o jogo é da Argentina
+const ATACANTES_ARG=[
+  {n:"Lionel Messi",    clube:"Inter Miami",    num:10, emoji:"🐐"},
+  {n:"Julián Álvarez",  clube:"Atlético Madrid",num:9,  emoji:"🕷️"},
+  {n:"Lautaro Martínez",clube:"Inter",          num:22, emoji:"🐂"},
+  {n:"Ángel Di María",  clube:"Benfica",        num:11, emoji:"🎩"},
+  {n:"Nico Paz",        clube:"Como",           num:8,  emoji:"✨"},
+  {n:"Alejandro Garnacho",clube:"Chelsea",      num:17, emoji:"⚡"},
+  {n:"Giuliano Simeone",clube:"Atlético Madrid",num:20, emoji:"🔥"},
+  {n:"Thiago Almada",   clube:"Atlético Madrid",num:16, emoji:"🚀"},
+];
+
+// Escolhe a lista de atacantes conforme o jogo:
+// se a Argentina joga (e o Brasil não), usa atacantes argentinos; senão, brasileiros.
+function atacantesDoJogo(jogo){
+  if(!jogo)return ATACANTES_BR;
+  const temBrasil=jogo.mandante==="Brasil"||jogo.visitante==="Brasil";
+  const temArg=jogo.mandante==="Argentina"||jogo.visitante==="Argentina";
+  return (temArg&&!temBrasil)?ATACANTES_ARG:ATACANTES_BR;
+}
+
+// Bandeira por país (fallback 🌍)
+function flagPais(p){
+  const m={"Brasil":"🇧🇷","Argentina":"🇦🇷","Marrocos":"🇲🇦","Haiti":"🇭🇹","Escócia":"🏴󠁧󠁢󠁳󠁣󠁴󠁿","Jordânia":"🇯🇴","Jordania":"🇯🇴"};
+  return m[p]||"🌍";
+}
+
 function getBolao(){
   if(!DATA.bolao)DATA.bolao={palpites:{},placar:{}};
   return DATA.bolao;
@@ -3943,12 +3970,8 @@ function renderBolao(){
   const mm=String(d.getMonth()+1).padStart(2,"0");
   const real=(bolao.placar||{})[jogo.id]||{};
   const temPlacar=real.golM!==""&&real.golV!==""&&real.golM!=null;
-  const flagVisit=jogo.visitante==="Brasil"?"🇧🇷":
-    jogo.visitante==="Marrocos"?"🇲🇦":
-    jogo.visitante==="Haiti"?"🇭🇹":
-    jogo.visitante==="Escócia"?"🏴󠁧󠁢󠁳󠁣󠁴󠁿":"🌍";
-  const flagMand=jogo.mandante==="Brasil"?"🇧🇷":
-    jogo.mandante==="Escócia"?"🏴󠁧󠁢󠁳󠁣󠁴󠁿":"🌍";
+  const flagVisit=flagPais(jogo.visitante);
+  const flagMand=flagPais(jogo.mandante);
 
   // Monta lista de palpites do próximo jogo
   const palpitesJogo=bolao.palpites?.[jogo.id]||{};
@@ -4075,8 +4098,8 @@ function renderPalpitesTab(bolao,jogoAtual){
   function renderFormulario(){
     formArea.innerHTML="";
     const jAtual=BOLAO_JOGOS.find(j=>j.id===jogoId)||jogoAtual;
-    const fM2=jAtual.mandante==="Brasil"?"🇧🇷":jAtual.mandante==="Escócia"?"🏴󠁧󠁢󠁳󠁣󠁴󠁿":"🌍";
-    const fV2=jAtual.visitante==="Brasil"?"🇧🇷":jAtual.visitante==="Haiti"?"🇭🇹":jAtual.visitante==="Marrocos"?"🇲🇦":"🌍";
+    const fM2=flagPais(jAtual.mandante);
+    const fV2=flagPais(jAtual.visitante);
 
     // ── Card formulário de aposta ────────────────────────────────────────────
     const formCard=div({style:{background:"linear-gradient(135deg,#f0fdf4,#dcfce7)",border:"2px solid #16a34a",borderRadius:18,padding:"16px",marginBottom:14}});
@@ -4121,7 +4144,7 @@ function renderPalpitesTab(bolao,jogoAtual){
         chipEls["__nenhum__"].style.border="2px solid "+(s?"#6b7280":"#e5e7eb");
       }
     }
-    ATACANTES_BR.forEach(j=>{
+    atacantesDoJogo(jAtual).forEach(j=>{
       const chip=btn({style:{padding:"7px 12px",borderRadius:20,fontSize:12,border:"2px solid #e5e7eb",background:"#fff",color:"#1A1A2E",fontWeight:700,display:"flex",alignItems:"center",gap:5},onClick:()=>{
         const i=jogSelecionados.indexOf(j.n);
         if(i>=0)jogSelecionados.splice(i,1);else jogSelecionados.push(j.n);
@@ -4315,7 +4338,15 @@ function renderRankingTab(bolao){
     const chW2=div({style:{display:"flex",flexWrap:"wrap",gap:6,marginBottom:14}});
     let golsSel2=[];const chips2={};
     function updC2(){Object.entries(chips2).forEach(([n,el])=>{const s=golsSel2.includes(n);el.style.background=s?"#15803d":"#fff";el.style.color=s?"#fff":"#1A1A2E";el.style.border="2px solid "+(s?"#15803d":"#e5e7eb");});}
-    ATACANTES_BR.forEach(j=>{const c2=btn({style:{padding:"6px 10px",borderRadius:18,fontSize:11,border:"2px solid #e5e7eb",background:"#fff",color:"#1A1A2E",fontWeight:700},onClick:()=>{const i=golsSel2.indexOf(j.n);if(i>=0)golsSel2.splice(i,1);else golsSel2.push(j.n);updC2();}});c2.textContent=j.emoji+" "+j.n.split(" ")[0];chips2[j.n]=c2;chW2.appendChild(c2);});
+    function renderChips2(){
+      chW2.innerHTML="";Object.keys(chips2).forEach(k=>delete chips2[k]);
+      const jSel=BOLAO_JOGOS.find(j=>j.id===jogoSel2.value);
+      atacantesDoJogo(jSel).forEach(j=>{const c2=btn({style:{padding:"6px 10px",borderRadius:18,fontSize:11,border:"2px solid #e5e7eb",background:"#fff",color:"#1A1A2E",fontWeight:700},onClick:()=>{const i=golsSel2.indexOf(j.n);if(i>=0)golsSel2.splice(i,1);else golsSel2.push(j.n);updC2();}});c2.textContent=j.emoji+" "+j.n.split(" ")[0];chips2[j.n]=c2;chW2.appendChild(c2);});
+      updC2();
+    }
+    // ao trocar o jogo, limpa goleadores selecionados e regera os chips do time certo
+    jogoSel2.addEventListener("change",()=>{golsSel2=[];renderChips2();});
+    renderChips2();
     cont.appendChild(chW2);
     let mv2=null;
     cont.appendChild(btn({style:{width:"100%",padding:"14px",background:"linear-gradient(135deg,#15803d,#22c55e)",color:"#fff",fontSize:14,fontWeight:800,borderRadius:13},onClick:()=>{
@@ -4435,8 +4466,8 @@ function renderJogosTab(bolao){
     const isBR=jogo.mandante==="Brasil"||jogo.visitante==="Brasil";
     const card=div({className:"card",style:{marginBottom:14,overflow:"hidden"}});
 
-    const fM=jogo.mandante==="Brasil"?"🇧🇷":jogo.mandante==="Escócia"?"🏴󠁧󠁢󠁳󠁣󠁴󠁿":"🌍";
-    const fV=jogo.visitante==="Brasil"?"🇧🇷":jogo.visitante==="Haiti"?"🇭🇹":jogo.visitante==="Marrocos"?"🇲🇦":"🌍";
+    const fM=flagPais(jogo.mandante);
+    const fV=flagPais(jogo.visitante);
 
     const hdr=div({style:{background:isBR?"linear-gradient(135deg,#15803d,#166534)":"linear-gradient(135deg,#1A1A2E,#2d2d4e)",padding:"12px 14px",display:"flex",alignItems:"center",justifyContent:"space-between"}});
     hdr.innerHTML=`
