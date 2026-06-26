@@ -311,17 +311,6 @@ function copiarFallback(txt,btn,ok){
 const fmtD=d=>{if(!d)return"--";const[y,m,dd]=d.split("-");return dd+"/"+m+"/"+y;};
 const addD=(ds,n)=>{const d=new Date(ds+"T12:00:00");d.setDate(d.getDate()+n);return d.toISOString().slice(0,10);};
 const mapsUrl=e=>"https://www.google.com/maps/search/?api=1&query="+encodeURIComponent(e+", Porto Alegre RS");
-// Normaliza texto p/ busca: minúsculo, sem acentos, espaços colapsados
-const normTxt=s=>(s||"").toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/\s+/g," ").trim();
-// Busca flexível: cada palavra digitada deve aparecer em algum lugar do alvo (ordem livre, sem acento)
-// alvo pode ser string ou array de strings (ex: nome + endereço + telefone)
-function matchBusca(q,alvo){
-  const termos=normTxt(q).split(" ").filter(Boolean);
-  if(!termos.length)return true;
-  const campos=Array.isArray(alvo)?alvo:[alvo];
-  const blob=campos.map(normTxt).join(" ");
-  return termos.every(t=>blob.includes(t));
-}
 const totAts=ats=>(ats||[]).reduce((s,a)=>s+(a.caes||[]).reduce((ss,c)=>ss+(c.servicos||[]).reduce((sss,sv)=>sss+(parseFloat(sv.valor)||0),0),0),0);
 
 function getValorPetFromCobs(casaNum,petNome){
@@ -450,30 +439,12 @@ const RUAS_BAIRROS={
 
 function detectarBairro(rua){
   if(!rua)return"";
-  const r=normTxt(rua);
-  // palavras "fracas" que não ajudam a identificar a rua
-  const STOP=new Set(["rua","r","avenida","av","travessa","tv","estrada","estr","beco","bc","do","da","de","dos","das","e","n","numero","nro","casa","apto","ap","bloco","lote","quadra","s","sn"]);
-  const palavrasEnd=new Set(r.replace(/\d+/g," ").split(" ").filter(Boolean));
-  let melhor="",melhorScore=0;
+  const r=rua.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
   for(const [chave,bairro] of Object.entries(RUAS_BAIRROS)){
-    const c=normTxt(chave);
-    // 1) match direto contíguo (comportamento original)
+    const c=chave.normalize("NFD").replace(/[\u0300-\u036f]/g,"");
     if(r.includes(c))return bairro;
-    // 2) match por palavras fortes: ignora "rua/avenida/do/da" e números.
-    //    casa se TODAS as palavras fortes da chave aparecem no endereço,
-    //    OU se todas as palavras fortes do endereço aparecem na chave (ex: usuário digitou só parte do nome)
-    const fortesChave=c.split(" ").filter(p=>p&&!STOP.has(p));
-    const fortesEnd=[...palavrasEnd].filter(p=>!STOP.has(p));
-    if(!fortesChave.length||!fortesEnd.length)continue;
-    const chaveNoEnd=fortesChave.every(p=>palavrasEnd.has(p));
-    const endNaChave=fortesEnd.every(p=>fortesChave.includes(p));
-    if(chaveNoEnd||endNaChave){
-      // pontua pelo nº de palavras fortes em comum (mais específico ganha)
-      const comuns=fortesChave.filter(p=>palavrasEnd.has(p)).length;
-      if(comuns>melhorScore){melhor=bairro;melhorScore=comuns;}
-    }
   }
-  return melhor;
+  return"";
 }
 
 function abrirModalDedupAgenda(){
@@ -754,6 +725,7 @@ function renderHome(){
 
 
   [
+   [()=>abrirModalUnirCadastros(),"🔗","Unir C1 + C2 (por telefone)","linear-gradient(135deg,#9B59B6,#c084fc)"],
    [()=>go("exportar"),"📋","Exportar Dados","linear-gradient(135deg,#1A1A2E,#2d2d4e)"],
    [()=>go("restaurar"),"📂","Restaurar Backup","linear-gradient(135deg,#2DC653,#52e87b)"]
   ].forEach(([fn,ico,lab,bg])=>{
@@ -1105,7 +1077,7 @@ function renderCadCasa(titulo,pref){
 
     // ── BUSCA ────────────────────────────────────────────────────────────────
     const buscaWrap=div({style:{marginBottom:14}});
-    const buscaInp=inp({className:"fi",placeholder:"🔍  Buscar por nome, endereço, ID ou telefone...",style:{background:"#FFF5F9",border:"2px solid #FFE4EF"}});
+    const buscaInp=inp({className:"fi",placeholder:"🔍  Buscar por nome, ID ou telefone...",style:{background:"#FFF5F9",border:"2px solid #FFE4EF"}});
     buscaWrap.appendChild(buscaInp);
     body.appendChild(buscaWrap);
 
@@ -1119,16 +1091,11 @@ function renderCadCasa(titulo,pref){
 
     function filtrarLista(q){
       listaGrid.innerHTML="";
-      const ends=DATA.enderecos||{};
+      const ql=q.toLowerCase();
       const filtrados=nums.filter(n=>{
         const c=casas[n]||{};
-        if(!q.trim())return true;
-        const e=ends[n]||{};
-        const endStr=[e.rua,e.numero,e.bairro,c.endereco].filter(Boolean).join(" ");
-        // ID/telefone: busca por dígitos crus; nome/endereço: busca flexível sem acento e ordem livre
-        const qDig=q.replace(/\D/g,"");
-        if(qDig&&(String(n).includes(qDig)||(c.telefone||"").replace(/\D/g,"").includes(qDig)))return true;
-        return matchBusca(q,[c.morador,endStr]);
+        if(!q)return true;
+        return String(n).includes(q)||(c.morador||"").toLowerCase().includes(ql)||(c.telefone||"").includes(q);
       });
       if(filtrados.length===0){
         const nem=div({style:{textAlign:"center",padding:"14px",color:"#8B8FA8",fontSize:13}});
@@ -3865,6 +3832,7 @@ const BOLAO_JOGOS=[
   {id:"g3",fase:"Grupo C",data:"2026-06-24",hora:"19:00",mandante:"Escócia",visitante:"Brasil",local:"Miami"},
   {id:"o1",fase:"Oitavas",data:"2026-06-29",hora:"?",mandante:"Brasil",visitante:"Grupo F",local:"Houston/Monterrey"},
   {id:"arg1",fase:"Argentina",data:"2026-06-27",hora:"?",mandante:"Argentina",visitante:"Jordânia",local:"—"},
+  {id:"jap1",fase:"Oitavas",data:"2026-07-02",hora:"?",mandante:"Brasil",visitante:"Japão",local:"—"},
 ];
 
 // Só atacantes — quem pode fazer gol no bolão
@@ -3879,33 +3847,6 @@ const ATACANTES_BR=[
   {n:"Igor Thiago",     clube:"Brentford",      num:19, emoji:"🦁"},
   {n:"Rayan",           clube:"Bournemouth",    num:18, emoji:"⭐"},
 ];
-
-// Atacantes da Argentina — usados quando o jogo é da Argentina
-const ATACANTES_ARG=[
-  {n:"Lionel Messi",    clube:"Inter Miami",    num:10, emoji:"🐐"},
-  {n:"Julián Álvarez",  clube:"Atlético Madrid",num:9,  emoji:"🕷️"},
-  {n:"Lautaro Martínez",clube:"Inter",          num:22, emoji:"🐂"},
-  {n:"Ángel Di María",  clube:"Benfica",        num:11, emoji:"🎩"},
-  {n:"Nico Paz",        clube:"Como",           num:8,  emoji:"✨"},
-  {n:"Alejandro Garnacho",clube:"Chelsea",      num:17, emoji:"⚡"},
-  {n:"Giuliano Simeone",clube:"Atlético Madrid",num:20, emoji:"🔥"},
-  {n:"Thiago Almada",   clube:"Atlético Madrid",num:16, emoji:"🚀"},
-];
-
-// Escolhe a lista de atacantes conforme o jogo:
-// se a Argentina joga (e o Brasil não), usa atacantes argentinos; senão, brasileiros.
-function atacantesDoJogo(jogo){
-  if(!jogo)return ATACANTES_BR;
-  const temBrasil=jogo.mandante==="Brasil"||jogo.visitante==="Brasil";
-  const temArg=jogo.mandante==="Argentina"||jogo.visitante==="Argentina";
-  return (temArg&&!temBrasil)?ATACANTES_ARG:ATACANTES_BR;
-}
-
-// Bandeira por país (fallback 🌍)
-function flagPais(p){
-  const m={"Brasil":"🇧🇷","Argentina":"🇦🇷","Marrocos":"🇲🇦","Haiti":"🇭🇹","Escócia":"🏴󠁧󠁢󠁳󠁣󠁴󠁿","Jordânia":"🇯🇴","Jordania":"🇯🇴"};
-  return m[p]||"🌍";
-}
 
 function getBolao(){
   if(!DATA.bolao)DATA.bolao={palpites:{},placar:{}};
@@ -3970,8 +3911,12 @@ function renderBolao(){
   const mm=String(d.getMonth()+1).padStart(2,"0");
   const real=(bolao.placar||{})[jogo.id]||{};
   const temPlacar=real.golM!==""&&real.golV!==""&&real.golM!=null;
-  const flagVisit=flagPais(jogo.visitante);
-  const flagMand=flagPais(jogo.mandante);
+  const flagVisit=jogo.visitante==="Brasil"?"🇧🇷":
+    jogo.visitante==="Marrocos"?"🇲🇦":
+    jogo.visitante==="Haiti"?"🇭🇹":
+    jogo.visitante==="Escócia"?"🏴󠁧󠁢󠁳󠁣󠁴󠁿":"🌍";
+  const flagMand=jogo.mandante==="Brasil"?"🇧🇷":
+    jogo.mandante==="Escócia"?"🏴󠁧󠁢󠁳󠁣󠁴󠁿":"🌍";
 
   // Monta lista de palpites do próximo jogo
   const palpitesJogo=bolao.palpites?.[jogo.id]||{};
@@ -4098,8 +4043,8 @@ function renderPalpitesTab(bolao,jogoAtual){
   function renderFormulario(){
     formArea.innerHTML="";
     const jAtual=BOLAO_JOGOS.find(j=>j.id===jogoId)||jogoAtual;
-    const fM2=flagPais(jAtual.mandante);
-    const fV2=flagPais(jAtual.visitante);
+    const fM2=jAtual.mandante==="Brasil"?"🇧🇷":jAtual.mandante==="Escócia"?"🏴󠁧󠁢󠁳󠁣󠁴󠁿":"🌍";
+    const fV2=jAtual.visitante==="Brasil"?"🇧🇷":jAtual.visitante==="Haiti"?"🇭🇹":jAtual.visitante==="Marrocos"?"🇲🇦":"🌍";
 
     // ── Card formulário de aposta ────────────────────────────────────────────
     const formCard=div({style:{background:"linear-gradient(135deg,#f0fdf4,#dcfce7)",border:"2px solid #16a34a",borderRadius:18,padding:"16px",marginBottom:14}});
@@ -4144,7 +4089,7 @@ function renderPalpitesTab(bolao,jogoAtual){
         chipEls["__nenhum__"].style.border="2px solid "+(s?"#6b7280":"#e5e7eb");
       }
     }
-    atacantesDoJogo(jAtual).forEach(j=>{
+    ATACANTES_BR.forEach(j=>{
       const chip=btn({style:{padding:"7px 12px",borderRadius:20,fontSize:12,border:"2px solid #e5e7eb",background:"#fff",color:"#1A1A2E",fontWeight:700,display:"flex",alignItems:"center",gap:5},onClick:()=>{
         const i=jogSelecionados.indexOf(j.n);
         if(i>=0)jogSelecionados.splice(i,1);else jogSelecionados.push(j.n);
@@ -4338,15 +4283,7 @@ function renderRankingTab(bolao){
     const chW2=div({style:{display:"flex",flexWrap:"wrap",gap:6,marginBottom:14}});
     let golsSel2=[];const chips2={};
     function updC2(){Object.entries(chips2).forEach(([n,el])=>{const s=golsSel2.includes(n);el.style.background=s?"#15803d":"#fff";el.style.color=s?"#fff":"#1A1A2E";el.style.border="2px solid "+(s?"#15803d":"#e5e7eb");});}
-    function renderChips2(){
-      chW2.innerHTML="";Object.keys(chips2).forEach(k=>delete chips2[k]);
-      const jSel=BOLAO_JOGOS.find(j=>j.id===jogoSel2.value);
-      atacantesDoJogo(jSel).forEach(j=>{const c2=btn({style:{padding:"6px 10px",borderRadius:18,fontSize:11,border:"2px solid #e5e7eb",background:"#fff",color:"#1A1A2E",fontWeight:700},onClick:()=>{const i=golsSel2.indexOf(j.n);if(i>=0)golsSel2.splice(i,1);else golsSel2.push(j.n);updC2();}});c2.textContent=j.emoji+" "+j.n.split(" ")[0];chips2[j.n]=c2;chW2.appendChild(c2);});
-      updC2();
-    }
-    // ao trocar o jogo, limpa goleadores selecionados e regera os chips do time certo
-    jogoSel2.addEventListener("change",()=>{golsSel2=[];renderChips2();});
-    renderChips2();
+    ATACANTES_BR.forEach(j=>{const c2=btn({style:{padding:"6px 10px",borderRadius:18,fontSize:11,border:"2px solid #e5e7eb",background:"#fff",color:"#1A1A2E",fontWeight:700},onClick:()=>{const i=golsSel2.indexOf(j.n);if(i>=0)golsSel2.splice(i,1);else golsSel2.push(j.n);updC2();}});c2.textContent=j.emoji+" "+j.n.split(" ")[0];chips2[j.n]=c2;chW2.appendChild(c2);});
     cont.appendChild(chW2);
     let mv2=null;
     cont.appendChild(btn({style:{width:"100%",padding:"14px",background:"linear-gradient(135deg,#15803d,#22c55e)",color:"#fff",fontSize:14,fontWeight:800,borderRadius:13},onClick:()=>{
@@ -4466,8 +4403,8 @@ function renderJogosTab(bolao){
     const isBR=jogo.mandante==="Brasil"||jogo.visitante==="Brasil";
     const card=div({className:"card",style:{marginBottom:14,overflow:"hidden"}});
 
-    const fM=flagPais(jogo.mandante);
-    const fV=flagPais(jogo.visitante);
+    const fM=jogo.mandante==="Brasil"?"🇧🇷":jogo.mandante==="Escócia"?"🏴󠁧󠁢󠁳󠁣󠁴󠁿":"🌍";
+    const fV=jogo.visitante==="Brasil"?"🇧🇷":jogo.visitante==="Haiti"?"🇭🇹":jogo.visitante==="Marrocos"?"🇲🇦":"🌍";
 
     const hdr=div({style:{background:isBR?"linear-gradient(135deg,#15803d,#166534)":"linear-gradient(135deg,#1A1A2E,#2d2d4e)",padding:"12px 14px",display:"flex",alignItems:"center",justifyContent:"space-between"}});
     hdr.innerHTML=`
