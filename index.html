@@ -859,11 +859,16 @@ function abrirCadastroPetModal(casaNum,pref,onDone){
   // ── Coleta raças já cadastradas no banco (modelos + atendimentos) ─────────────
   function getRacasConhecidas(){
     const racas=new Set();
-    // dos modelos
-    Object.values(DATA.modelos||{}).forEach(lista=>{
-      (lista||[]).forEach(p=>{if(p.raca&&p.raca.trim())racas.add(p.raca.trim());});
-    });
-    // dos atendimentos (cobrancas + cobrancas2)
+    // raças base conhecidas
+    ["SRD Canino","SRD Felino","Poodle Toy","Poodle Micro","Poodle Standard","Shih-Tzu","Yorkshire Terrier",
+     "Lhasa Apso","Maltês","Pinscher","Dachshund","Golden Retriever","Labrador","Border Collie",
+     "Buldogue Francês","Buldogue Inglês","Schnauzer","Chihuahua","Husky Siberiano","Pastor Alemão",
+     "Pastor Belga","Rottweiler","Pit Bull","American Staffordshire","Fila Brasileiro","Boxer",
+     "Cocker Spaniel","Beagle","Dogue Alemão","Chow Chow","Spitz Alemão","Lulu da Pomerânia",
+     "Maine Coon","Persa","Siamês","Ragdoll","Bengal","Angora","British Shorthair","Scottish Fold",
+     "Cimarron Uruguaio","Fox Terrier","Dachshund Miniatura","Pequinês","Pug","Basenji","Collie",
+     "Dobermann","Akita","Sharpei","Shar Pei","Weimaraner","Dálmata","Setter Irlandês"].forEach(r=>racas.add(r));
+    // das cobranças
     [DATA.cobrancas,DATA.cobrancas2||{}].forEach(src=>{
       Object.values(src||{}).forEach(cbMes=>{
         Object.values(cbMes||{}).forEach(cb=>{
@@ -876,6 +881,10 @@ function abrirCadastroPetModal(casaNum,pref,onDone){
     // das casas (campo pets)
     [...Object.values(DATA.casas||{}),...Object.values(DATA.casas2||{})].forEach(casa=>{
       (casa.pets||[]).forEach(p=>{if(p.raca&&p.raca.trim())racas.add(p.raca.trim());});
+    });
+    // dos modelos
+    Object.values(DATA.modelos||{}).forEach(lista=>{
+      (lista||[]).forEach(p=>{if(p.raca&&p.raca.trim())racas.add(p.raca.trim());});
     });
     return [...racas].sort((a,b)=>a.localeCompare(b));
   }
@@ -901,22 +910,38 @@ function abrirCadastroPetModal(casaNum,pref,onDone){
       nI.addEventListener("input",()=>pets[i].nome=nI.value);
       pb.appendChild(nI);
       pb.appendChild(lbl("Raça"));
-      // input com datalist para autocomplete dinâmico
-      const rI=inp({className:"fi",placeholder:"Digite ou escolha...",value:p.raca,style:{marginBottom:4}});
-      rI.setAttribute("list",dlId);
-      rI.addEventListener("input",()=>pets[i].raca=rI.value);
-      // chips de raças mais usadas (top 5)
-      const topRacas=getRacasConhecidas().slice(0,5);
-      if(topRacas.length>0){
-        const chips=div({style:{display:"flex",flexWrap:"wrap",gap:5,marginTop:6,marginBottom:2}});
-        topRacas.forEach(r=>{
-          const c=btn({style:{padding:"4px 10px",fontSize:11,fontWeight:700,background:"#FFF5F9",color:"#FF6B9D",border:"1.5px solid #FFE4EF",borderRadius:20},onClick:()=>{rI.value=r;pets[i].raca=r;}},r);
-          chips.appendChild(c);
+      // input com datalist + busca filtrada em tempo real
+      const rI=inp({className:"fi",placeholder:"Digite para buscar raça...",value:p.raca,style:{marginBottom:4}});
+      rI.addEventListener("input",()=>{pets[i].raca=rI.value;buildRacaChips(rI.value,chipsDiv,rI,i);});
+
+      const chipsDiv=div({style:{display:"flex",flexWrap:"wrap",gap:5,marginTop:6,marginBottom:4,maxHeight:120,overflowY:"auto"}});
+
+      function buildRacaChips(q,wrap,input,pi){
+        wrap.innerHTML="";
+        const todas=getRacasConhecidas();
+        const filtradas=q.length<1?todas.slice(0,20):todas.filter(r=>r.toLowerCase().includes(q.toLowerCase())).slice(0,30);
+        filtradas.forEach(r=>{
+          const isSel=pets[pi].raca===r;
+          const c=btn({style:{
+            padding:"4px 10px",fontSize:11,fontWeight:700,
+            background:isSel?"#FF6B9D":"#FFF5F9",
+            color:isSel?"#fff":"#FF6B9D",
+            border:"1.5px solid "+(isSel?"#FF6B9D":"#FFE4EF"),
+            borderRadius:20,whiteSpace:"nowrap"
+          },onClick:()=>{
+            input.value=r;pets[pi].raca=r;
+            buildRacaChips(r,wrap,input,pi);
+          }},r);
+          wrap.appendChild(c);
         });
-        pb.appendChild(rI);pb.appendChild(chips);
-      } else {
-        pb.appendChild(rI);
+        if(!filtradas.length){
+          const nada=div({style:{fontSize:11,color:"#8B8FA8",padding:"4px 8px"}});
+          nada.textContent="Nenhuma raça encontrada — digitada acima será salva";
+          wrap.appendChild(nada);
+        }
       }
+      buildRacaChips(p.raca,chipsDiv,rI,i);
+      pb.appendChild(rI);pb.appendChild(chipsDiv);
       petsWrap.appendChild(pb);
     });
   }
@@ -2099,7 +2124,7 @@ function abrirPagamentoModal(grupo,onDone,gwaRota,semWA){
   const montarMsg=(formaPag)=>{
     const labels={dinheiro:"Dinheiro 💵",cartao:"Cartao 💳",pix:"Pix 📱",pl:"Retirou na Loja 🏪",naopagou:"Pendente ⚠️"};
     const vetusId=rep.casa>=10001?rep.casa-10000:rep.casa;
-    let msg=`📅 ${fmtD(rep.data)}\nId Vetus ${vetusId} - ${rep.morador||""}\n`;
+            let msg=`📅 ${fmtD(rep.data)}\nId Vetus ${vetusId} - *${rep.morador||""}*\n`;
     if(isClienteNovo)msg+=`🆕 *Cliente novo*\n`;
     if(isClienteNovo&&telCliente)msg+=`📞 ${telCliente}\n`;
     if(isClienteNovo){
@@ -2108,7 +2133,7 @@ function abrirPagamentoModal(grupo,onDone,gwaRota,semWA){
         const pets=(DATA.modelos&&DATA.modelos[rep.casa])||[];
         const petObj=pets.find(p=>p.nome===ev.pet);
         const raca=petObj?.raca||(ev.raca||"");
-        if(raca)msg+=`🐾 ${ev.pet}: ${raca}\n`;
+        if(raca)msg+=`🐾 _${ev.pet}_: ${raca}\n`;
       });
       // Endereço
       const endObj=(DATA.enderecos&&DATA.enderecos[rep.casa])||{};
@@ -2117,9 +2142,9 @@ function abrirPagamentoModal(grupo,onDone,gwaRota,semWA){
     }
     grupo.forEach(ev=>{
       const val=getValorEvento(ev);
-      msg+=`🐶 ${ev.pet||"Pet"} ${ev.servico||"Banho"}${val>0?"  R$ "+val.toFixed(2):""}\n`;
+      msg+=`🐶 *_${ev.pet||"Pet"}_* ${ev.servico||"Banho"}${val>0?"  R$ "+val.toFixed(2):""}\n`;
     });
-    msg+=`\n💰 Total: R$ ${totalG.toFixed(2)}\n`;
+    msg+=`\n💰 Total: *R$ ${totalG.toFixed(2)}*\n`;
     if(formaPag==="naopagou")msg+="⚠️ Pagamento pendente";
     else if(formaPag==="pl")msg+=`🏪 Retirou na loja · ✅ Pagou: ${labels[formaPag]}`;
     else msg+=`✅ Pagou: ${labels[formaPag]}`;
@@ -3170,12 +3195,15 @@ function renderStats(){
   body.appendChild(secGrafico);
 
   // ── Seção 3: Abas interativas ────────────────────────────────────────────────
-  let abaAtiva="pets";
+  let abaAtiva="dia";
+  let diaSel=hoje();
+  let mesSelBairro="__todos__";
   const abaWrap=div({style:{marginBottom:18}});
   const abaTabs=div({style:{display:"flex",gap:6,marginBottom:12,overflowX:"auto",paddingBottom:2}});
   const abaContent=div();
 
   const ABAS=[
+    {k:"dia",l:"🛁 Banhos do Dia"},
     {k:"pets",l:"🐾 Top Pets"},
     {k:"clientes",l:"👤 Clientes"},
     {k:"mes",l:"📋 Por Mês"},
@@ -3193,9 +3221,95 @@ function renderStats(){
 
   let mesSel=mesNomeAt;
 
+  // Detecta bairro de um cliente (usado nas abas Dia e Bairros)
+  const BAIRROS_CONHECIDOS_G=["Terra Ville","Lami","Chapéu do Sol","Chapeu do Sol","Belém Novo","Belem Novo","Bom Jesus","Espírito Santo","Espirito Santo","Ipanema","Guarujá","Guaruja","Jardim Itu","Jardim Isabel","Camaquã","Camaqua","Tristeza","Cavalhada","Aberta dos Morros","Restinga","Ponta Grossa","Lageado","Lajeado","Canta Galo","Belém Velho","Belem Velho","Itapuã","Itapua","Viamão","Viamao","Hípica","Hipica","Serraria","Vila Nova","Cristal","Nonoai","Santa Tereza","Teresópolis","Teresopolis","Menino Deus","Partenon","Centro"];
+  function getBairroCli(casaNum){
+    const casa=(DATA.casas||{})[casaNum]||(DATA.casas2||{})[casaNum]||{};
+    const endObj=(DATA.enderecos||{})[casaNum]||{};
+    const endStr=[casa.endereco||"",typeof endObj==="string"?endObj:"",typeof endObj==="object"?(endObj.bairro||endObj.rua||""):""].join(" ");
+    if(!endStr.trim())return"Não informado";
+    for(const b of BAIRROS_CONHECIDOS_G){if(endStr.toLowerCase().includes(b.toLowerCase()))return b;}
+    const partes=endStr.split(/[,\-–]/);
+    for(let i=partes.length-1;i>=0;i--){const p=partes[i].trim();if(p.length>3&&!/^\d/.test(p)&&!/porto alegre/i.test(p)&&!/^RS$/i.test(p)&&p.split(" ").length<=4)return p;}
+    return"Não informado";
+  }
+
   function buildAbaContent(){
     abaContent.innerHTML="";
-    if(abaAtiva==="pets"){
+    if(abaAtiva==="dia"){
+      // ── Banhos do dia por bairro ─────────────────────────────────────────
+      // Seletor de data
+      const selData=div({style:{marginBottom:14}});
+      selData.appendChild(lbl("Dia"));
+      const dInp=inp({type:"date",className:"fi",value:diaSel,onChange:e=>{diaSel=e.target.value;buildAbaContent();}});
+      selData.appendChild(dInp);
+      // Botões rápidos: hoje / ontem
+      const quick=div({style:{display:"flex",gap:8,marginTop:8}});
+      [["Hoje",hoje()],["Ontem",addD(hoje(),-1)]].forEach(([lab,ds])=>{
+        const on=diaSel===ds;
+        quick.appendChild(btn({style:{flex:1,padding:"9px",fontSize:12,fontWeight:800,borderRadius:10,background:on?"#FF6B9D":"#fff",color:on?"#fff":"#8B8FA8",border:"2px solid "+(on?"#FF6B9D":"#FFE4EF")},onClick:()=>{diaSel=ds;buildAbaContent();}},lab));
+      });
+      selData.appendChild(quick);
+      abaContent.appendChild(selData);
+
+      // Coleta atendimentos do dia (cobrancas C1 + C2) pela data exata
+      const bairroDia={};
+      let totBanhos=0,totGanho=0;
+      [DATA.cobrancas||{},(DATA.cobrancas2||{})].forEach(src=>{
+        MESES.forEach(m=>{
+          Object.entries(src[m]||{}).forEach(([casaNum,cb])=>{
+            (cb.atendimentos||[]).forEach(at=>{
+              if(at.data!==diaSel)return;
+              const val=totAts([at]);
+              const nPets=(at.caes||[]).length||1;
+              const bairro=getBairroCli(casaNum);
+              if(!bairroDia[bairro])bairroDia[bairro]={ganho:0,banhos:0};
+              bairroDia[bairro].ganho+=val;
+              bairroDia[bairro].banhos+=nPets;
+              totBanhos+=nPets;
+              totGanho+=val;
+            });
+          });
+        });
+      });
+      const ticketGeral=totBanhos>0?totGanho/totBanhos:0;
+
+      // Cards resumo do dia
+      const resumo=div({style:{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:14}});
+      [{l:"🛁 Banhos",v:totBanhos,c:"#3B82F6"},{l:"💰 Ganho",v:fmtR(totGanho),c:"#2DC653"},{l:"🎫 Ticket",v:fmtR(ticketGeral),c:"#FF6B9D"}].forEach(it=>{
+        const c=div({style:{background:it.c+"18",borderRadius:14,padding:"12px 8px",textAlign:"center"}});
+        c.innerHTML='<div style="font-size:10px;font-weight:700;color:'+it.c+';text-transform:uppercase;letter-spacing:.5px">'+it.l+'</div><div style="font-weight:800;color:'+it.c+';font-size:15px;font-family:\'Fredoka One\',sans-serif;margin-top:3px">'+it.v+'</div>';
+        resumo.appendChild(c);
+      });
+      abaContent.appendChild(resumo);
+
+      const bairrosDiaArr=Object.entries(bairroDia).sort((a,b)=>b[1].ganho-a[1].ganho);
+      if(bairrosDiaArr.length===0){
+        const vazio=div({style:{textAlign:"center",padding:"30px 20px",color:"#8B8FA8",fontSize:13,background:"#fff",borderRadius:18,boxShadow:"0 2px 12px rgba(0,0,0,.06)"}});
+        vazio.innerHTML='<div style="font-size:38px;margin-bottom:8px">🛁</div><div style="font-weight:800;color:#1A1A2E;font-size:14px;margin-bottom:6px">Nenhum banho em '+fmtD(diaSel)+'</div><div style="font-size:12px">Lance os atendimentos nas cobranças<br>para ver o resumo do dia por bairro</div>';
+        abaContent.appendChild(vazio);
+      } else {
+        const lista=div({style:{background:"#fff",borderRadius:18,padding:"16px",boxShadow:"0 2px 12px rgba(0,0,0,.06)"}});
+        lista.appendChild(h("p",{style:{fontFamily:"'Fredoka One',sans-serif",fontSize:14,color:"#1A1A2E",marginBottom:10}},"🗺️ Por Bairro — "+fmtD(diaSel)));
+        const CORES_D=["#FF6B9D","#FFD93D","#3B82F6","#2DC653","#9B59B6","#E8A000","#e53e3e","#06b6d4","#84cc16","#ec4899"];
+        bairrosDiaArr.forEach(([bairro,d],i)=>{
+          const ticketB=d.banhos>0?d.ganho/d.banhos:0;
+          const row=div({style:{marginBottom:10,borderRadius:14,padding:"11px 12px",background:"#f8f8f8",border:"1.5px solid #f0f0f0"}});
+          const topR=div({style:{display:"flex",alignItems:"center",gap:8,marginBottom:6}});
+          const badge=div({style:{width:12,height:12,borderRadius:6,background:CORES_D[i%CORES_D.length],flexShrink:0}});
+          const nm=h("span",{style:{fontWeight:800,fontSize:13,color:"#1A1A2E",flex:1}},bairro);
+          const vl=h("span",{style:{fontWeight:800,fontSize:13,color:CORES_D[i%CORES_D.length]}},fmtR(d.ganho));
+          [badge,nm,vl].forEach(el=>topR.appendChild(el));
+          row.appendChild(topR);
+          const sub=div({style:{display:"flex",gap:12,fontSize:11,color:"#8B8FA8",fontWeight:700}});
+          sub.innerHTML='<span>🛁 '+d.banhos+' banho'+(d.banhos>1?"s":"")+'</span><span>🎫 '+fmtR(ticketB)+'/pet</span>';
+          row.appendChild(sub);
+          lista.appendChild(row);
+        });
+        abaContent.appendChild(lista);
+      }
+
+    }else if(abaAtiva==="pets"){
       const tops=getPetsLucro();
       if(tops.length===0){abaContent.appendChild(div({style:{textAlign:"center",padding:"20px",color:"#8B8FA8",fontSize:13}},"Sem dados de atendimento ainda"));return;}
       const maxP=tops[0][1];
@@ -3387,37 +3501,26 @@ function renderStats(){
       }
     }else if(abaAtiva==="bairros"){
       // ── Gráfico de pizza por bairro ─────────────────────────────────────────
-      // Lista de bairros conhecidos para matching
-      const BAIRROS_CONHECIDOS=["Terra Ville","Lami","Chapéu do Sol","Chapeu do Sol","Belém Novo","Belem Novo","Bom Jesus","Espírito Santo","Espirito Santo","Ipanema","Guarujá","Guaruja","Jardim Isabel","Camaquã","Camaqua","Tristeza","Cavalhada","Aberta dos Morros","Restinga","Ponta Grossa","Sarandi","Rubem Berta","Bom Fim","Cidade Baixa","Moinhos","Petrópolis","Petropolis","Auxiliadora","Boa Vista","Mont Serrat","Rio Branco","Menino Deus","Teresópolis","Teresopolis","Cristal","Nonoai","Santa Tereza","Centro","Floresta","Independência","Independencia","Passo das Pedras","Partenon"];
+      const getBairroDoCliente=getBairroCli;
 
-      function getBairroDoCliente(casaNum){
-        const casa=(DATA.casas||{})[casaNum]||(DATA.casas2||{})[casaNum]||{};
-        const endObj=(DATA.enderecos||{})[casaNum]||{};
-        // Junta todas as fontes de endereço
-        const endStr=[
-          casa.endereco||"",
-          typeof endObj==="string"?endObj:"",
-          typeof endObj==="object"?(endObj.bairro||endObj.rua||""):"",
-        ].join(" ");
-        if(!endStr.trim())return"Não informado";
-        // Tenta match com bairros conhecidos
-        for(const b of BAIRROS_CONHECIDOS){
-          if(endStr.toLowerCase().includes(b.toLowerCase()))return b;
-        }
-        // Tenta extrair última parte após vírgula ou hífen que não seja CEP/cidade/UF
-        const partes=endStr.split(/[,\-–]/);
-        for(let i=partes.length-1;i>=0;i--){
-          const p=partes[i].trim();
-          if(p.length>3&&!/^\d/.test(p)&&!/porto alegre/i.test(p)&&!/^RS$/i.test(p)&&p.split(" ").length<=4){
-            return p;
-          }
-        }
-        return"Não informado";
-      }
+      // Seletor de mês em chips clicáveis (Todos + cada mês)
+      const selWrap=div({style:{marginBottom:14}});
+      selWrap.appendChild(lbl("Mês do gráfico"));
+      const chips=div({style:{display:"flex",gap:6,overflowX:"auto",paddingBottom:4,marginTop:4}});
+      const opcoes=[{k:"__todos__",l:"Todos"}].concat(MESES.map(m=>({k:m,l:m.slice(0,3)})));
+      opcoes.forEach(op=>{
+        const on=mesSelBairro===op.k;
+        chips.appendChild(btn({style:{flexShrink:0,padding:"7px 14px",fontSize:12,fontWeight:800,borderRadius:18,whiteSpace:"nowrap",background:on?"#FF6B9D":"#fff",color:on?"#fff":"#8B8FA8",border:"2px solid "+(on?"#FF6B9D":"#FFE4EF")},onClick:()=>{mesSelBairro=op.k;buildAbaContent();}},op.l));
+      });
+      selWrap.appendChild(chips);
+      abaContent.appendChild(selWrap);
 
-      // Agrupa receita e pets por bairro (todos os meses)
+      // Meses a considerar conforme seleção
+      const mesesAlvo=mesSelBairro==="__todos__"?MESES:[mesSelBairro];
+
+      // Agrupa receita e pets por bairro (mês selecionado ou todos)
       const bairroMap={};
-      MESES.forEach(m=>{
+      mesesAlvo.forEach(m=>{
         [DATA.cobrancas[m]||{},(DATA.cobrancas2||{})[m]||{}].forEach(cbM=>{
           Object.entries(cbM).forEach(([casaNum,cb])=>{
             const v=totAts(cb.atendimentos);
@@ -3442,7 +3545,7 @@ function renderStats(){
       } else {
         // ── Gráfico de pizza SVG tipo donut ──────────────────────────────────
         const pizzaWrap=div({style:{background:"#fff",borderRadius:18,padding:"16px",boxShadow:"0 2px 12px rgba(0,0,0,.07)",marginBottom:14}});
-        pizzaWrap.appendChild(h("p",{style:{fontFamily:"'Fredoka One',sans-serif",fontSize:15,color:"#1A1A2E",marginBottom:12,textAlign:"center"}},"🗺️ Receita por Bairro"));
+        pizzaWrap.appendChild(h("p",{style:{fontFamily:"'Fredoka One',sans-serif",fontSize:15,color:"#1A1A2E",marginBottom:12,textAlign:"center"}},"🗺️ Receita por Bairro · "+(mesSelBairro==="__todos__"?"Todos os meses":mesSelBairro)));
 
         const SZ=220,cx=110,cy=110,R=90,ri=45;
         const ns="http://www.w3.org/2000/svg";
@@ -3492,13 +3595,15 @@ function renderStats(){
         [tc,tv].forEach(t=>svg.appendChild(t));
         pizzaWrap.appendChild(svg);
 
-        // Legenda colorida
-        const leg=div({style:{display:"flex",flexWrap:"wrap",gap:6,marginTop:10,justifyContent:"center"}});
+        // Legenda colorida com espaçamento
+        const leg=div({style:{display:"flex",flexWrap:"wrap",gap:8,marginTop:12,justifyContent:"center"}});
         top10.forEach(([bairro,],i)=>{
-          const li=div({style:{display:"flex",alignItems:"center",gap:4,fontSize:10,fontWeight:700,color:"#1A1A2E"}});
+          const li=div({style:{display:"flex",alignItems:"center",gap:5,fontSize:11,fontWeight:700,color:"#1A1A2E",background:"#f8f8f8",borderRadius:20,padding:"4px 10px"}});
           const dot=div({style:{width:10,height:10,borderRadius:5,background:CORES[i%CORES.length],flexShrink:0}});
           li.appendChild(dot);
-          li.appendChild(document.createTextNode(bairro.split(" ").slice(0,2).join(" ")));
+          // nome curto
+          const nm=bairro.split(" ").slice(0,3).join(" ");
+          li.appendChild(document.createTextNode(nm));
           leg.appendChild(li);
         });
         pizzaWrap.appendChild(leg);
