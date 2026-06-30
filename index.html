@@ -40,7 +40,7 @@ const DIAS_SEM=["Dom","Seg","Ter","Qua","Qui","Sex","Sab"];
 const DIAS_FULL=["Domingo","Segunda","Terca","Quarta","Quinta","Sexta","Sabado"];
 const SERVICOS=["Banho","Tosa","Banho + Tosa","Vacina","Consulta","Outro"];
 const FUNCS=[{n:"Jaqueline",c:"Banho e Tosa"},{n:"Patricia",c:"Banho e Tosa"},{n:"Kleber",c:"Banho e Tosa"},{n:"Julia",c:"Recepcao"},{n:"Vera",c:"Recepcao"},{n:"Felipe",c:"Motorista"}];
-const REPS=[{l:"7 dias",d:7},{l:"10 dias",d:10},{l:"15 dias",d:15},{l:"4 semanas",d:28}];
+const REPS=[{l:"7 dias",d:7},{l:"10 dias",d:10},{l:"14 dias",d:14},{l:"21 dias",d:21},{l:"28 dias",d:28}];
 const STATUS_CORES={pendente:{bg:"#FFFBEE",faixa:"#FFD93D",label:"Pendente",emoji:"🟡"},servico:{bg:"#EFF6FF",faixa:"#3B82F6",label:"Em Servico",emoji:"🔵"},finalizado:{bg:"#f0fff4",faixa:"#2DC653",label:"Finalizado",emoji:"🟢"}};
 
 // ── SAÍDAS: categorias com subcategorias específicas ──────────────────────────
@@ -717,6 +717,10 @@ function renderHome(){
   const bolaoGridBtn=div({className:"card btn anim",style:{gridColumn:"1/-1",padding:"16px",display:"flex",alignItems:"center",gap:12,cursor:"pointer",background:"linear-gradient(135deg,#15803d,#16a34a,#22c55e)",border:"none",borderRadius:16,animationDelay:"200ms"},onClick:()=>go("bolao")});
   bolaoGridBtn.innerHTML=`<span style="font-size:36px">⚽</span><div style="flex:1"><div style="font-family:'Fredoka One',sans-serif;font-size:20px;color:#fff;letter-spacing:.5px">Bolão Copa 2026</div><div style="font-size:11px;color:rgba(255,255,255,.85);font-weight:700;margin-top:2px">🇧🇷 Brasil no Grupo C · Palpite dos Tutores</div></div><span style="font-size:22px">🏆</span>`;
   grid.appendChild(bolaoGridBtn);
+  // Botão Banhos do Dia (atalho direto para o relatório do dia)
+  const diaGridBtn=div({className:"card btn anim",style:{gridColumn:"1/-1",padding:"16px",display:"flex",alignItems:"center",gap:12,cursor:"pointer",background:"linear-gradient(135deg,#3B82F6,#60a5fa,#06b6d4)",border:"none",borderRadius:16,animationDelay:"220ms"},onClick:()=>go("stats")});
+  diaGridBtn.innerHTML=`<span style="font-size:36px">🛁</span><div style="flex:1"><div style="font-family:'Fredoka One',sans-serif;font-size:20px;color:#fff;letter-spacing:.5px">Banhos do Dia</div><div style="font-size:11px;color:rgba(255,255,255,.85);font-weight:700;margin-top:2px">Quantos banhos e ticket médio de hoje</div></div><span style="font-size:22px">🎫</span>`;
+  grid.appendChild(diaGridBtn);
   w.appendChild(grid);
   const extra=div({style:{padding:"0 18px 28px",display:"flex",flexDirection:"column",gap:10}});
   const agBtn=div({className:"btn",style:{width:"100%",padding:"18px",background:"linear-gradient(135deg,#9B59B6,#FF6B9D)",color:"#fff",fontSize:15,borderRadius:16,display:"flex",alignItems:"center",gap:12,cursor:"pointer"},onClick:()=>go("agenda_gerente")});
@@ -2211,7 +2215,7 @@ function abrirPagamentoModal(grupo,onDone,gwaRota,semWA){
   // ── Seletor de próximo retorno ────────────────────────────────────────────
   const repSel=div({style:{marginBottom:14}});
   repSel.appendChild(h("p",{style:{fontWeight:800,color:"#1A1A2E",fontSize:12,marginBottom:4,textTransform:"uppercase",letterSpacing:.7}},"🔁 Próximo retorno"));
-  const repOpts=[{l:"7 dias",d:7},{l:"10 dias",d:10},{l:"14 dias",d:14},{l:"30 dias",d:30},{l:"Sem repetir",d:0}];
+  const repOpts=[{l:"7 dias",d:7},{l:"10 dias",d:10},{l:"14 dias",d:14},{l:"21 dias",d:21},{l:"28 dias",d:28},{l:"Sem repetir",d:0}];
   const repGrid=div({style:{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}});
   function buildRepGrid(){
     repGrid.innerHTML="";
@@ -2460,7 +2464,7 @@ function abrirAgModal(dataInicial,onDone,getAllPets,gerente){
   const fSel2=sel({className:"fi",style:{marginBottom:12}},FUNCS.map((f,i)=>({v:i,l:f.n+" - "+f.c})));fSel2.addEventListener("change",()=>funcIdx=Number(fSel2.value));
   const hI=inp({className:"fi",type:"time",value:"08:00",style:{marginBottom:14}});
   let repetir=0;
-  const repGrid=div({style:{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:8,marginBottom:16}});
+  const repGrid=div({style:{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:16}});
   function buildRepGrid2(){
     repGrid.innerHTML="";
     REPS.forEach(r=>{
@@ -4433,7 +4437,16 @@ function renderRankingTab(bolao){
       vencedores.forEach((v,i)=>{
         const vCard=div({style:{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:i===0?"linear-gradient(135deg,#fef9c3,#fef08a)":"#f9fafb",borderRadius:12,marginBottom:6,border:"1.5px solid "+(i===0?"#FFD93D":"#e5e7eb")}});
         const iniciais=v.nome.split(" ").filter(Boolean).slice(0,2).map(p=>p[0].toUpperCase()).join("");
-        vCard.innerHTML='<div style="width:40px;height:40px;border-radius:20px;background:linear-gradient(135deg,#FFD93D,#f59e0b);display:flex;align-items:center;justify-content:center;font-family:Fredoka One,sans-serif;font-size:15px;color:#fff;flex-shrink:0">'+( i===0?"🏆":iniciais)+'</div><div style="flex:1"><div style="font-weight:800;font-size:14px;color:#1A1A2E">'+v.nome.split(" ").slice(0,2).join(" ")+'</div><div style="font-size:11px;color:#15803d;font-weight:700">'+v.motivo+'</div><div style="font-size:10px;color:#8B8FA8">Palpite: '+( v.pal.placar||"—")+(getJogadores(v.pal).length?" · ⚽ "+getJogadores(v.pal).join(", "):"")+'</div></div><div style="font-size:28px">🐕</div>';
+        vCard.innerHTML='<div style="width:40px;height:40px;border-radius:20px;background:linear-gradient(135deg,#FFD93D,#f59e0b);display:flex;align-items:center;justify-content:center;font-family:Fredoka One,sans-serif;font-size:15px;color:#fff;flex-shrink:0">'+( i===0?"🏆":iniciais)+'</div><div style="flex:1"><div style="font-weight:800;font-size:14px;color:#1A1A2E">'+v.nome.split(" ").slice(0,2).join(" ")+'</div><div style="font-size:11px;color:#15803d;font-weight:700">'+v.motivo+'</div><div style="font-size:10px;color:#8B8FA8">Palpite: '+( v.pal.placar||"—")+(getJogadores(v.pal).length?" · ⚽ "+getJogadores(v.pal).join(", "):"")+'</div></div>';
+        // Botão WhatsApp para chamar o ganhador direto no quadro
+        const primeiroNomeV=v.nome.split(" ")[0];
+        const telV=(v.pal.tel||"").replace(/\D/g,"");
+        const msgGanhadorR="🏆 "+primeiroNomeV+", você GANHOU o Bolão Planet Dogs! 🐾\n\n⚽ "+jogo.mandante+" "+real.golM+"×"+real.golV+" "+jogo.visitante+(goleadoresCurto(real)?"\nGol: ⚽ "+goleadoresCurto(real):"")+"\n\nSeu palpite: "+v.pal.golM+"×"+v.pal.golV+(getJogadores(v.pal).length?" · ⚽ "+getJogadores(v.pal).join(", "):"")+"\n"+v.motivo+"\n\n🛁 Vem buscar seu banho grátis! Parabéns! 🎉";
+        const waGanhBtn=btn({style:{width:42,height:42,borderRadius:21,background:telV?"linear-gradient(135deg,#25D366,#128C7E)":"#e5e7eb",color:"#fff",fontSize:20,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,border:"none",cursor:telV?"pointer":"not-allowed",boxShadow:telV?"0 2px 8px rgba(37,211,102,.4)":"none"},onClick:()=>{
+          if(!telV){alert("⚠️ "+primeiroNomeV+" não tem telefone cadastrado no palpite.");return;}
+          window.open("https://api.whatsapp.com/send?phone=55"+telV+"&text="+encodeURIComponent(msgGanhadorR),"_blank");
+        }},"💬");
+        vCard.appendChild(waGanhBtn);
         corpo.appendChild(vCard);
       });
       const obs=h("div",{style:{fontSize:10,color:"#8B8FA8",textAlign:"center",marginTop:6}});
