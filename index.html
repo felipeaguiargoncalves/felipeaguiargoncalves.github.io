@@ -717,10 +717,6 @@ function renderHome(){
   const bolaoGridBtn=div({className:"card btn anim",style:{gridColumn:"1/-1",padding:"16px",display:"flex",alignItems:"center",gap:12,cursor:"pointer",background:"linear-gradient(135deg,#15803d,#16a34a,#22c55e)",border:"none",borderRadius:16,animationDelay:"200ms"},onClick:()=>go("bolao")});
   bolaoGridBtn.innerHTML=`<span style="font-size:36px">⚽</span><div style="flex:1"><div style="font-family:'Fredoka One',sans-serif;font-size:20px;color:#fff;letter-spacing:.5px">Bolão Copa 2026</div><div style="font-size:11px;color:rgba(255,255,255,.85);font-weight:700;margin-top:2px">🇧🇷 Brasil no Grupo C · Palpite dos Tutores</div></div><span style="font-size:22px">🏆</span>`;
   grid.appendChild(bolaoGridBtn);
-  // Botão Banhos do Dia (atalho direto para o relatório do dia)
-  const diaGridBtn=div({className:"card btn anim",style:{gridColumn:"1/-1",padding:"16px",display:"flex",alignItems:"center",gap:12,cursor:"pointer",background:"linear-gradient(135deg,#3B82F6,#60a5fa,#06b6d4)",border:"none",borderRadius:16,animationDelay:"220ms"},onClick:()=>go("stats")});
-  diaGridBtn.innerHTML=`<span style="font-size:36px">🛁</span><div style="flex:1"><div style="font-family:'Fredoka One',sans-serif;font-size:20px;color:#fff;letter-spacing:.5px">Banhos do Dia</div><div style="font-size:11px;color:rgba(255,255,255,.85);font-weight:700;margin-top:2px">Quantos banhos e ticket médio de hoje</div></div><span style="font-size:22px">🎫</span>`;
-  grid.appendChild(diaGridBtn);
   w.appendChild(grid);
   const extra=div({style:{padding:"0 18px 28px",display:"flex",flexDirection:"column",gap:10}});
   const agBtn=div({className:"btn",style:{width:"100%",padding:"18px",background:"linear-gradient(135deg,#9B59B6,#FF6B9D)",color:"#fff",fontSize:15,borderRadius:16,display:"flex",alignItems:"center",gap:12,cursor:"pointer"},onClick:()=>go("agenda_gerente")});
@@ -3942,6 +3938,7 @@ const BOLAO_JOGOS=[
   {id:"o1",fase:"Oitavas",data:"2026-06-29",hora:"?",mandante:"Brasil",visitante:"Grupo F",local:"Houston/Monterrey"},
   {id:"arg1",fase:"Argentina",data:"2026-06-27",hora:"?",mandante:"Argentina",visitante:"Jordânia",local:"—"},
   {id:"jap1",fase:"Oitavas",data:"2026-07-02",hora:"?",mandante:"Brasil",visitante:"Japão",local:"—"},
+  {id:"nor1",fase:"Mata-mata",data:"2026-07-05",hora:"16:00",mandante:"Brasil",visitante:"Noruega",local:"—"},
 ];
 
 // Só atacantes — quem pode fazer gol no bolão
@@ -3984,27 +3981,34 @@ function jogadoresCurto(pal){return getJogadores(pal).map(n=>n.split(" ")[0]).jo
 function goleadoresCurto(real){return getGoleadores(real).join(", ");}
 
 // ── Calcula vencedor de um jogo (prêmio banho grátis) ─────────────────────────
-// Regra (GOLEADOR NÃO CONTA MAIS):
-// 1º) quem acertou o placar exato ganha
-// 2º) se ninguém acertou o placar → quem acertou o resultado (V/E/D) ganha
+// Regra:
+// • SÓ GANHA quem acertar o PLACAR EXATO do jogo.
+// • Ordem de qualificação (mais qualificado primeiro):
+//     1º) acertou placar exato + goleador
+//     2º) acertou placar exato (só o placar)
 function calcularVencedores(jogoId,real,palpites){
   if(!real||real.golM===""||real.golV==="")return[];
   const rm=parseInt(real.golM),rv=parseInt(real.golV);
-  const resReal=rm>rv?"M":rm<rv?"V":"E";
+  const golsReais=getGoleadores(real);
   const candidatos=Object.entries(palpites[jogoId]||{}).map(([uid,pal])=>{
     const pm=parseInt(pal.golM),pv=parseInt(pal.golV);
     const acertouExato=!isNaN(pm)&&!isNaN(pv)&&pm===rm&&pv===rv;
-    const resPal=pm>pv?"M":pm<pv?"V":"E";
-    const acertouRes=!isNaN(pm)&&!isNaN(pv)&&resPal===resReal;
-    return{uid,nome:pal.nome,acertouExato,acertouRes,pal};
+    const jogP=getJogadores(pal);
+    const acertouGol=jogP.length>0&&golsReais.length>0&&jogP.some(j=>golsReais.includes(j));
+    return{uid,nome:pal.nome,acertouExato,acertouGol,pal};
   });
-  // 1º critério: placar exato
-  const exatos=candidatos.filter(c=>c.acertouExato);
-  if(exatos.length)return exatos.map(c=>({...c,motivo:"🎯 Placar exato!"}));
-  // 2º critério: resultado certo
-  const resOk=candidatos.filter(c=>c.acertouRes);
-  if(resOk.length)return resOk.map(c=>({...c,motivo:"✅ Resultado certo"}));
-  return[];
+  // Só entram quem acertou o placar exato
+  const ganhadores=candidatos.filter(c=>c.acertouExato);
+  if(!ganhadores.length)return[];
+  // Pontuação de qualificação para ordenar
+  ganhadores.forEach(c=>{
+    c.qualif=(c.acertouGol?1:0);
+    if(c.acertouGol)c.motivo="🏆 Placar exato + goleador!";
+    else c.motivo="🎯 Acertou o placar exato";
+  });
+  // Mais qualificado primeiro
+  ganhadores.sort((a,b)=>b.qualif-a.qualif);
+  return ganhadores;
 }
 
 function renderBolao(){
@@ -4023,6 +4027,7 @@ function renderBolao(){
   const flagVisit=jogo.visitante==="Brasil"?"🇧🇷":
     jogo.visitante==="Marrocos"?"🇲🇦":
     jogo.visitante==="Haiti"?"🇭🇹":
+    jogo.visitante==="Noruega"?"🇳🇴":
     jogo.visitante==="Escócia"?"🏴󠁧󠁢󠁳󠁣󠁴󠁿":"🌍";
   const flagMand=jogo.mandante==="Brasil"?"🇧🇷":
     jogo.mandante==="Escócia"?"🏴󠁧󠁢󠁳󠁣󠁴󠁿":"🌍";
@@ -4153,7 +4158,7 @@ function renderPalpitesTab(bolao,jogoAtual){
     formArea.innerHTML="";
     const jAtual=BOLAO_JOGOS.find(j=>j.id===jogoId)||jogoAtual;
     const fM2=jAtual.mandante==="Brasil"?"🇧🇷":jAtual.mandante==="Escócia"?"🏴󠁧󠁢󠁳󠁣󠁴󠁿":"🌍";
-    const fV2=jAtual.visitante==="Brasil"?"🇧🇷":jAtual.visitante==="Haiti"?"🇭🇹":jAtual.visitante==="Marrocos"?"🇲🇦":"🌍";
+    const fV2=jAtual.visitante==="Brasil"?"🇧🇷":jAtual.visitante==="Haiti"?"🇭🇹":jAtual.visitante==="Marrocos"?"🇲🇦":jAtual.visitante==="Noruega"?"🇳🇴":"🌍";
 
     // ── Card formulário de aposta ────────────────────────────────────────────
     const formCard=div({style:{background:"linear-gradient(135deg,#f0fdf4,#dcfce7)",border:"2px solid #16a34a",borderRadius:18,padding:"16px",marginBottom:14}});
@@ -4314,7 +4319,7 @@ function renderPalpitesTab(bolao,jogoAtual){
 
     if(!vencedores.length){
       const av=div({style:{textAlign:"center",padding:"24px",background:"#fff0f0",border:"2px solid #fca5a5",borderRadius:14}});
-      av.innerHTML='<div style="font-size:36px;margin-bottom:8px">😔</div><div style="font-weight:800;font-size:14px;color:#e53e3e">Ninguém ganhou o banho grátis!</div><div style="font-size:12px;color:#8B8FA8;margin-top:6px">Nenhuma aposta acertou o resultado</div>';
+      av.innerHTML='<div style="font-size:36px;margin-bottom:8px">😔</div><div style="font-weight:800;font-size:14px;color:#e53e3e">Ninguém ganhou o banho grátis!</div><div style="font-size:12px;color:#8B8FA8;margin-top:6px">Nenhuma aposta acertou o placar exato</div>';
       cont.appendChild(av);
     } else {
       vencedores.forEach((v,i)=>{
@@ -4505,7 +4510,7 @@ function renderRankingTab(bolao){
     em.innerHTML='<div style="font-size:40px;margin-bottom:10px">🏆</div><div style="font-weight:800;font-size:14px;color:#1A1A2E;margin-bottom:4px">Aguardando os jogos!</div><div style="font-size:12px">Use o botão acima para lançar um resultado,<br>ou vá na aba Jogos.</div>';
     wrap.appendChild(em);
     const regras=div({style:{background:"#f0fdf4",border:"1.5px solid #16a34a",borderRadius:14,padding:"14px 16px",marginTop:4}});
-    regras.innerHTML='<div style="font-weight:800;color:#15803d;font-size:12px;margin-bottom:8px;text-transform:uppercase;letter-spacing:.8px">🏅 Como funciona o prêmio</div><div style="font-size:12px;line-height:2.2;color:#1A1A2E">⚽ <b>Acertou o goleador</b> → <b style="color:#15803d">GANHA o banho</b><br>🎯 Empate? Quem também acertou o <b>placar exato</b> leva<br>✅ Se ninguém acertou gol → quem acertou o <b>resultado</b> ganha</div>';
+    regras.innerHTML='<div style="font-weight:800;color:#15803d;font-size:12px;margin-bottom:8px;text-transform:uppercase;letter-spacing:.8px">🏅 Como funciona o prêmio</div><div style="font-size:12px;line-height:2.2;color:#1A1A2E">🎯 <b>Só ganha quem acertar o placar exato</b> do jogo<br>⚽ Quem também acertar <b>quem fez gol</b> fica mais qualificado<br>🏆 Ordem: placar exato + gol → só placar exato</div>';
     wrap.appendChild(regras);
   }
   return wrap;
@@ -4522,7 +4527,7 @@ function renderJogosTab(bolao){
     const card=div({className:"card",style:{marginBottom:14,overflow:"hidden"}});
 
     const fM=jogo.mandante==="Brasil"?"🇧🇷":jogo.mandante==="Escócia"?"🏴󠁧󠁢󠁳󠁣󠁴󠁿":"🌍";
-    const fV=jogo.visitante==="Brasil"?"🇧🇷":jogo.visitante==="Haiti"?"🇭🇹":jogo.visitante==="Marrocos"?"🇲🇦":"🌍";
+    const fV=jogo.visitante==="Brasil"?"🇧🇷":jogo.visitante==="Haiti"?"🇭🇹":jogo.visitante==="Marrocos"?"🇲🇦":jogo.visitante==="Noruega"?"🇳🇴":"🌍";
 
     const hdr=div({style:{background:isBR?"linear-gradient(135deg,#15803d,#166534)":"linear-gradient(135deg,#1A1A2E,#2d2d4e)",padding:"12px 14px",display:"flex",alignItems:"center",justifyContent:"space-between"}});
     hdr.innerHTML=`
