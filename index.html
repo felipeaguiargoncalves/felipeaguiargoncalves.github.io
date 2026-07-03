@@ -4662,6 +4662,35 @@ function renderJogosTab(bolao){
 }
 
 render();
+</script><script>
+(function(){
+  var firebaseConfig = {
+    apiKey: "AIzaSyCXUsH1pg-yU62z99iOn93Y68H_qI9w_lU",
+    authDomain: "planetdogs-agenda-de-banhos.firebaseapp.com",
+    databaseURL: "https://planetdogs-agenda-de-banhos-default-rtdb.firebaseio.com",
+    projectId: "planetdogs-agenda-de-banhos"
+  };
+  if (typeof firebase === 'undefined') return;
+  firebase.initializeApp(firebaseConfig);
+  var fb = firebase.database().ref('planet_sync');
+  var applying = false;
+  var _set = localStorage.setItem.bind(localStorage);
+  localStorage.setItem = function(k, v){
+    _set(k, v);
+    if (!applying) fb.child(k.replace(/[.#$/\[\]]/g,'_')).set({k:k, v:v});
+  };
+  fb.on('value', function(snap){
+    var data = snap.val(); if (!data) return;
+    var mudou = false;
+    Object.keys(data).forEach(function(id){
+      var item = data[id];
+      if (localStorage.getItem(item.k) !== item.v){
+        applying = true; _set(item.k, item.v); applying = false; mudou = true;
+      }
+    });
+    if (mudou) location.reload();
+  });
+})();
 </script>
 </body>
 </html>
