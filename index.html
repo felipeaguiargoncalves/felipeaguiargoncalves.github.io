@@ -153,10 +153,8 @@ function saveData(d){try{localStorage.setItem(KEY,JSON.stringify(d));}catch(e){
   }
 }}
 const firebaseConfig = {
-    apiKey: "AIzaSyAs8_X0O7mRlz_3yN4mP427-0x-x-x",
-    authDomain: "planetdogs-agenda-de-banhos.firebaseapp.com",
-    databaseURL: "https://planetdogs-agenda-de-banhos-default-rtdb.firebaseio.com",
-    projectId: "planetdogs-agenda-de-banhos"
+    databaseURL: "https://planet-dogs-default-rtdb.firebaseio.com/",
+    projectId: "planet-dogs"
 };
 if (typeof firebase !== 'undefined' && !firebase.apps.length) {
     firebase.initializeApp(firebaseConfig);
