@@ -153,8 +153,14 @@ function saveData(d){try{localStorage.setItem(KEY,JSON.stringify(d));}catch(e){
   }
 }}
 const firebaseConfig = {
-    databaseURL: "https://planet-dogs-default-rtdb.firebaseio.com/",
-    projectId: "planet-dogs"
+    apiKey: "AIzaSyCXUsH1pg-yU62z99iOn93Y68H_qI9w_lU",
+    authDomain: "planetdogs-agenda-de-banhos.firebaseapp.com",
+    databaseURL: "https://planetdogs-agenda-de-banhos-default-rtdb.firebaseio.com",
+    projectId: "planetdogs-agenda-de-banhos",
+    storageBucket: "planetdogs-agenda-de-banhos.appspot.com",
+    messagingSenderId: "998733899433",
+    appId: "1:998733899433:web:e6f8d9032408c51daeebb8",
+    measurementId: "G-B6S4D8S7K1"
 };
 if (typeof firebase !== 'undefined' && !firebase.apps.length) {
     firebase.initializeApp(firebaseConfig);
@@ -273,6 +279,13 @@ let NAV={s:IS_GERENTE?"agenda_gerente":"home"};
 function go(s,extra){
   // Gerente só pode ir para agenda_gerente
   if(IS_GERENTE&&s!=="agenda_gerente")return;
+  if(s==="agenda_gerente"){
+    if(!new URLSearchParams(location.search).has("gerente")){
+      history.replaceState(null,"",location.pathname+"?gerente");
+    }
+  }else if(!IS_GERENTE&&new URLSearchParams(location.search).has("gerente")){
+    history.replaceState(null,"",location.pathname);
+  }
   NAV={s,...(extra||{})};render();
 }
 
