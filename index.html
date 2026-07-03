@@ -165,12 +165,17 @@ const firebaseConfig = {
 if (typeof firebase !== 'undefined' && !firebase.apps.length) {
     firebase.initializeApp(firebaseConfig);
     const fb = firebase.database().ref('planet_data');
+    let fbSeeded=false;
     fb.on('value', snap => {
         if(snap.val()) {
             localStorage.setItem(KEY, JSON.stringify(snap.val()));
             DATA = snap.val();
             if(typeof render==='function') render();
+        } else if(!fbSeeded) {
+            const local = loadData();
+            if(local) fb.set(local);
         }
+        fbSeeded=true;
     });
     const orig = saveData;
     saveData = d => { orig(d); fb.set(d); };
