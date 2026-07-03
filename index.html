@@ -30,6 +30,8 @@ input,select,textarea{font-family:'Nunito',sans-serif;font-size:14px;}
 @keyframes up{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);}}
 .anim{animation:up .2s ease both;}
 </style>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 </head>
 <body>
 <div class="topbar" id="topbar"></div>
@@ -71,6 +73,16 @@ const CAT_SAIDAS=[
 const KEY="pd_v8";
 // ── MODO GERENTE ──────────────────────────────────────────────────────────────
 const IS_GERENTE=new URLSearchParams(location.search).has("gerente");
+if(IS_GERENTE){
+  document.documentElement.style.overscrollBehaviorY="contain";
+  document.body.style.overscrollBehaviorY="contain";
+  let touchStartY=0;
+  document.addEventListener("touchstart",e=>{touchStartY=e.touches[0].clientY;},{passive:true});
+  document.addEventListener("touchmove",e=>{
+    const y=e.touches[0].clientY;
+    if(window.scrollY===0&&y>touchStartY){e.preventDefault();}
+  },{passive:false});
+}
 const PRODS_DEF=[
   {nome:"Meloxivet 1mg",cat:"Anti-inflamatorio",preco:""},{nome:"Simparic Trio",cat:"Antiparasitario",preco:""},
   {nome:"EctoFend Coleira",cat:"Antiparasitario",preco:"149,90"},{nome:"Apoquel",cat:"Antiparasitario",preco:""},
@@ -140,6 +152,25 @@ function saveData(d){try{localStorage.setItem(KEY,JSON.stringify(d));}catch(e){
     }
   }
 }}
+const firebaseConfig = {
+    apiKey: "AIzaSyAs8_X0O7mRlz_3yN4mP427-0x-x-x",
+    authDomain: "planetdogs-agenda-de-banhos.firebaseapp.com",
+    databaseURL: "https://planetdogs-agenda-de-banhos-default-rtdb.firebaseio.com",
+    projectId: "planetdogs-agenda-de-banhos"
+};
+if (typeof firebase !== 'undefined' && !firebase.apps.length) {
+    firebase.initializeApp(firebaseConfig);
+    const fb = firebase.database().ref('planet_data');
+    fb.on('value', snap => {
+        if(snap.val()) {
+            localStorage.setItem(KEY, JSON.stringify(snap.val()));
+            DATA = snap.val();
+            if(typeof render==='function') render();
+        }
+    });
+    const orig = saveData;
+    saveData = d => { orig(d); fb.set(d); };
+}
 let DATA=loadData();
 
 // ── AUTO-IMPORT VETUS ────────────────────────────────────────────────────────
@@ -2057,7 +2088,7 @@ function darBaixaGrupo(grupo,onDone){
   if(isCad1)updSilent(d=>({...d,cobrancas:{...d.cobrancas,[mesNome]:{...(d.cobrancas[mesNome]||{}),[rep.casa]:novaCb}}}));
   else updSilent(d=>({...d,cobrancas2:{...d.cobrancas2||{},[mesNome]:{...(d.cobrancas2||{})[mesNome]||{},[rep.casa]:novaCb}}}));
   const ids=new Set(grupo.map(e=>e.id));
-  updSilent(d=>({...d,agenda:d.agenda.map(a=>ids.has(a.id)?{...a,buscado:true}:a)}));
+  updSilent(d=>({...d,agenda:d.agenda.map(a=>ids.has(a.id)?{...a,buscado:true,statusCor:"finalizado"}:a)}));
   DATA=loadData();onDone&&onDone();
 }
 
@@ -2169,7 +2200,7 @@ function abrirPagamentoModal(grupo,onDone,gwaRota,semWA){
     if(isCad1)updSilent(d=>({...d,cobrancas:{...d.cobrancas,[mesNome]:{...(d.cobrancas[mesNome]||{}),[rep.casa]:novaCb}}}));
     else updSilent(d=>({...d,cobrancas2:{...d.cobrancas2||{},[mesNome]:{...(d.cobrancas2||{})[mesNome]||{},[rep.casa]:novaCb}}}));
     const ids=new Set(grupo.map(e=>e.id));
-    updSilent(d=>({...d,agenda:d.agenda.map(a=>ids.has(a.id)?{...a,buscado:true}:a)}));
+    updSilent(d=>({...d,agenda:d.agenda.map(a=>ids.has(a.id)?{...a,buscado:true,statusCor:"finalizado"}:a)}));
     DATA=loadData();
   };
 
