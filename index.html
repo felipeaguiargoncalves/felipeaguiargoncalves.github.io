@@ -168,8 +168,9 @@ if (typeof firebase !== 'undefined' && !firebase.apps.length) {
     let fbSeeded=false;
     fb.on('value', snap => {
         if(snap.val()) {
-            localStorage.setItem(KEY, JSON.stringify(snap.val()));
-            DATA = snap.val();
+            const limpo=sanitizeData(snap.val());
+            localStorage.setItem(KEY, JSON.stringify(limpo));
+            DATA = limpo;
             if(typeof render==='function') render();
         } else if(!fbSeeded) {
             const local = loadData();
@@ -772,14 +773,74 @@ function renderHome(){
 
 
   [
-   [()=>abrirModalUnirCadastros(),"🔗","Unir C1 + C2 (por telefone)","linear-gradient(135deg,#9B59B6,#c084fc)"],
-   [()=>go("exportar"),"📋","Exportar Dados","linear-gradient(135deg,#1A1A2E,#2d2d4e)"],
-   [()=>go("restaurar"),"📂","Restaurar Backup","linear-gradient(135deg,#2DC653,#52e87b)"]
-  ].forEach(([fn,ico,lab,bg])=>{
-    extra.appendChild(btn({style:{width:"100%",padding:"15px",background:bg,color:"#fff",fontSize:14,borderRadius:16,display:"flex",alignItems:"center",justifyContent:"center",gap:10},onClick:fn},[h("span",{},ico)," "+lab]));
+   [()=>go("exportar"),"📋","Exportar Dados","linear-gradient(135deg,#1A1A2E,#2d2d4e)",""],
+   [()=>go("restaurar"),"📂","Restaurar Backup","linear-gradient(135deg,#2DC653,#52e87b)",""],
+   [()=>abrirModalZerarApp(),"🗑️","Zerar App (apagar tudo)","linear-gradient(135deg,#e53e3e,#ff8080)","btn-zerar-app"]
+  ].forEach(([fn,ico,lab,bg,bid])=>{
+    const bEl=btn({style:{width:"100%",padding:"15px",background:bg,color:"#fff",fontSize:14,borderRadius:16,display:"flex",alignItems:"center",justifyContent:"center",gap:10},onClick:fn},[h("span",{},ico)," "+lab]);
+    if(bid)bEl.id=bid;
+    extra.appendChild(bEl);
   });
   w.appendChild(extra);
   return w;
+}
+
+// ── ZERAR APP ──────────────────────────────────────────────────────────────────
+// Listener delegado no documento: sobrevive a re-renders (ex.: sync do Firebase
+// que recria a tela no meio do toque) e dispara direto no touchend.
+let _zerarLock=0;
+function _zerarTrigger(e){
+  const alvo=e.target&&e.target.closest?e.target.closest("#btn-zerar-app"):null;
+  if(!alvo)return;
+  const agora=Date.now();
+  if(agora-_zerarLock<600)return; // evita disparo duplo (touchend + click)
+  _zerarLock=agora;
+  e.preventDefault();
+  abrirModalZerarApp();
+}
+document.addEventListener("touchend",_zerarTrigger,{passive:false});
+document.addEventListener("click",_zerarTrigger);
+
+function abrirModalZerarApp(){
+  if(document.getElementById("modal-zerar"))return; // já aberto
+  const cont=div();
+  let mv=null;
+  let etapa=1;
+
+  function render1(){
+    cont.innerHTML="";
+    cont.appendChild(h("p",{style:{fontSize:14,color:"#1A1A2E",fontWeight:700,marginBottom:10,lineHeight:1.5}},"⚠️ Isso vai apagar TODOS os cadastros, cobranças, agenda, vendas, saídas e demais dados do app — como se fosse instalado pela primeira vez."));
+    cont.appendChild(h("p",{style:{fontSize:13,color:"#8B8FA8",marginBottom:20,lineHeight:1.5}},"Recomendamos fazer um backup (Exportar Dados) antes de continuar. Esta ação não pode ser desfeita."));
+    cont.appendChild(btn({style:{width:"100%",padding:"16px",background:"linear-gradient(135deg,#e53e3e,#ff8080)",color:"#fff",fontSize:15,borderRadius:14,fontWeight:800,marginBottom:10},onClick:()=>{etapa=2;render2();}},"🗑️ Zerar App e Apagar Tudo"));
+    cont.appendChild(btn({style:{width:"100%",padding:"14px",background:"#F5F5F7",color:"#1A1A2E",fontSize:14,borderRadius:14,fontWeight:700},onClick:()=>{if(mv)mv.remove();}},"Cancelar"));
+  }
+
+  function render2(){
+    cont.innerHTML="";
+    cont.appendChild(h("p",{style:{fontSize:14,color:"#e53e3e",fontWeight:800,marginBottom:10,lineHeight:1.5}},"Última confirmação: para apagar TODOS os dados, digite APAGAR abaixo."));
+    const txt=inp({className:"fi",placeholder:"Digite APAGAR",style:{marginBottom:14,textAlign:"center",fontWeight:800,border:"2px solid #e53e3e"}});
+    cont.appendChild(txt);
+    const confirmBtn=btn({style:{width:"100%",padding:"16px",background:"#ccc",color:"#fff",fontSize:15,borderRadius:14,fontWeight:800,marginBottom:10},onClick:()=>{
+      if(txt.value.trim().toUpperCase()!=="APAGAR")return;
+      DATA=emptyData();
+      saveData(DATA);
+      DATA=loadData();
+      if(mv)mv.remove();
+      go("home");
+    }},"🗑️ Confirmar e Apagar Tudo");
+    confirmBtn.disabled=true;
+    txt.addEventListener("input",()=>{
+      const ok=txt.value.trim().toUpperCase()==="APAGAR";
+      confirmBtn.disabled=!ok;
+      confirmBtn.style.background=ok?"linear-gradient(135deg,#e53e3e,#ff8080)":"#ccc";
+    });
+    cont.appendChild(confirmBtn);
+    cont.appendChild(btn({style:{width:"100%",padding:"14px",background:"#F5F5F7",color:"#1A1A2E",fontSize:14,borderRadius:14,fontWeight:700},onClick:()=>{etapa=1;render1();}},"Voltar"));
+  }
+
+  render1();
+  mv=openModal("Zerar App",cont,null,true);
+  mv.id="modal-zerar";
 }
 
 // ── MENU CADASTRO ─────────────────────────────────────────────────────────────
@@ -2435,8 +2496,7 @@ function abrirAgModal(dataInicial,onDone,getAllPets,gerente){
         }
         buildLista();
       }});
-      const ult=getUltimoValorPet(p.casa,p.pet);
-      inf.innerHTML=`<div style="display:flex;align-items:center;gap:8px"><span style="font-weight:800;color:${p.pet?"#1A1A2E":"#E8A000"};font-size:14px">${p.pet||"(sem pet)"}</span>${p.pet?(!gerente&&ult>0?`<span style="background:#e8fbed;color:#2DC653;border-radius:6px;padding:1px 7px;font-size:11px;font-weight:800">R$ ${ult.toFixed(2)}</span>`:""):`<span style="background:#FFFBEE;color:#E8A000;border-radius:6px;padding:1px 7px;font-size:10px;font-weight:800">Toque para cadastrar pet 🐾</span>`}</div><div style="font-size:11px;color:#8B8FA8">Casa ${p.casa} - ${p.morador}</div>${p.endereco?`<div style="font-size:10px;color:#FF6B9D">📍 ${p.endereco}</div>`:""}`;
+      inf.innerHTML=`<div style="display:flex;align-items:center;gap:8px"><span style="font-weight:800;color:${p.pet?"#1A1A2E":"#E8A000"};font-size:14px">${p.pet||"(sem pet)"}</span>${p.pet?"":`<span style="background:#FFFBEE;color:#E8A000;border-radius:6px;padding:1px 7px;font-size:10px;font-weight:800">Toque para cadastrar pet 🐾</span>`}</div><div style="font-size:11px;color:#8B8FA8">Casa ${p.casa} - ${p.morador}</div>${p.endereco?`<div style="font-size:10px;color:#FF6B9D">📍 ${p.endereco}</div>`:""}`;
       const togBtn=btn({style:{width:44,height:44,borderRadius:12,background:isSel?"#FF6B9D":"#fff",border:"2px solid "+(isSel?"#FF6B9D":"#FFE4EF"),color:isSel?"#fff":"#FF6B9D",fontSize:22,fontWeight:900,flexShrink:0,margin:"0 8px",display:"flex",alignItems:"center",justifyContent:"center"},onClick:()=>{
         if(!p.pet){
           const pref2=DATA.casas[p.casa]?"cad1":"cad2";
@@ -2478,9 +2538,8 @@ function abrirAgModal(dataInicial,onDone,getAllPets,gerente){
     const res=div({style:{background:"#FFF5F9",borderRadius:14,padding:"12px 14px",border:"1.5px solid #FF6B9D"}});
     res.appendChild(h("p",{style:{fontWeight:800,color:"#FF6B9D",fontSize:12,marginBottom:8,textTransform:"uppercase",letterSpacing:.6}},"Pets selecionados"));
     selecionados.forEach(p=>{
-      const ult=getUltimoValorPet(p.casa,p.pet);
       const row2=div({style:{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}});
-      row2.innerHTML=`<span style="font-weight:700;color:#1A1A2E;font-size:13px">🐶 ${p.pet||"(sem pet)"} <span style="color:#8B8FA8;font-weight:600;font-size:11px">Casa ${p.casa}</span></span>${(!gerente&&ult>0)?`<span style="font-weight:800;color:#2DC653;font-size:13px">R$ ${ult.toFixed(2)}</span>`:(!gerente?`<span style="font-size:11px;color:#8B8FA8">sem histórico</span>`:"")}`;
+      row2.innerHTML=`<span style="font-weight:700;color:#1A1A2E;font-size:13px">🐶 ${p.pet||"(sem pet)"} <span style="color:#8B8FA8;font-weight:600;font-size:11px">Casa ${p.casa}</span></span>`;
       res.appendChild(row2);
     });
     resumoDiv.appendChild(res);
@@ -4662,35 +4721,6 @@ function renderJogosTab(bolao){
 }
 
 render();
-</script><script>
-(function(){
-  var firebaseConfig = {
-    apiKey: "AIzaSyCXUsH1pg-yU62z99iOn93Y68H_qI9w_lU",
-    authDomain: "planetdogs-agenda-de-banhos.firebaseapp.com",
-    databaseURL: "https://planetdogs-agenda-de-banhos-default-rtdb.firebaseio.com",
-    projectId: "planetdogs-agenda-de-banhos"
-  };
-  if (typeof firebase === 'undefined') return;
-  firebase.initializeApp(firebaseConfig);
-  var fb = firebase.database().ref('planet_sync');
-  var applying = false;
-  var _set = localStorage.setItem.bind(localStorage);
-  localStorage.setItem = function(k, v){
-    _set(k, v);
-    if (!applying) fb.child(k.replace(/[.#$/\[\]]/g,'_')).set({k:k, v:v});
-  };
-  fb.on('value', function(snap){
-    var data = snap.val(); if (!data) return;
-    var mudou = false;
-    Object.keys(data).forEach(function(id){
-      var item = data[id];
-      if (localStorage.getItem(item.k) !== item.v){
-        applying = true; _set(item.k, item.v); applying = false; mudou = true;
-      }
-    });
-    if (mudou) location.reload();
-  });
-})();
 </script>
 </body>
 </html>
