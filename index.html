@@ -166,6 +166,18 @@ if (typeof firebase !== 'undefined' && !firebase.apps.length) {
     firebase.initializeApp(firebaseConfig);
     const fb = firebase.database().ref('planet_data');
     let fbSeeded=false;
+    function temDadosReais(p){
+        if(!p||typeof p!=='object')return false;
+        if(Array.isArray(p.agenda)&&p.agenda.length>0)return true;
+        if(Array.isArray(p.saidas)&&p.saidas.length>0)return true;
+        if(Array.isArray(p.vendas)&&p.vendas.length>0)return true;
+        if(p.casas&&Object.keys(p.casas).length>0)return true;
+        if(p.casas2&&Object.keys(p.casas2).length>0)return true;
+        if(p.cobrancas&&Object.keys(p.cobrancas).length>0)return true;
+        if(p.cobrancas2&&Object.keys(p.cobrancas2).length>0)return true;
+        if(p.enderecos&&Object.keys(p.enderecos).length>0)return true;
+        return false;
+    }
     fb.on('value', snap => {
         if(snap.val()) {
             const limpo=sanitizeData(snap.val());
@@ -174,7 +186,7 @@ if (typeof firebase !== 'undefined' && !firebase.apps.length) {
             if(typeof render==='function') render();
         } else if(!fbSeeded) {
             const local = loadData();
-            if(local) fb.set(local);
+            if(temDadosReais(local)) fb.set(local);
         }
         fbSeeded=true;
     });
