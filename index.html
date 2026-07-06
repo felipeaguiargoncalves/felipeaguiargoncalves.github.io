@@ -166,6 +166,7 @@ if (typeof firebase !== 'undefined' && !firebase.apps.length) {
     firebase.initializeApp(firebaseConfig);
     const fb = firebase.database().ref('planet_data');
     let fbSeeded=false;
+    let ultimoRemoto=null;
     function temDadosReais(p){
         if(!p||typeof p!=='object')return false;
         if(Array.isArray(p.agenda)&&p.agenda.length>0)return true;
@@ -181,17 +182,32 @@ if (typeof firebase !== 'undefined' && !firebase.apps.length) {
     fb.on('value', snap => {
         if(snap.val()) {
             const limpo=sanitizeData(snap.val());
+            ultimoRemoto=limpo;
             localStorage.setItem(KEY, JSON.stringify(limpo));
             DATA = limpo;
             if(typeof render==='function') render();
         } else if(!fbSeeded) {
             const local = loadData();
-            if(temDadosReais(local)) fb.set(local);
+            if(temDadosReais(local)){ultimoRemoto=local;fb.set(local);}
         }
         fbSeeded=true;
     });
     const orig = saveData;
-    saveData = d => { orig(d); fb.set(d); };
+    saveData = d => {
+        orig(d);
+        // Envia só as chaves de topo que realmente mudaram desde a última
+        // versão conhecida da nuvem, em vez de sobrescrever tudo — evita que
+        // um celular com dados desatualizados apague mudanças de outro.
+        const diff={};
+        Object.keys(d).forEach(k=>{
+            const antigo=ultimoRemoto?ultimoRemoto[k]:undefined;
+            if(JSON.stringify(d[k])!==JSON.stringify(antigo))diff[k]=d[k];
+        });
+        if(Object.keys(diff).length>0){
+            fb.update(diff);
+            ultimoRemoto={...(ultimoRemoto||{}),...diff};
+        }
+    };
 }
 let DATA=loadData();
 
@@ -242,6 +258,60 @@ let DATA=loadData();
 
 function updSilent(fn){DATA=fn(JSON.parse(JSON.stringify(DATA)));saveData(DATA);}
 function upd(fn){DATA=fn(JSON.parse(JSON.stringify(DATA)));saveData(DATA);render();}
+
+// ── VÍRGULA EM MASSA NOS NÚMEROS DO CADASTRO 1 ────────────────────────────────
+function adicionarVirgulaC1(){
+  upd(d=>{
+    const nd={...d};
+    const casasAntigas=nd.casas||{};
+    const novasCasas={};
+    const mapaRenome={};
+    Object.keys(casasAntigas).forEach(antigId=>{
+      let novoN=String(antigId);
+      if(!novoN.trim().endsWith(",")) novoN=novoN+",";
+      if(novoN!==antigId){
+        mapaRenome[antigId]=novoN;
+        novasCasas[novoN]={...casasAntigas[antigId],numero:novoN};
+      } else {
+        novasCasas[antigId]=casasAntigas[antigId];
+      }
+    });
+    nd.casas=novasCasas;
+    if(nd.modelos){
+      const nm={...nd.modelos};
+      Object.keys(mapaRenome).forEach(antigo=>{if(nm[antigo]!==undefined){nm[mapaRenome[antigo]]=nm[antigo];delete nm[antigo];}});
+      nd.modelos=nm;
+    }
+    if(nd.enderecos){
+      const ne={...nd.enderecos};
+      Object.keys(mapaRenome).forEach(antigo=>{if(ne[antigo]!==undefined){ne[mapaRenome[antigo]]=ne[antigo];delete ne[antigo];}});
+      nd.enderecos=ne;
+    }
+    if(nd.cobrancas){
+      const nc={...nd.cobrancas};
+      Object.keys(nc).forEach(mes=>{
+        const mesObj={...nc[mes]};
+        Object.keys(mapaRenome).forEach(antigo=>{if(mesObj[antigo]!==undefined){mesObj[mapaRenome[antigo]]=mesObj[antigo];delete mesObj[antigo];}});
+        nc[mes]=mesObj;
+      });
+      nd.cobrancas=nc;
+    }
+    if(nd.agenda){
+      nd.agenda=nd.agenda.map(a=>{
+        const chave=String(a.casa);
+        if(mapaRenome[chave]!==undefined) return {...a,casa:mapaRenome[chave]};
+        return a;
+      });
+    }
+    return nd;
+  });
+}
+function virgulaC1Click(){
+  const qtd=Object.keys(DATA.casas||{}).length;
+  if(!confirm("Isso vai adicionar uma vírgula no número de todas as "+qtd+" casas do Cadastro 1 (ex: 40 → 40,). Agenda, cobranças, modelos e endereços dessas casas serão migrados automaticamente. Deseja continuar?"))return;
+  adicionarVirgulaC1();
+  alert("✅ Vírgula adicionada aos números das casas do Cadastro 1!");
+}
 
 // ── DOM helpers ───────────────────────────────────────────────────────────────
 function h(tag,attrs,children){
@@ -787,6 +857,7 @@ function renderHome(){
   [
    [()=>go("exportar"),"📋","Exportar Dados","linear-gradient(135deg,#1A1A2E,#2d2d4e)",""],
    [()=>go("restaurar"),"📂","Restaurar Backup","linear-gradient(135deg,#2DC653,#52e87b)",""],
+   [()=>virgulaC1Click(),"💬","Adicionar vírgula (Casas C1)","linear-gradient(135deg,#4285F4,#6fa8ff)",""],
    [()=>abrirModalZerarApp(),"🗑️","Zerar App (apagar tudo)","linear-gradient(135deg,#e53e3e,#ff8080)","btn-zerar-app"]
   ].forEach(([fn,ico,lab,bg,bid])=>{
     const bEl=btn({style:{width:"100%",padding:"15px",background:bg,color:"#fff",fontSize:14,borderRadius:16,display:"flex",alignItems:"center",justifyContent:"center",gap:10},onClick:fn},[h("span",{},ico)," "+lab]);
