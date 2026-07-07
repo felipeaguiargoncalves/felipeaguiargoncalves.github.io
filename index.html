@@ -167,6 +167,7 @@ if (typeof firebase !== 'undefined' && !firebase.apps.length) {
     const fb = firebase.database().ref('planet_data');
     let fbSeeded=false;
     let ultimoRemoto=null;
+    let pendenteEnvio=null;
     function temDadosReais(p){
         if(!p||typeof p!=='object')return false;
         if(Array.isArray(p.agenda)&&p.agenda.length>0)return true;
@@ -178,6 +179,20 @@ if (typeof firebase !== 'undefined' && !firebase.apps.length) {
         if(p.cobrancas2&&Object.keys(p.cobrancas2).length>0)return true;
         if(p.enderecos&&Object.keys(p.enderecos).length>0)return true;
         return false;
+    }
+    function enviarDiff(d){
+        // Envia só as chaves de topo que realmente mudaram desde a última
+        // versão conhecida da nuvem, em vez de sobrescrever tudo — evita que
+        // um celular com dados desatualizados apague mudanças de outro.
+        const diff={};
+        Object.keys(d).forEach(k=>{
+            const antigo=ultimoRemoto?ultimoRemoto[k]:undefined;
+            if(JSON.stringify(d[k])!==JSON.stringify(antigo))diff[k]=d[k];
+        });
+        if(Object.keys(diff).length>0){
+            fb.update(diff);
+            ultimoRemoto={...(ultimoRemoto||{}),...diff};
+        }
     }
     fb.on('value', snap => {
         if(snap.val()) {
@@ -191,27 +206,33 @@ if (typeof firebase !== 'undefined' && !firebase.apps.length) {
             if(temDadosReais(local)){ultimoRemoto=local;fb.set(local);}
         }
         fbSeeded=true;
+        if(pendenteEnvio){
+            const d=pendenteEnvio;
+            pendenteEnvio=null;
+            enviarDiff(d);
+        }
     });
     const orig = saveData;
     saveData = d => {
         orig(d);
-        // Envia só as chaves de topo que realmente mudaram desde a última
-        // versão conhecida da nuvem, em vez de sobrescrever tudo — evita que
-        // um celular com dados desatualizados apague mudanças de outro.
-        const diff={};
-        Object.keys(d).forEach(k=>{
-            const antigo=ultimoRemoto?ultimoRemoto[k]:undefined;
-            if(JSON.stringify(d[k])!==JSON.stringify(antigo))diff[k]=d[k];
-        });
-        if(Object.keys(diff).length>0){
-            fb.update(diff);
-            ultimoRemoto={...(ultimoRemoto||{}),...diff};
+        if(!fbSeeded){
+            // Ainda não sabemos o estado real da nuvem — espera a primeira
+            // sincronização chegar antes de mandar qualquer coisa, para não
+            // arriscar sobrescrever dados que ainda não vimos.
+            pendenteEnvio=d;
+            return;
         }
+        enviarDiff(d);
     };
 }
 let DATA=loadData();
 
 // ── AUTO-IMPORT VETUS ────────────────────────────────────────────────────────
+// Desativado quando o Firebase está ativo: essa importação é de uma época em
+// que cada navegador guardava seus próprios dados isolados. Hoje os dados reais
+// vêm todos da nuvem, e rodar isso aqui salvaria dados locais desatualizados
+// (ou vazios, num navegador novo) por cima da nuvem antes da sincronização.
+if(!(typeof firebase!=='undefined' && firebase.apps && firebase.apps.length)){
 (function(){
   const VFLAG="pd_vetus_imported_v2";
   if(localStorage.getItem(VFLAG)) return; // já importado
@@ -254,6 +275,7 @@ let DATA=loadData();
     console.log("Vetus importado:",nc,"clientes novos,",np,"pets novos");
   }catch(e){ console.warn("Vetus import err:",e); }
 })();
+}
 // ─────────────────────────────────────────────────────────────────────────────
 
 function updSilent(fn){DATA=fn(JSON.parse(JSON.stringify(DATA)));saveData(DATA);}
@@ -829,27 +851,26 @@ function importarBanhosPDF(){
 // ── HOME ──────────────────────────────────────────────────────────────────────
 function renderHome(){
   const w=div({className:"screen"});
-  w.appendChild(div({style:{background:"linear-gradient(135deg,#FF6B9D,#FFD93D)",padding:"24px",textAlign:"center"}},[
-    div({style:{fontSize:48}},"🐕"),
-    h("h1",{style:{fontFamily:"'Fredoka One',sans-serif",fontSize:32,color:"#fff",letterSpacing:2,marginTop:4}},"PLANET DOGS"),
-    h("p",{style:{color:"rgba(255,255,255,.9)",fontWeight:600,marginTop:3}},"Gestao completa do pet shop"),
-  ]));
-  const grid=div({style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,padding:"18px 18px 10px"}});
-  [{k:"cad1",l:"Cadastro 1",i:"📁",c:"#FF6B9D"},{k:"cad2",l:"Cadastro 2",i:"📂",c:"#9B59B6"},
+  const grid=div({style:{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,padding:"12px 14px 6px"}});
+  [{k:"cad1",l:"Cad 1",i:"📁",c:"#FF6B9D"},{k:"cad2",l:"Cad 2",i:"📂",c:"#9B59B6"},
    {k:"agenda",l:"Agenda",i:"📅",c:"#E8A000"},{k:"saidas",l:"Saidas",i:"💸",c:"#E8A000"},
    {k:"vendas",l:"Vendas",i:"🛍",c:"#FF6B9D"},{k:"farmacia",l:"Farmacia",i:"💊",c:"#2DC653"},
    {k:"stats",l:"Relatorio",i:"📊",c:"#8B8FA8"},{k:"notas",l:"Notas",i:"📝",c:"#3B82F6"}
   ].forEach((it,i)=>{
-    const c=div({className:"card btn anim",style:{padding:"18px 12px",display:"flex",flexDirection:"column",alignItems:"center",gap:6,animationDelay:i*22+"ms",cursor:"pointer"},onClick:()=>go(it.k)});
-    c.innerHTML=`<span style="font-size:30px">${it.i}</span><span style="font-family:'Fredoka One',sans-serif;font-size:15px;color:${it.c}">${it.l}</span>`;
+    const c=div({className:"card btn anim",style:{padding:"8px 4px",display:"flex",flexDirection:"column",alignItems:"center",gap:3,animationDelay:i*18+"ms",cursor:"pointer",borderRadius:12},onClick:()=>go(it.k)});
+    c.innerHTML=`<span style="font-size:18px">${it.i}</span><span style="font-family:'Fredoka One',sans-serif;font-size:10px;color:${it.c};text-align:center">${it.l}</span>`;
     grid.appendChild(c);
   });
-  // Botão Bolão Copa largura total
-  const bolaoGridBtn=div({className:"card btn anim",style:{gridColumn:"1/-1",padding:"16px",display:"flex",alignItems:"center",gap:12,cursor:"pointer",background:"linear-gradient(135deg,#15803d,#16a34a,#22c55e)",border:"none",borderRadius:16,animationDelay:"200ms"},onClick:()=>go("bolao")});
-  bolaoGridBtn.innerHTML=`<span style="font-size:36px">⚽</span><div style="flex:1"><div style="font-family:'Fredoka One',sans-serif;font-size:20px;color:#fff;letter-spacing:.5px">Bolão Copa 2026</div><div style="font-size:11px;color:rgba(255,255,255,.85);font-weight:700;margin-top:2px">🇧🇷 Brasil no Grupo C · Palpite dos Tutores</div></div><span style="font-size:22px">🏆</span>`;
-  grid.appendChild(bolaoGridBtn);
   w.appendChild(grid);
-  const extra=div({style:{padding:"0 18px 28px",display:"flex",flexDirection:"column",gap:10}});
+  // Botão Bolão Copa, compacto, largura total
+  const bolaoGridBtn=div({className:"card btn anim",style:{margin:"0 14px 10px",padding:"10px 14px",display:"flex",alignItems:"center",gap:10,cursor:"pointer",background:"linear-gradient(135deg,#15803d,#16a34a,#22c55e)",border:"none",borderRadius:14},onClick:()=>go("bolao")});
+  bolaoGridBtn.innerHTML=`<span style="font-size:22px">⚽</span><div style="flex:1"><div style="font-family:'Fredoka One',sans-serif;font-size:14px;color:#fff;letter-spacing:.5px">Bolão Copa 2026</div><div style="font-size:10px;color:rgba(255,255,255,.85);font-weight:700;margin-top:1px">🇧🇷 Palpite dos Tutores</div></div><span style="font-size:16px">🏆</span>`;
+  w.appendChild(bolaoGridBtn);
+
+  // ── Agenda embutida na tela inicial ──────────────────────────────────────
+  w.appendChild(renderAgenda(false,true));
+
+  const extra=div({style:{padding:"10px 18px 28px",display:"flex",flexDirection:"column",gap:10,borderTop:"2px solid #FFE4EF",marginTop:6}});
   const agBtn=div({className:"btn",style:{width:"100%",padding:"18px",background:"linear-gradient(135deg,#9B59B6,#FF6B9D)",color:"#fff",fontSize:15,borderRadius:16,display:"flex",alignItems:"center",gap:12,cursor:"pointer"},onClick:()=>go("agenda_gerente")});
   agBtn.innerHTML='<span style="font-size:26px">✂️</span><div style="text-align:left"><div style="font-family:\'Fredoka One\',sans-serif;font-size:17px">Agenda — Banho e Tosa</div><div style="font-size:11px;opacity:.85">Tela da gerente</div></div>';
   extra.appendChild(agBtn);
@@ -1820,19 +1841,22 @@ function renderFin(titulo,casas,cobs,pref){
 }
 
 // ── AGENDA ────────────────────────────────────────────────────────────────────
-function renderAgenda(gerente){
-  const w=div({className:"screen"});
+function renderAgenda(gerente,embutido){
+  const w=div({className:embutido?"":"screen"});
   const gwa=DATA.gruposWA||{};
   const grpBtn=btn({style:{background:"rgba(255,255,255,.35)",color:"#1A1A2E",padding:"8px 12px",fontSize:12,borderRadius:10},onClick:()=>abrirGruposModal()},"📲 Grupos");
-  if(gerente)w.appendChild(mkHdr("Agenda — Banho e Tosa",null,grpBtn));
-  else w.appendChild(mkHdr("Agenda",()=>go("home"),grpBtn));
+  if(!embutido){
+    if(gerente)w.appendChild(mkHdr("Agenda — Banho e Tosa",null,grpBtn));
+    else w.appendChild(mkHdr("Agenda",()=>go("home"),grpBtn));
+  }
 
   let ano=new Date().getFullYear(),mes=new Date().getMonth();
   let diaSel=hoje();
   let filtroStatus="todos";
+  let calAberto=true;
 
   // ── Container principal (sem padding-bottom no wrapper, adicionamos abaixo)
-  const calWrap=div({style:{padding:"0 14px 120px"}});
+  const calWrap=div({style:{padding:embutido?"0 14px 10px":"0 14px 120px"}});
   w.appendChild(calWrap);
 
   // ── Seção calendário (cabeçalho fixo)
@@ -1847,12 +1871,17 @@ function renderAgenda(gerente){
     calSection.innerHTML="";
 
     // Navegação mês
-    const navRow=div({style:{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 4px 8px"}});
+    const navRow=div({style:{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 4px 4px"}});
     navRow.appendChild(btn({style:{background:"#FF6B9D",color:"#fff",padding:"8px 16px",borderRadius:12,fontSize:18},onClick:()=>{mes--;if(mes<0){mes=11;ano--;}buildCal();}},"‹"));
-    navRow.appendChild(h("span",{style:{fontFamily:"'Fredoka One',sans-serif",fontSize:20,color:"#1A1A2E"}},MESES[mes]+" "+ano));
+    const navCenter=div({style:{display:"flex",alignItems:"center",gap:8,cursor:"pointer"},onClick:()=>{calAberto=!calAberto;buildCal();}});
+    navCenter.appendChild(h("span",{style:{fontFamily:"'Fredoka One',sans-serif",fontSize:20,color:"#1A1A2E"}},MESES[mes]+" "+ano));
+    navCenter.appendChild(h("span",{style:{fontSize:14,color:"#FF6B9D"}},calAberto?"▲":"▼"));
+    navRow.appendChild(navCenter);
     navRow.appendChild(btn({style:{background:"#FF6B9D",color:"#fff",padding:"8px 16px",borderRadius:12,fontSize:18},onClick:()=>{mes++;if(mes>11){mes=0;ano++;}buildCal();}},"›"));
+
     calSection.appendChild(navRow);
 
+    if(calAberto){
     // Cabeçalho dias semana
     const wd=div({style:{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2,marginBottom:4}});
     DIAS_SEM.forEach(d=>{wd.appendChild(div({style:{textAlign:"center",fontSize:11,fontWeight:800,color:"#8B8FA8",padding:"4px 0"}},d));});
@@ -1874,6 +1903,7 @@ function renderAgenda(gerente){
         const dObj=new Date(ds+"T12:00:00");
         ano=dObj.getFullYear();mes=dObj.getMonth();
         buildCal();
+
         // Rola até a seção de eventos SEM recriar a tela
         setTimeout(()=>{evSection.scrollIntoView({behavior:"smooth",block:"start"});},80);
       }});
@@ -1882,6 +1912,7 @@ function renderAgenda(gerente){
       grid2.appendChild(c);
     }
     calSection.appendChild(grid2);
+    } // fim if(calAberto)
 
     // Botão Hoje
     calSection.appendChild(btn({style:{width:"100%",padding:"11px",background:"linear-gradient(135deg,#FF6B9D,#FFD93D)",color:"#fff",fontSize:13,borderRadius:12,marginBottom:4},onClick:()=>{
