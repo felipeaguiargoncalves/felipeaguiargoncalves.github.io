@@ -2042,26 +2042,28 @@ const ids=new Set(grupo.map(e=>e.id));const grupoAtual=(DATA.agenda||[]).filter(
     Object.entries(all).forEach(([num,casa])=>{
       const endObj=(DATA.enderecos||{})[num]||{};
       const endStr=endObj.rua?`${endObj.rua}, ${endObj.numero||""}, ${endObj.bairro||""}`:"";
+      const numCasaC1=endObj.numero||"";
+      const isCad1=!!DATA.casas[num];
       const vis=new Set();
       // 1) Pets dos atendimentos de cobrança (fonte original)
       [...Object.values(DATA.cobrancas||{}),...Object.values(DATA.cobrancas2||{})].forEach(cbM=>{
         const cb=cbM[num];if(!cb)return;
         (cb.atendimentos||[]).forEach(at=>(at.caes||[]).forEach(c=>{
-          if(c.nome&&!vis.has(c.nome)){vis.add(c.nome);const uid=num+"_"+c.nome;if(!visto.has(uid)){visto.add(uid);pets.push({pet:c.nome,casa:Number(num),morador:casa.morador||"",endereco:endStr,telefone:casa.telefone||"",});}}
+          if(c.nome&&!vis.has(c.nome)){vis.add(c.nome);const uid=num+"_"+c.nome;if(!visto.has(uid)){visto.add(uid);pets.push({pet:c.nome,casa:Number(num),morador:casa.morador||"",endereco:endStr,telefone:casa.telefone||"",numCasa:numCasaC1,isCad1:isCad1});}}
         }));
       });
       // 2) Pets do campo modelos (cadastrados via modal de pets)
       const modPets=DATA.modelos?.[num]||[];
       modPets.forEach(p=>{
-        if(p.nome&&!vis.has(p.nome)){vis.add(p.nome);const uid=num+"_"+p.nome;if(!visto.has(uid)){visto.add(uid);pets.push({pet:p.nome,casa:Number(num),morador:casa.morador||"",endereco:endStr,telefone:casa.telefone||"",});}}
+        if(p.nome&&!vis.has(p.nome)){vis.add(p.nome);const uid=num+"_"+p.nome;if(!visto.has(uid)){visto.add(uid);pets.push({pet:p.nome,casa:Number(num),morador:casa.morador||"",endereco:endStr,telefone:casa.telefone||"",numCasa:numCasaC1,isCad1:isCad1});}}
       });
       // 3) Pets do campo pets da casa (campo direto do cadastro)
       const casaPets=casa.pets||[];
       casaPets.forEach(p=>{
-        if(p.nome&&!vis.has(p.nome)){vis.add(p.nome);const uid=num+"_"+p.nome;if(!visto.has(uid)){visto.add(uid);pets.push({pet:p.nome,casa:Number(num),morador:casa.morador||"",endereco:endStr,telefone:casa.telefone||"",});}}
+        if(p.nome&&!vis.has(p.nome)){vis.add(p.nome);const uid=num+"_"+p.nome;if(!visto.has(uid)){visto.add(uid);pets.push({pet:p.nome,casa:Number(num),morador:casa.morador||"",endereco:endStr,telefone:casa.telefone||"",numCasa:numCasaC1,isCad1:isCad1});}}
       });
       // 4) Se ainda não tem nenhum pet, exibe tutor para cadastrar
-      if(vis.size===0){const uid=num+"_";if(!visto.has(uid)){visto.add(uid);pets.push({pet:"",casa:Number(num),morador:casa.morador||"",endereco:endStr,telefone:casa.telefone||"",});}}
+      if(vis.size===0){const uid=num+"_";if(!visto.has(uid)){visto.add(uid);pets.push({pet:"",casa:Number(num),morador:casa.morador||"",endereco:endStr,telefone:casa.telefone||"",numCasa:numCasaC1,isCad1:isCad1});}}
     });
     return pets;
   }
@@ -2529,6 +2531,7 @@ function abrirAgModal(dataInicial,onDone,getAllPets,gerente){
   const cont=div();
   const dI=inp({className:"fi",type:"date",value:dataInicial,style:{marginBottom:12}});
   const buscaNum=inp({className:"fi",placeholder:"Ex: 608, 1029...",style:{marginBottom:8,border:"2px solid #4285F4"}});
+  const buscaCasaC1=inp({className:"fi",placeholder:"Ex: 120, 45A...",style:{marginBottom:8,border:"2px solid #4285F4"}});
   const buscaCao=inp({className:"fi",placeholder:"Cao...",style:{marginBottom:0,border:"2px solid #FF6B9D"}});
   const buscaTutor=inp({className:"fi",placeholder:"Tutor / telefone...",style:{marginBottom:0,border:"2px solid #FF6B9D"}});
   const buscaEnd=inp({className:"fi",placeholder:"Rua, bairro...",style:{marginBottom:8,border:"2px solid #2DC653"}});
@@ -2536,12 +2539,14 @@ function abrirAgModal(dataInicial,onDone,getAllPets,gerente){
   const selInfo=div({style:{fontSize:12,fontWeight:700,color:"#FF6B9D",marginBottom:8,minHeight:18}});
   function filtrarPets(){
     const qNum=buscaNum.value.toLowerCase().trim();
+    const qCasaC1=buscaCasaC1.value.toLowerCase().trim();
     const qCao=buscaCao.value.toLowerCase().trim();
     const qTutor=buscaTutor.value.toLowerCase().trim();
     const qTutorDig=qTutor.replace(/\D/g,"");
     const qEnd=buscaEnd.value.toLowerCase().trim();
     return pets.filter(p=>{
       if(qNum&&!String(p.casa).includes(qNum))return false;
+      if(qCasaC1&&!(p.isCad1&&String(p.numCasa).toLowerCase().includes(qCasaC1)))return false;
       if(qCao&&!p.pet.toLowerCase().includes(qCao))return false;
       if(qTutor){
         const tutorOk=p.morador.toLowerCase().includes(qTutor);
@@ -2664,7 +2669,7 @@ function abrirAgModal(dataInicial,onDone,getAllPets,gerente){
     selIdxs=[];casaSelecionada=null;
     buildLista();
   };
-  buscaNum.addEventListener("input",onInput);buscaCao.addEventListener("input",onInput);buscaTutor.addEventListener("input",onInput);buscaEnd.addEventListener("input",onInput);
+  buscaNum.addEventListener("input",onInput);buscaCasaC1.addEventListener("input",onInput);buscaCao.addEventListener("input",onInput);buscaTutor.addEventListener("input",onInput);buscaEnd.addEventListener("input",onInput);
   const selTodos=btn({style:{padding:"7px 12px",background:"#FF6B9D",color:"#fff",borderRadius:10,fontSize:12,fontWeight:800,marginBottom:8},onClick:()=>{
     // "Todos" só funciona se já há tutor selecionado (adiciona todos os pets desse tutor)
     // ou sem seleção, não faz sentido selecionar todos de tutores diferentes
@@ -2763,8 +2768,17 @@ function abrirAgModal(dataInicial,onDone,getAllPets,gerente){
   const divider=div({style:{borderTop:"2px dashed #FFE4EF",marginBottom:12}});
   cont.appendChild(divider);
 
+  const buscaColEsq=div({style:{flex:1}});
+  buscaColEsq.appendChild(h("span",{style:{fontWeight:700,color:"#4285F4",fontSize:10,textTransform:"uppercase",letterSpacing:.8,display:"block",marginBottom:4}},"ID Vetus"));
+  buscaColEsq.appendChild(buscaNum);
+  const buscaColDir=div({style:{flex:1}});
+  buscaColDir.appendChild(h("span",{style:{fontWeight:700,color:"#4285F4",fontSize:10,textTransform:"uppercase",letterSpacing:.8,display:"block",marginBottom:4}},"Nº casa (C1)"));
+  buscaColDir.appendChild(buscaCasaC1);
+  const buscaDoisCol=div({style:{display:"flex",gap:8}});
+  buscaDoisCol.appendChild(buscaColEsq);buscaDoisCol.appendChild(buscaColDir);
+
   [lbl("Data"),dI,
-   h("span",{style:{fontWeight:700,color:"#4285F4",fontSize:10,textTransform:"uppercase",letterSpacing:.8,display:"block",marginBottom:4}},"Buscar por numero da casa"),buscaNum,
+   buscaDoisCol,
    buscaDupla,
    h("span",{style:{fontWeight:700,color:"#2DC653",fontSize:10,textTransform:"uppercase",letterSpacing:.8,display:"block",marginBottom:4}},"Buscar por rua / endereco"),buscaEnd,
    selRow,selInfo,listaDiv,
