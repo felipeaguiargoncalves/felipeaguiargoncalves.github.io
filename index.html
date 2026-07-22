@@ -2038,33 +2038,37 @@ const ids=new Set(grupo.map(e=>e.id));const grupoAtual=(DATA.agenda||[]).filter(
   }
 
   function getAllPets(){
-    const all={...DATA.casas,...DATA.casas2||{}};const pets=[];const visto=new Set();
-    Object.entries(all).forEach(([num,casa])=>{
-      const endObj=(DATA.enderecos||{})[num]||{};
-      const endStr=endObj.rua?`${endObj.rua}, ${endObj.numero||""}, ${endObj.bairro||""}`:"";
-      const numCasaC1=endObj.numero||"";
-      const isCad1=!!DATA.casas[num];
-      const vis=new Set();
-      // 1) Pets dos atendimentos de cobrança (fonte original)
-      [...Object.values(DATA.cobrancas||{}),...Object.values(DATA.cobrancas2||{})].forEach(cbM=>{
-        const cb=cbM[num];if(!cb)return;
-        (cb.atendimentos||[]).forEach(at=>(at.caes||[]).forEach(c=>{
-          if(c.nome&&!vis.has(c.nome)){vis.add(c.nome);const uid=num+"_"+c.nome;if(!visto.has(uid)){visto.add(uid);pets.push({pet:c.nome,casa:Number(num),morador:casa.morador||"",endereco:endStr,telefone:casa.telefone||"",numCasa:numCasaC1,isCad1:isCad1});}}
-        }));
+    const pets=[];const visto=new Set();
+    function processarCadastro(casasObj,cobrancasObj,isCad1){
+      Object.entries(casasObj||{}).forEach(([num,casa])=>{
+        const endObj=(DATA.enderecos||{})[num]||{};
+        const endStr=endObj.rua?`${endObj.rua}, ${endObj.numero||""}, ${endObj.bairro||""}`:"";
+        const numCasaC1=endObj.numero||"";
+        const vis=new Set();
+        const pref=(isCad1?"c1_":"c2_")+num+"_";
+        // 1) Pets dos atendimentos de cobrança (só do cadastro correspondente)
+        Object.values(cobrancasObj||{}).forEach(cbM=>{
+          const cb=cbM[num];if(!cb)return;
+          (cb.atendimentos||[]).forEach(at=>(at.caes||[]).forEach(c=>{
+            if(c.nome&&!vis.has(c.nome)){vis.add(c.nome);const uid=pref+c.nome;if(!visto.has(uid)){visto.add(uid);pets.push({pet:c.nome,casa:Number(num),morador:casa.morador||"",endereco:endStr,telefone:casa.telefone||"",numCasa:numCasaC1,isCad1:isCad1});}}
+          }));
+        });
+        // 2) Pets do campo modelos (cadastrados via modal de pets)
+        const modPets=DATA.modelos?.[num]||[];
+        modPets.forEach(p=>{
+          if(p.nome&&!vis.has(p.nome)){vis.add(p.nome);const uid=pref+p.nome;if(!visto.has(uid)){visto.add(uid);pets.push({pet:p.nome,casa:Number(num),morador:casa.morador||"",endereco:endStr,telefone:casa.telefone||"",numCasa:numCasaC1,isCad1:isCad1});}}
+        });
+        // 3) Pets do campo pets da casa (campo direto do cadastro)
+        const casaPets=casa.pets||[];
+        casaPets.forEach(p=>{
+          if(p.nome&&!vis.has(p.nome)){vis.add(p.nome);const uid=pref+p.nome;if(!visto.has(uid)){visto.add(uid);pets.push({pet:p.nome,casa:Number(num),morador:casa.morador||"",endereco:endStr,telefone:casa.telefone||"",numCasa:numCasaC1,isCad1:isCad1});}}
+        });
+        // 4) Se ainda não tem nenhum pet, exibe tutor para cadastrar
+        if(vis.size===0){const uid=pref+"__vazio__";if(!visto.has(uid)){visto.add(uid);pets.push({pet:"",casa:Number(num),morador:casa.morador||"",endereco:endStr,telefone:casa.telefone||"",numCasa:numCasaC1,isCad1:isCad1});}}
       });
-      // 2) Pets do campo modelos (cadastrados via modal de pets)
-      const modPets=DATA.modelos?.[num]||[];
-      modPets.forEach(p=>{
-        if(p.nome&&!vis.has(p.nome)){vis.add(p.nome);const uid=num+"_"+p.nome;if(!visto.has(uid)){visto.add(uid);pets.push({pet:p.nome,casa:Number(num),morador:casa.morador||"",endereco:endStr,telefone:casa.telefone||"",numCasa:numCasaC1,isCad1:isCad1});}}
-      });
-      // 3) Pets do campo pets da casa (campo direto do cadastro)
-      const casaPets=casa.pets||[];
-      casaPets.forEach(p=>{
-        if(p.nome&&!vis.has(p.nome)){vis.add(p.nome);const uid=num+"_"+p.nome;if(!visto.has(uid)){visto.add(uid);pets.push({pet:p.nome,casa:Number(num),morador:casa.morador||"",endereco:endStr,telefone:casa.telefone||"",numCasa:numCasaC1,isCad1:isCad1});}}
-      });
-      // 4) Se ainda não tem nenhum pet, exibe tutor para cadastrar
-      if(vis.size===0){const uid=num+"_";if(!visto.has(uid)){visto.add(uid);pets.push({pet:"",casa:Number(num),morador:casa.morador||"",endereco:endStr,telefone:casa.telefone||"",numCasa:numCasaC1,isCad1:isCad1});}}
-    });
+    }
+    processarCadastro(DATA.casas,DATA.cobrancas,true);
+    processarCadastro(DATA.casas2,DATA.cobrancas2,false);
     return pets;
   }
 
