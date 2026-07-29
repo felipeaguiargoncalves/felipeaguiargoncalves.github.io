@@ -30,8 +30,6 @@ input,select,textarea{font-family:'Nunito',sans-serif;font-size:14px;}
 @keyframes up{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);}}
 .anim{animation:up .2s ease both;}
 </style>
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 </head>
 <body>
 <div class="topbar" id="topbar"></div>
@@ -42,7 +40,7 @@ const DIAS_SEM=["Dom","Seg","Ter","Qua","Qui","Sex","Sab"];
 const DIAS_FULL=["Domingo","Segunda","Terca","Quarta","Quinta","Sexta","Sabado"];
 const SERVICOS=["Banho","Tosa","Banho + Tosa","Vacina","Consulta","Outro"];
 const FUNCS=[{n:"Jaqueline",c:"Banho e Tosa"},{n:"Patricia",c:"Banho e Tosa"},{n:"Kleber",c:"Banho e Tosa"},{n:"Julia",c:"Recepcao"},{n:"Vera",c:"Recepcao"},{n:"Felipe",c:"Motorista"}];
-const REPS=[{l:"7 dias",d:7},{l:"10 dias",d:10},{l:"14 dias",d:14},{l:"21 dias",d:21},{l:"28 dias",d:28}];
+const REPS=[{l:"7 dias",d:7},{l:"10 dias",d:10},{l:"15 dias",d:15},{l:"4 semanas",d:28}];
 const STATUS_CORES={pendente:{bg:"#FFFBEE",faixa:"#FFD93D",label:"Pendente",emoji:"🟡"},servico:{bg:"#EFF6FF",faixa:"#3B82F6",label:"Em Servico",emoji:"🔵"},finalizado:{bg:"#f0fff4",faixa:"#2DC653",label:"Finalizado",emoji:"🟢"}};
 
 // ── SAÍDAS: categorias com subcategorias específicas ──────────────────────────
@@ -73,16 +71,6 @@ const CAT_SAIDAS=[
 const KEY="pd_v8";
 // ── MODO GERENTE ──────────────────────────────────────────────────────────────
 const IS_GERENTE=new URLSearchParams(location.search).has("gerente");
-if(IS_GERENTE){
-  document.documentElement.style.overscrollBehaviorY="contain";
-  document.body.style.overscrollBehaviorY="contain";
-  let touchStartY=0;
-  document.addEventListener("touchstart",e=>{touchStartY=e.touches[0].clientY;},{passive:true});
-  document.addEventListener("touchmove",e=>{
-    const y=e.touches[0].clientY;
-    if(window.scrollY===0&&y>touchStartY){e.preventDefault();}
-  },{passive:false});
-}
 const PRODS_DEF=[
   {nome:"Meloxivet 1mg",cat:"Anti-inflamatorio",preco:""},{nome:"Simparic Trio",cat:"Antiparasitario",preco:""},
   {nome:"EctoFend Coleira",cat:"Antiparasitario",preco:"149,90"},{nome:"Apoquel",cat:"Antiparasitario",preco:""},
@@ -99,46 +87,8 @@ function loadData(){
     if(!p.lab)p.lab={maquina:"",insumos:[],exames:[],valorExame:"60"};
     if(!p.gruposWA)p.gruposWA={0:"",1:"",2:"",3:"",4:"",5:"",6:""};if(!p.gruposWAPag)p.gruposWAPag={0:"",1:"",2:"",3:"",4:"",5:"",6:""};
     if(!p.casas2)p.casas2={};if(!p.cobrancas2)p.cobrancas2={};
-    return sanitizeData(p);}}catch(e){}
+    return p;}}catch(e){}
   return emptyData();
-}
-// Garante que todo backup tenha a estrutura certa (evita travas tipo "forEach of undefined")
-function sanitizeData(p){
-  if(!p||typeof p!=="object")return emptyData();
-  // Campos que DEVEM ser array
-  ["agenda","saidas","vendas"].forEach(k=>{if(!Array.isArray(p[k]))p[k]=[];});
-  // Campos que DEVEM ser objeto
-  ["casas","casas2","cobrancas","cobrancas2","modelos","enderecos","gruposWA","gruposWAPag"].forEach(k=>{
-    if(!p[k]||typeof p[k]!=="object"||Array.isArray(p[k]))p[k]={};
-  });
-  // produtos precisa ser array
-  if(!Array.isArray(p.produtos))p.produtos=JSON.parse(JSON.stringify(PRODS_DEF));
-  // lab e subcampos
-  if(!p.lab||typeof p.lab!=="object")p.lab={maquina:"",insumos:[],exames:[],valorExame:"60"};
-  if(!Array.isArray(p.lab.insumos))p.lab.insumos=[];
-  if(!Array.isArray(p.lab.exames))p.lab.exames=[];
-  // modelos: cada chave deve ser array
-  Object.keys(p.modelos).forEach(k=>{if(!Array.isArray(p.modelos[k]))p.modelos[k]=[];});
-  // casas/casas2: cada casa.pets deve ser array
-  [p.casas,p.casas2].forEach(grp=>{
-    Object.values(grp).forEach(c=>{if(c&&typeof c==="object"&&!Array.isArray(c.pets))c.pets=Array.isArray(c.pets)?c.pets:[];});
-  });
-  // cobrancas/cobrancas2: cada casa precisa de atendimentos (array), e cada atendimento de caes (array)
-  [p.cobrancas,p.cobrancas2].forEach(cobr=>{
-    Object.values(cobr).forEach(mes=>{
-      if(!mes||typeof mes!=="object")return;
-      Object.values(mes).forEach(casa=>{
-        if(!casa||typeof casa!=="object")return;
-        if(!Array.isArray(casa.atendimentos))casa.atendimentos=[];
-        casa.atendimentos.forEach(at=>{if(at&&typeof at==="object"&&!Array.isArray(at.caes))at.caes=[];});
-      });
-    });
-  });
-  // bolão
-  if(!p.bolao||typeof p.bolao!=="object")p.bolao={palpites:{},placar:{}};
-  if(!p.bolao.palpites||typeof p.bolao.palpites!=="object")p.bolao.palpites={};
-  if(!p.bolao.placar||typeof p.bolao.placar!=="object")p.bolao.placar={};
-  return p;
 }
 function saveData(d){try{localStorage.setItem(KEY,JSON.stringify(d));}catch(e){
   if(e.name==="QuotaExceededError"||e.code===22){
@@ -152,87 +102,9 @@ function saveData(d){try{localStorage.setItem(KEY,JSON.stringify(d));}catch(e){
     }
   }
 }}
-const firebaseConfig = {
-    apiKey: "AIzaSyCXUsH1pg-yU62z99iOn93Y68H_qI9w_lU",
-    authDomain: "planetdogs-agenda-de-banhos.firebaseapp.com",
-    databaseURL: "https://planetdogs-agenda-de-banhos-default-rtdb.firebaseio.com",
-    projectId: "planetdogs-agenda-de-banhos",
-    storageBucket: "planetdogs-agenda-de-banhos.appspot.com",
-    messagingSenderId: "998733899433",
-    appId: "1:998733899433:web:e6f8d9032408c51daeebb8",
-    measurementId: "G-B6S4D8S7K1"
-};
-if (typeof firebase !== 'undefined' && !firebase.apps.length) {
-    firebase.initializeApp(firebaseConfig);
-    const fb = firebase.database().ref('planet_data');
-    let fbSeeded=false;
-    let ultimoRemoto=null;
-    let pendenteEnvio=null;
-    function temDadosReais(p){
-        if(!p||typeof p!=='object')return false;
-        if(Array.isArray(p.agenda)&&p.agenda.length>0)return true;
-        if(Array.isArray(p.saidas)&&p.saidas.length>0)return true;
-        if(Array.isArray(p.vendas)&&p.vendas.length>0)return true;
-        if(p.casas&&Object.keys(p.casas).length>0)return true;
-        if(p.casas2&&Object.keys(p.casas2).length>0)return true;
-        if(p.cobrancas&&Object.keys(p.cobrancas).length>0)return true;
-        if(p.cobrancas2&&Object.keys(p.cobrancas2).length>0)return true;
-        if(p.enderecos&&Object.keys(p.enderecos).length>0)return true;
-        return false;
-    }
-    function enviarDiff(d){
-        // Envia só as chaves de topo que realmente mudaram desde a última
-        // versão conhecida da nuvem, em vez de sobrescrever tudo — evita que
-        // um celular com dados desatualizados apague mudanças de outro.
-        const diff={};
-        Object.keys(d).forEach(k=>{
-            const antigo=ultimoRemoto?ultimoRemoto[k]:undefined;
-            if(JSON.stringify(d[k])!==JSON.stringify(antigo))diff[k]=d[k];
-        });
-        if(Object.keys(diff).length>0){
-            fb.update(diff);
-            ultimoRemoto={...(ultimoRemoto||{}),...diff};
-        }
-    }
-    fb.on('value', snap => {
-        if(snap.val()) {
-            const limpo=sanitizeData(snap.val());
-            ultimoRemoto=limpo;
-            localStorage.setItem(KEY, JSON.stringify(limpo));
-            DATA = limpo;
-            if(typeof render==='function') render();
-        } else if(!fbSeeded) {
-            const local = loadData();
-            if(temDadosReais(local)){ultimoRemoto=local;fb.set(local);}
-        }
-        fbSeeded=true;
-        if(pendenteEnvio){
-            const d=pendenteEnvio;
-            pendenteEnvio=null;
-            enviarDiff(d);
-        }
-    });
-    const orig = saveData;
-    saveData = d => {
-        orig(d);
-        if(!fbSeeded){
-            // Ainda não sabemos o estado real da nuvem — espera a primeira
-            // sincronização chegar antes de mandar qualquer coisa, para não
-            // arriscar sobrescrever dados que ainda não vimos.
-            pendenteEnvio=d;
-            return;
-        }
-        enviarDiff(d);
-    };
-}
 let DATA=loadData();
 
 // ── AUTO-IMPORT VETUS ────────────────────────────────────────────────────────
-// Desativado quando o Firebase está ativo: essa importação é de uma época em
-// que cada navegador guardava seus próprios dados isolados. Hoje os dados reais
-// vêm todos da nuvem, e rodar isso aqui salvaria dados locais desatualizados
-// (ou vazios, num navegador novo) por cima da nuvem antes da sincronização.
-if(!(typeof firebase!=='undefined' && firebase.apps && firebase.apps.length)){
 (function(){
   const VFLAG="pd_vetus_imported_v2";
   if(localStorage.getItem(VFLAG)) return; // já importado
@@ -275,66 +147,10 @@ if(!(typeof firebase!=='undefined' && firebase.apps && firebase.apps.length)){
     console.log("Vetus importado:",nc,"clientes novos,",np,"pets novos");
   }catch(e){ console.warn("Vetus import err:",e); }
 })();
-}
 // ─────────────────────────────────────────────────────────────────────────────
 
 function updSilent(fn){DATA=fn(JSON.parse(JSON.stringify(DATA)));saveData(DATA);}
 function upd(fn){DATA=fn(JSON.parse(JSON.stringify(DATA)));saveData(DATA);render();}
-
-// ── VÍRGULA EM MASSA NOS NÚMEROS DO CADASTRO 1 ────────────────────────────────
-function removerVirgulaC1(){
-  upd(d=>{
-    const nd={...d};
-    const casasAntigas=nd.casas||{};
-    const novasCasas={};
-    const mapaRenome={};
-    Object.keys(casasAntigas).forEach(antigId=>{
-      let novoN=String(antigId).trim();
-      while(novoN.endsWith(",")) novoN=novoN.slice(0,-1);
-      novoN=novoN.trim();
-      if(novoN!==antigId){
-        mapaRenome[antigId]=novoN;
-        novasCasas[novoN]={...casasAntigas[antigId],numero:novoN};
-      } else {
-        novasCasas[antigId]=casasAntigas[antigId];
-      }
-    });
-    nd.casas=novasCasas;
-    if(nd.modelos){
-      const nm={...nd.modelos};
-      Object.keys(mapaRenome).forEach(antigo=>{if(nm[antigo]!==undefined){nm[mapaRenome[antigo]]=nm[antigo];delete nm[antigo];}});
-      nd.modelos=nm;
-    }
-    if(nd.enderecos){
-      const ne={...nd.enderecos};
-      Object.keys(mapaRenome).forEach(antigo=>{if(ne[antigo]!==undefined){ne[mapaRenome[antigo]]=ne[antigo];delete ne[antigo];}});
-      nd.enderecos=ne;
-    }
-    if(nd.cobrancas){
-      const nc={...nd.cobrancas};
-      Object.keys(nc).forEach(mes=>{
-        const mesObj={...nc[mes]};
-        Object.keys(mapaRenome).forEach(antigo=>{if(mesObj[antigo]!==undefined){mesObj[mapaRenome[antigo]]=mesObj[antigo];delete mesObj[antigo];}});
-        nc[mes]=mesObj;
-      });
-      nd.cobrancas=nc;
-    }
-    if(nd.agenda){
-      nd.agenda=nd.agenda.map(a=>{
-        const chave=String(a.casa);
-        if(mapaRenome[chave]!==undefined) return {...a,casa:mapaRenome[chave]};
-        return a;
-      });
-    }
-    return nd;
-  });
-}
-function virgulaC1Click(){
-  const qtd=Object.keys(DATA.casas||{}).length;
-  if(!confirm("Isso vai REMOVER a vírgula do número de todas as "+qtd+" casas do Cadastro 1, restaurando o número original (ex: 40, → 40). Agenda, cobranças, modelos e endereços dessas casas serão migrados de volta automaticamente. Deseja continuar?"))return;
-  removerVirgulaC1();
-  alert("✅ Vírgula removida! Números das casas do Cadastro 1 restaurados.");
-}
 
 // ── DOM helpers ───────────────────────────────────────────────────────────────
 function h(tag,attrs,children){
@@ -390,13 +206,6 @@ let NAV={s:IS_GERENTE?"agenda_gerente":"home"};
 function go(s,extra){
   // Gerente só pode ir para agenda_gerente
   if(IS_GERENTE&&s!=="agenda_gerente")return;
-  if(s==="agenda_gerente"){
-    if(!new URLSearchParams(location.search).has("gerente")){
-      history.replaceState(null,"",location.pathname+"?gerente");
-    }
-  }else if(!IS_GERENTE&&new URLSearchParams(location.search).has("gerente")){
-    history.replaceState(null,"",location.pathname);
-  }
   NAV={s,...(extra||{})};render();
 }
 
@@ -430,7 +239,7 @@ function render(){
   const screens={
     home:renderHome,
     agenda:()=>renderAgenda(false),agenda_gerente:()=>renderAgenda(true),
-    saidas:renderSaidas,vendas:renderVendas,farmacia:renderFarmacia,bolao:renderBolao,
+    saidas:renderSaidas,vendas:renderVendas,farmacia:renderFarmacia,
     stats:renderStats,exportar:renderExportar,restaurar:renderRestaurar,notas:renderNotas,mesclar:renderMesclar,
     cad1:()=>renderMenuCad("Cadastro 1","cad1"),cad2:()=>renderMenuCad("Cadastro 2","cad2"),
     cad1_casa:()=>renderCadCasa("Cadastro 1","cad1"),cad2_casa:()=>renderCadCasa("Cadastro 2","cad2"),
@@ -445,22 +254,6 @@ function render(){
 
 // ── UTILS ─────────────────────────────────────────────────────────────────────
 const hoje=()=>new Date().toISOString().slice(0,10);
-function copiarTexto(txt,btn){
-  // Tenta clipboard API primeiro, fallback para execCommand
-  const ok=()=>{const t=btn.textContent;btn.textContent="✅ Copiado!";setTimeout(()=>btn.textContent=t,2000);};
-  try{
-    if(navigator.clipboard&&navigator.clipboard.writeText){
-      navigator.clipboard.writeText(txt).then(ok).catch(()=>copiarFallback(txt,btn,ok));
-    } else {copiarFallback(txt,btn,ok);}
-  }catch(e){copiarFallback(txt,btn,ok);}
-}
-function copiarFallback(txt,btn,ok){
-  const ta=document.createElement("textarea");
-  ta.value=txt;ta.style.cssText="position:fixed;top:0;left:0;opacity:0;font-size:16px";
-  document.body.appendChild(ta);ta.focus();ta.select();
-  try{document.execCommand("copy");ok();}catch(e){alert("Não foi possível copiar. Selecione e copie manualmente:\n\n"+txt);}
-  document.body.removeChild(ta);
-}
 const fmtD=d=>{if(!d)return"--";const[y,m,dd]=d.split("-");return dd+"/"+m+"/"+y;};
 const addD=(ds,n)=>{const d=new Date(ds+"T12:00:00");d.setDate(d.getDate()+n);return d.toISOString().slice(0,10);};
 const mapsUrl=e=>"https://www.google.com/maps/search/?api=1&query="+encodeURIComponent(e+", Porto Alegre RS");
@@ -565,222 +358,6 @@ function lancarBanhosBuscadosCad2(){
   mv=openModal("Lançar Banhos → Cad.2",cont,()=>{},true);
 }
 
-// ── UTILITÁRIOS DE ENDEREÇO ───────────────────────────────────────────────────
-// Mapa de ruas → bairros conhecidos na região da Planet Dogs
-const RUAS_BAIRROS={
-  "juca batista":"Chapéu do Sol","chapéu do sol":"Chapéu do Sol","chapeu do sol":"Chapéu do Sol",
-  "terra ville":"Terra Ville","terra vil":"Terra Ville",
-  "do lami":"Lami","otaviano josé pinto":"Lami","otaviano jose pinto":"Lami","estrada do varejão":"Lami","estrada do varejao":"Lami","estrada canta galo":"Lami","canta galo":"Lami",
-  "francisca de oliveira vieira":"Belém Novo","eustáquio inácio da silveira":"Belém Novo","eustaquio inacio da silveira":"Belém Novo","heitor vieira":"Belém Novo","beira rio":"Belém Novo","florêncio farias":"Belém Novo","florencio farias":"Belém Novo","raul bopp":"Belém Novo","olávio jose de souza":"Belém Novo","olavio jose de sousa":"Belém Novo","olavio jose":"Belém Novo","rua e":"Belém Novo","sérgio martini da silva":"Belém Novo","sergio martini":"Belém Novo","lauro motta duarte":"Belém Novo","beco do motta":"Belém Novo","idalino pereira":"Belém Novo","ernani behs":"Belém Novo","clai jesus silva":"Belém Novo","beco clai":"Belém Novo","beco pedro rodrigues":"Belém Novo","frei passifico":"Belém Novo","joão pestana":"Belém Novo","joao pestana":"Belém Novo","irineu francisco":"Belém Novo","david dutra soares":"Belém Novo","beco dos passarinhos":"Belém Novo","beco do sabino":"Chapéu do Sol","paulo fontoura gastal":"Chapéu do Sol",
-  "gedeon leite":"Hípica","fernando jorge schneider":"Hípica","zuzu angel":"Hípica","padre ayrton":"Hípica","corticeira":"Hípica","rua pau-brasil":"Hípica","pau-brasil":"Hípica","mercedez azoline":"Ponta Grossa","mercedes azoline":"Ponta Grossa","reinaldo muller":"Ponta Grossa","pedro aniceto de souza":"Hípica","túnel verde":"Ponta Grossa","tunel verde":"Ponta Grossa","retiro da ponta grossa":"Ponta Grossa","estrada da pedreira":"Ponta Grossa","ponta grossa":"Ponta Grossa","principal da ponta grossa":"Ponta Grossa",
-  "do cerro":"Lageado","jacques da rosa":"Lageado","roque gonzales":"Lageado","do jesuíno":"Lageado","do jesuino":"Lageado","edgar pires de castro":"Lageado","jofer":"Ponta Grossa","beco joão paulo coelho":"Lageado","joao paulo coelho":"Lageado","oscar ferreira duarte":"Lageado","hilário cristo":"Aberta dos Morros","hilario cristo":"Aberta dos Morros","celestino bertolucci":"Aberta dos Morros","carlos wilson schröder":"Aberta dos Morros","carlos wilson schroder":"Aberta dos Morros","antonio spolidoro":"Aberta dos Morros","do pacheco":"Lageado",
-  "do rincão":"Belém Velho","watanabe":"Belém Velho","berlim-lomba":"Lomba do Pinheiro","berlim lomba":"Lomba do Pinheiro","lomba do pinheiro":"Lomba do Pinheiro","arroio do meio":"Planalto",
-  "itambé":"Lami","itambe":"Lami","gaspar siveira martins":"Itapuã","gaspar silveira martins":"Itapuã","rua dos pescadores":"Itapuã","berlim":"Itapuã","julio de castilhos":"Itapuã","beco roma":"Itapuã","estrada gravata":"Itapuã","bento gonalves":"Itapuã","bento gonçalves":"Itapuã",
-  "jardim floresta":"Lami","costa gama":"Restinga","estrada chácara do banco":"Restinga","chacara do banco":"Restinga","barro vermelho":"Restinga","acesso h":"Restinga","estrada costa gama":"Restinga","luiz tagliassuchi":"Ponta Grossa","luiz corrêa da silva":"Extrema","luiz correa da silva":"Extrema","estrada extrema":"Extrema","rua a":"Extrema","estrada da extrema":"Extrema",
-  "doutor marques pereira":"Aberta dos Morros","doutor pereira neto":"Tristeza","guilherme schell":"Santo Antônio","santo antonio":"Santo Antônio",
-  "arlindo polesi":"Lami","mauro vieira":"Lami","marina barcelos":"Lami","marino barcelos":"Lami","jose inacio":"Belém Novo","josé inácio":"Belém Novo","nossa senhora navegante":"Lami","av. juca":"Chapéu do Sol",
-  "avenida da cavalhada":"Cavalhada","da prudência":"Cavalhada","da prudencia":"Cavalhada",
-  "barão do amazonas":"Partenon","partenon":"Partenon","barão":"Partenon",
-  "rua miguel ascoleze":"Vila Nova","luiz tagliassuchi":"Ponta Grossa","ventos do sul":"Vila Nova","joselma":"Lomba do Pinheiro","rua berlim":"Lomba do Pinheiro",
-  "capivari":"Cristal","coronel massot":"Cristal","atílio supertti":"Vila Nova","atilio supertti":"Vila Nova","josé alves de castro":"Vila Nova","jose alves de castro":"Vila Nova","pedro raimundo":"Chapéu do Sol",
-  "avenida edgar pires de castro":"Lageado","edigar pires":"Lageado","edgar pires":"Lageado",
-  "estrada jacques":"Lageado","rua oito mil":"Lageado",
-  "beco do jesuino":"Belém Novo","beco jesuino":"Belém Novo",
-  "maximos meotte":"Viamão","maximos":"Viamão","viamão":"Viamão","viamao":"Viamão",
-  "itapua":"Itapuã","lageado costa do cerro":"Lageado",
-};
-
-function detectarBairro(rua){
-  if(!rua)return"";
-  const r=rua.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
-  for(const [chave,bairro] of Object.entries(RUAS_BAIRROS)){
-    const c=chave.normalize("NFD").replace(/[\u0300-\u036f]/g,"");
-    if(r.includes(c))return bairro;
-  }
-  return"";
-}
-
-function abrirModalDedupAgenda(){
-  const agenda=DATA.agenda||[];
-  if(agenda.length===0){alert("Nenhum agendamento na agenda.");return;}
-
-  // Detecta duplicatas: mesmo pet + mesmo casa + mesmo dia → mantém só o primeiro (menor id ou ordem)
-  const vistos=new Set();
-  const manter=[];const remover=[];
-  // Ordena por data e depois por id para garantir que o mais antigo seja o primeiro
-  const sorted=[...agenda].sort((a,b)=>{
-    if((a.data||"")!==(b.data||""))return (a.data||"").localeCompare(b.data||"");
-    return String(a.id||0).localeCompare(String(b.id||0));
-  });
-  sorted.forEach(ev=>{
-    const chave=(ev.data||"")+"_"+(ev.casa||"")+"_"+(ev.pet||"").toLowerCase().trim();
-    if(vistos.has(chave)){remover.push(ev);}
-    else{vistos.add(chave);manter.push(ev);}
-  });
-
-  const cont=div();
-
-  if(remover.length===0){
-    const ok=div({style:{background:"#e8fbed",border:"2px solid #2DC653",borderRadius:14,padding:"20px",textAlign:"center"}});
-    ok.innerHTML='<div style="font-size:40px;margin-bottom:8px">✅</div><div style="font-weight:800;font-size:15px;color:#2DC653">Nenhum duplicado encontrado!</div><div style="font-size:12px;color:#6b7280;margin-top:6px">Todos os agendamentos são únicos por pet/dia.</div>';
-    cont.appendChild(ok);
-    openModal("🧹 Remover Duplicados",cont,()=>{},true);
-    return;
-  }
-
-  // Resumo
-  const info=div({style:{background:"#fff7ed",border:"2px solid #f59e0b",borderRadius:12,padding:"14px",marginBottom:14,fontSize:13,lineHeight:1.8}});
-  info.innerHTML=`<b style="color:#d97706">⚠️ ${remover.length} agendamento(s) duplicado(s)</b> encontrados<br><span style="color:#6b7280;font-size:11px">Serão removidos, mantendo apenas o 1º por pet/dia</span>`;
-  cont.appendChild(info);
-
-  // Preview da lista de duplicatas
-  const prev=div({style:{maxHeight:220,overflowY:"auto",border:"1px solid #f0f0f0",borderRadius:10,marginBottom:14,padding:"6px"}});
-  remover.forEach(ev=>{
-    const casaObj=(DATA.casas||{})[ev.casa]||(DATA.casas2||{})[ev.casa]||{};
-    const tutor=(casaObj.morador||ev.morador||"Casa "+ev.casa).split(" ")[0];
-    const r=div({style:{display:"flex",gap:8,alignItems:"center",padding:"6px 10px",borderBottom:"1px solid #f8f8f8",fontSize:12}});
-    r.innerHTML=`<span style="color:#e53e3e;font-weight:900;font-size:16px">✕</span><span style="color:#8B8FA8;min-width:64px">${ev.data?ev.data.split("-").reverse().join("/"):"—"}</span><span style="font-weight:700;flex:1">${ev.pet||"?"}</span><span style="color:#8B8FA8">${tutor}</span>`;
-    prev.appendChild(r);
-  });
-  cont.appendChild(prev);
-
-  let mv=null;
-  cont.appendChild(btn({style:{width:"100%",padding:"16px",background:"linear-gradient(135deg,#dc2626,#ef4444)",color:"#fff",fontSize:15,fontWeight:800,borderRadius:14,marginBottom:10},onClick:()=>{
-    const idsRemover=new Set(remover.map(ev=>ev.id));
-    updSilent(d=>({...d,agenda:(d.agenda||[]).filter(ev=>!idsRemover.has(ev.id))}));
-    DATA=loadData();
-    if(mv)mv.remove();
-    alert("✅ "+remover.length+" duplicado(s) removido(s)!\nAgenda limpa.");
-    render();
-  }},"🗑 Remover "+remover.length+" duplicado(s)"));
-  cont.appendChild(btn({style:{width:"100%",padding:"13px",background:"#f5f5f5",color:"#666",borderRadius:12},onClick:()=>{if(mv)mv.remove();}},"Cancelar"));
-  mv=openModal("🧹 Remover Duplicados da Agenda",cont,()=>{},true);
-}
-
-function abrirModalUtilitariosEndereco(){
-  const cont=div();
-  const resultDiv=div();
-
-  // ── Ação 1: Detectar bairro C2 pela rua ──────────────────────────────────
-  const sec1=div({style:{background:"#EFF6FF",border:"2px solid #3B82F6",borderRadius:14,padding:"14px",marginBottom:14}});
-  sec1.appendChild(h("div",{style:{fontWeight:800,color:"#3B82F6",fontSize:14,marginBottom:4}},"📍 1. Corrigir bairros do Cad.2"));
-  sec1.appendChild(h("div",{style:{fontSize:12,color:"#6b7280",marginBottom:10}},"Olha o endereço (rua) de quem está sem bairro e detecta automaticamente"));
-  sec1.appendChild(btn({style:{width:"100%",padding:"13px",background:"linear-gradient(135deg,#3B82F6,#60a5fa)",color:"#fff",fontSize:13,fontWeight:800,borderRadius:12},onClick:()=>{
-    const casas2=DATA.casas2||{};
-    const enderecos=DATA.enderecos||{};
-    let corrigidos=0,semDados=0;
-    const log=[];
-    updSilent(d=>{
-      const nd={...d};nd.enderecos={...(nd.enderecos||{})};nd.casas2={...(nd.casas2||{})};
-      Object.keys(nd.casas2).forEach(cid=>{
-        const casa=nd.casas2[cid]||{};
-        const end=nd.enderecos[cid]||{};
-        const bairroAtual=end.bairro||(casa.bairro||"");
-        if(bairroAtual&&bairroAtual.trim()&&bairroAtual.toLowerCase()!=="outro")return;// já tem
-        // Tenta detectar pela rua do endereço
-        const rua=(end.rua||casa.endereco||"").trim();
-        const bairroDetectado=detectarBairro(rua);
-        if(bairroDetectado){
-          nd.enderecos[cid]={...end,bairro:bairroDetectado};
-          nd.casas2[cid]={...casa};
-          corrigidos++;
-          log.push({nome:casa.morador||"?",rua,bairro:bairroDetectado});
-        } else if(rua){
-          semDados++;
-        }
-      });
-      return nd;
-    });
-    DATA=loadData();
-    resultDiv.innerHTML="";
-    const info=div({style:{background:"#e8fbed",border:"2px solid #2DC653",borderRadius:10,padding:"12px 14px",marginBottom:10,fontSize:13,fontWeight:700}});
-    info.innerHTML='✅ <b>'+corrigidos+' bairros corrigidos</b>'+(semDados?' · '+semDados+' ruas não reconhecidas':"")+'.';
-    resultDiv.appendChild(info);
-    if(log.length>0){
-      const lista=div({style:{maxHeight:180,overflowY:"auto",border:"1px solid #e5e7eb",borderRadius:10,padding:"6px"}});
-      log.slice(0,50).forEach(l=>{
-        const r=div({style:{fontSize:11,padding:"4px 8px",borderBottom:"1px solid #f5f5f5",display:"flex",gap:8}});
-        r.innerHTML='<span style="color:#3B82F6;font-weight:700;flex:1">'+l.nome+'</span><span style="color:#8B8FA8;font-size:10px">'+l.rua.slice(0,30)+'</span><span style="color:#15803d;font-weight:800;min-width:80px;text-align:right">→ '+l.bairro+'</span>';
-        lista.appendChild(r);
-      });
-      resultDiv.appendChild(lista);
-    }
-  }},"🔍 Detectar e Corrigir Bairros C2"));
-  cont.appendChild(sec1);
-
-  // ── Ação 2: TODOS do C1 → bairro Terra Ville + rua "Avenida Juca Batista" ─
-  const sec2=div({style:{background:"#fff7ed",border:"2px solid #f59e0b",borderRadius:14,padding:"14px",marginBottom:14}});
-  sec2.appendChild(h("div",{style:{fontWeight:800,color:"#d97706",fontSize:14,marginBottom:4}},"🏘️ 2. Todos do Cad.1 → Terra Ville"));
-  sec2.appendChild(h("div",{style:{fontSize:12,color:"#6b7280",marginBottom:10}},"Define bairro = Terra Ville e rua = Avenida Juca Batista para TODOS do Cad.1, mantendo o número da casa"));
-  sec2.appendChild(btn({style:{width:"100%",padding:"13px",background:"linear-gradient(135deg,#f59e0b,#fbbf24)",color:"#fff",fontSize:13,fontWeight:800,borderRadius:12},onClick:()=>{
-    if(!confirm("Isso vai mudar o bairro e a rua de TODOS os clientes do Cad.1 para Terra Ville / Av. Juca Batista.\n\nContinuar?"))return;
-    let corrigidos=0;const log2=[];
-    updSilent(d=>{
-      const nd={...d};nd.enderecos={...(nd.enderecos||{})};nd.casas={...(nd.casas||{})};
-      Object.keys(nd.casas).forEach(cid=>{
-        const casa=nd.casas[cid]||{};
-        const end=nd.enderecos[cid]||{};
-        // Mantém o número da casa, troca rua e bairro
-        const numCasa=end.numero||"";
-        nd.enderecos[cid]={...end,rua:"Avenida Juca Batista",numero:numCasa,bairro:"Terra Ville"};
-        corrigidos++;
-        log2.push({nome:casa.morador||"?",num:numCasa});
-      });
-      return nd;
-    });
-    DATA=loadData();
-    resultDiv.innerHTML="";
-    const info2=div({style:{background:"#fff7ed",border:"2px solid #f59e0b",borderRadius:10,padding:"12px 14px",marginBottom:10,fontSize:13,fontWeight:700}});
-    info2.innerHTML='✅ <b>'+corrigidos+' clientes</b> do Cad.1 → Av. Juca Batista, Terra Ville.';
-    resultDiv.appendChild(info2);
-    if(log2.length>0){
-      const lista2=div({style:{maxHeight:200,overflowY:"auto",border:"1px solid #e5e7eb",borderRadius:10,padding:"6px"}});
-      log2.forEach(l=>{
-        const r=div({style:{fontSize:11,padding:"4px 8px",borderBottom:"1px solid #f5f5f5",display:"flex",gap:8}});
-        r.innerHTML='<span style="color:#d97706;font-weight:700;flex:1">'+l.nome+'</span><span style="color:#8B8FA8">nº '+( l.num||"—")+'</span><span style="font-weight:800;color:#15803d">→ Av. Juca Batista, Terra Ville</span>';
-        lista2.appendChild(r);
-      });
-      resultDiv.appendChild(lista2);
-    }
-  }},"🏘️ Aplicar Terra Ville em TODOS do Cad.1"));
-  cont.appendChild(sec2);
-
-  // ── Ação 3: Listar todos C1 com endereço de Terra Ville ──────────────────
-  const sec3=div({style:{background:"#f0fdf4",border:"2px solid #16a34a",borderRadius:14,padding:"14px",marginBottom:14}});
-  sec3.appendChild(h("div",{style:{fontWeight:800,color:"#15803d",fontSize:14,marginBottom:4}},"📋 3. Ver todos do C1 em Terra Ville"));
-  sec3.appendChild(h("div",{style:{fontSize:12,color:"#6b7280",marginBottom:10}},"Lista de clientes do Cad.1 que têm Juca Batista / Terra Ville no endereço"));
-  sec3.appendChild(btn({style:{width:"100%",padding:"13px",background:"linear-gradient(135deg,#15803d,#22c55e)",color:"#fff",fontSize:13,fontWeight:800,borderRadius:12},onClick:()=>{
-    const casas=DATA.casas||{};
-    const enderecos=DATA.enderecos||{};
-    const PALAVRAS_TV=["terra ville","juca batista","chapéu do sol","chapeu do sol"];
-    const encontrados=[];
-    Object.entries(casas).forEach(([cid,casa])=>{
-      const end=enderecos[cid]||{};
-      const bairroEnd=(end.bairro||"").toLowerCase();
-      const ruaEnd=(end.rua||casa.endereco||"").toLowerCase();
-      const isTV=PALAVRAS_TV.some(p=>ruaEnd.includes(p)||bairroEnd.includes(p));
-      if(isTV)encontrados.push({cid,nome:casa.morador||"?",tel:casa.telefone||"",rua:end.rua||casa.endereco||"",bairro:end.bairro||""});
-    });
-    resultDiv.innerHTML="";
-    const info3=div({style:{background:"#dcfce7",border:"2px solid #16a34a",borderRadius:10,padding:"12px 14px",marginBottom:10,fontSize:13,fontWeight:700}});
-    info3.innerHTML='📍 <b>'+encontrados.length+' clientes</b> do Cad.1 na área de Terra Ville / Chapéu do Sol';
-    resultDiv.appendChild(info3);
-    if(encontrados.length){
-      const lista3=div({style:{maxHeight:260,overflowY:"auto",border:"1px solid #e5e7eb",borderRadius:10,padding:"6px"}});
-      encontrados.sort((a,b)=>a.nome.localeCompare(b.nome)).forEach(l=>{
-        const r=div({style:{fontSize:12,padding:"8px 10px",borderBottom:"1px solid #f5f5f5"}});
-        r.innerHTML='<b style="color:#15803d">'+l.nome+'</b> <span style="color:#8B8FA8;font-size:10px">ID '+l.cid+'</span><br><span style="color:#6b7280;font-size:10px">'+l.rua+(l.bairro?' · '+l.bairro:'')+'</span>'+(l.tel?'<span style="color:#3B82F6;font-size:10px;margin-left:6px">'+l.tel+'</span>':"");
-        lista3.appendChild(r);
-      });
-      resultDiv.appendChild(lista3);
-    }
-  }},"📋 Listar Terra Ville no Cad.1"));
-  cont.appendChild(sec3);
-
-  cont.appendChild(resultDiv);
-  openModal("📍 Utilitários de Endereço",cont,()=>{});
-}
-
 // ── IMPORTAR BANHOS DO PDF (TEMPORÁRIO) ──────────────────────────────────────
 function importarBanhosPDF(){
   const BANHOS_PDF=[
@@ -851,101 +428,42 @@ function importarBanhosPDF(){
 // ── HOME ──────────────────────────────────────────────────────────────────────
 function renderHome(){
   const w=div({className:"screen"});
-  const grid=div({style:{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,padding:"12px 14px 6px"}});
-  [{k:"cad1",l:"Cad 1",i:"📁",c:"#FF6B9D"},{k:"cad2",l:"Cad 2",i:"📂",c:"#9B59B6"},
+  w.appendChild(div({style:{background:"linear-gradient(135deg,#FF6B9D,#FFD93D)",padding:"24px",textAlign:"center"}},[
+    div({style:{fontSize:48}},"🐕"),
+    h("h1",{style:{fontFamily:"'Fredoka One',sans-serif",fontSize:32,color:"#fff",letterSpacing:2,marginTop:4}},"PLANET DOGS"),
+    h("p",{style:{color:"rgba(255,255,255,.9)",fontWeight:600,marginTop:3}},"Gestao completa do pet shop"),
+  ]));
+  const grid=div({style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,padding:"18px 18px 10px"}});
+  [{k:"cad1",l:"Cadastro 1",i:"📁",c:"#FF6B9D"},{k:"cad2",l:"Cadastro 2",i:"📂",c:"#9B59B6"},
    {k:"agenda",l:"Agenda",i:"📅",c:"#E8A000"},{k:"saidas",l:"Saidas",i:"💸",c:"#E8A000"},
    {k:"vendas",l:"Vendas",i:"🛍",c:"#FF6B9D"},{k:"farmacia",l:"Farmacia",i:"💊",c:"#2DC653"},
    {k:"stats",l:"Relatorio",i:"📊",c:"#8B8FA8"},{k:"notas",l:"Notas",i:"📝",c:"#3B82F6"}
   ].forEach((it,i)=>{
-    const c=div({className:"card btn anim",style:{padding:"8px 4px",display:"flex",flexDirection:"column",alignItems:"center",gap:3,animationDelay:i*18+"ms",cursor:"pointer",borderRadius:12},onClick:()=>go(it.k)});
-    c.innerHTML=`<span style="font-size:18px">${it.i}</span><span style="font-family:'Fredoka One',sans-serif;font-size:10px;color:${it.c};text-align:center">${it.l}</span>`;
+    const c=div({className:"card btn anim",style:{padding:"18px 12px",display:"flex",flexDirection:"column",alignItems:"center",gap:6,animationDelay:i*22+"ms",cursor:"pointer"},onClick:()=>go(it.k)});
+    c.innerHTML=`<span style="font-size:30px">${it.i}</span><span style="font-family:'Fredoka One',sans-serif;font-size:15px;color:${it.c}">${it.l}</span>`;
     grid.appendChild(c);
   });
   w.appendChild(grid);
-  // Botão Bolão Copa, compacto, largura total
-  const bolaoGridBtn=div({className:"card btn anim",style:{margin:"0 14px 10px",padding:"10px 14px",display:"flex",alignItems:"center",gap:10,cursor:"pointer",background:"linear-gradient(135deg,#15803d,#16a34a,#22c55e)",border:"none",borderRadius:14},onClick:()=>go("bolao")});
-  bolaoGridBtn.innerHTML=`<span style="font-size:22px">⚽</span><div style="flex:1"><div style="font-family:'Fredoka One',sans-serif;font-size:14px;color:#fff;letter-spacing:.5px">Bolão Copa 2026</div><div style="font-size:10px;color:rgba(255,255,255,.85);font-weight:700;margin-top:1px">🇧🇷 Palpite dos Tutores</div></div><span style="font-size:16px">🏆</span>`;
-  w.appendChild(bolaoGridBtn);
-
-  // ── Agenda embutida na tela inicial ──────────────────────────────────────
-  w.appendChild(renderAgenda(false,true));
-
-  const extra=div({style:{padding:"10px 18px 28px",display:"flex",flexDirection:"column",gap:10,borderTop:"2px solid #FFE4EF",marginTop:6}});
+  const extra=div({style:{padding:"0 18px 28px",display:"flex",flexDirection:"column",gap:10}});
   const agBtn=div({className:"btn",style:{width:"100%",padding:"18px",background:"linear-gradient(135deg,#9B59B6,#FF6B9D)",color:"#fff",fontSize:15,borderRadius:16,display:"flex",alignItems:"center",gap:12,cursor:"pointer"},onClick:()=>go("agenda_gerente")});
   agBtn.innerHTML='<span style="font-size:26px">✂️</span><div style="text-align:left"><div style="font-family:\'Fredoka One\',sans-serif;font-size:17px">Agenda — Banho e Tosa</div><div style="font-size:11px;opacity:.85">Tela da gerente</div></div>';
   extra.appendChild(agBtn);
+  const lbBtn=div({className:"btn",style:{width:"100%",padding:"18px",background:"linear-gradient(135deg,#3B82F6,#60a5fa)",color:"#fff",fontSize:15,borderRadius:16,display:"flex",alignItems:"center",gap:12,cursor:"pointer"},onClick:()=>lancarBanhosBuscadosCad2()});
+  lbBtn.innerHTML='<span style="font-size:26px">💳</span><div style="text-align:left"><div style="font-family:\'Fredoka One\',sans-serif;font-size:17px">Lançar Banhos → Cad.2</div><div style="font-size:11px;opacity:.85">Agenda buscada (Maio/Junho) nas cobranças</div></div>';
+  extra.appendChild(lbBtn);
 
-
-  [
-   [()=>go("exportar"),"📋","Exportar Dados","linear-gradient(135deg,#1A1A2E,#2d2d4e)",""],
-   [()=>go("restaurar"),"📂","Restaurar Backup","linear-gradient(135deg,#2DC653,#52e87b)",""],
-   [()=>virgulaC1Click(),"↩️","Desfazer vírgula (Casas C1)","linear-gradient(135deg,#4285F4,#6fa8ff)",""],
-   [()=>abrirModalZerarApp(),"🗑️","Zerar App (apagar tudo)","linear-gradient(135deg,#e53e3e,#ff8080)","btn-zerar-app"]
-  ].forEach(([fn,ico,lab,bg,bid])=>{
-    const bEl=btn({style:{width:"100%",padding:"15px",background:bg,color:"#fff",fontSize:14,borderRadius:16,display:"flex",alignItems:"center",justifyContent:"center",gap:10},onClick:fn},[h("span",{},ico)," "+lab]);
-    if(bid)bEl.id=bid;
-    extra.appendChild(bEl);
+  // ── BOTÃO TEMPORÁRIO — IMPORTAR BANHOS DO PDF ─────────────────────────────
+  const importBtn=div({className:"btn",style:{width:"100%",padding:"18px",background:"linear-gradient(135deg,#e53e3e,#ff6b6b)",color:"#fff",fontSize:15,borderRadius:16,display:"flex",alignItems:"center",gap:12,cursor:"pointer"},onClick:()=>importarBanhosPDF()});
+  importBtn.innerHTML='<span style="font-size:26px">📋</span><div style="text-align:left"><div style="font-family:\'Fredoka One\',sans-serif;font-size:17px">⚡ Importar Banhos Faltando</div><div style="font-size:11px;opacity:.85">29 banhos Maio/Junho — aperta e vai!</div></div>';
+  extra.appendChild(importBtn);
+  [   [()=>go("mesclar"),"🔀","Mesclar Duplicados","linear-gradient(135deg,#E8A000,#FFD93D)"],
+   [()=>go("exportar"),"📋","Exportar Dados","linear-gradient(135deg,#1A1A2E,#2d2d4e)"],
+   [()=>go("restaurar"),"📂","Restaurar Backup","linear-gradient(135deg,#2DC653,#52e87b)"]
+  ].forEach(([fn,ico,lab,bg])=>{
+    extra.appendChild(btn({style:{width:"100%",padding:"15px",background:bg,color:"#fff",fontSize:14,borderRadius:16,display:"flex",alignItems:"center",justifyContent:"center",gap:10},onClick:fn},[h("span",{},ico)," "+lab]));
   });
   w.appendChild(extra);
   return w;
-}
-
-// ── ZERAR APP ──────────────────────────────────────────────────────────────────
-// Listener delegado no documento: sobrevive a re-renders (ex.: sync do Firebase
-// que recria a tela no meio do toque) e dispara direto no touchend.
-let _zerarLock=0;
-function _zerarTrigger(e){
-  const alvo=e.target&&e.target.closest?e.target.closest("#btn-zerar-app"):null;
-  if(!alvo)return;
-  const agora=Date.now();
-  if(agora-_zerarLock<600)return; // evita disparo duplo (touchend + click)
-  _zerarLock=agora;
-  e.preventDefault();
-  abrirModalZerarApp();
-}
-document.addEventListener("touchend",_zerarTrigger,{passive:false});
-document.addEventListener("click",_zerarTrigger);
-
-function abrirModalZerarApp(){
-  if(document.getElementById("modal-zerar"))return; // já aberto
-  const cont=div();
-  let mv=null;
-  let etapa=1;
-
-  function render1(){
-    cont.innerHTML="";
-    cont.appendChild(h("p",{style:{fontSize:14,color:"#1A1A2E",fontWeight:700,marginBottom:10,lineHeight:1.5}},"⚠️ Isso vai apagar TODOS os cadastros, cobranças, agenda, vendas, saídas e demais dados do app — como se fosse instalado pela primeira vez."));
-    cont.appendChild(h("p",{style:{fontSize:13,color:"#8B8FA8",marginBottom:20,lineHeight:1.5}},"Recomendamos fazer um backup (Exportar Dados) antes de continuar. Esta ação não pode ser desfeita."));
-    cont.appendChild(btn({style:{width:"100%",padding:"16px",background:"linear-gradient(135deg,#e53e3e,#ff8080)",color:"#fff",fontSize:15,borderRadius:14,fontWeight:800,marginBottom:10},onClick:()=>{etapa=2;render2();}},"🗑️ Zerar App e Apagar Tudo"));
-    cont.appendChild(btn({style:{width:"100%",padding:"14px",background:"#F5F5F7",color:"#1A1A2E",fontSize:14,borderRadius:14,fontWeight:700},onClick:()=>{if(mv)mv.remove();}},"Cancelar"));
-  }
-
-  function render2(){
-    cont.innerHTML="";
-    cont.appendChild(h("p",{style:{fontSize:14,color:"#e53e3e",fontWeight:800,marginBottom:10,lineHeight:1.5}},"Última confirmação: para apagar TODOS os dados, digite APAGAR abaixo."));
-    const txt=inp({className:"fi",placeholder:"Digite APAGAR",style:{marginBottom:14,textAlign:"center",fontWeight:800,border:"2px solid #e53e3e"}});
-    cont.appendChild(txt);
-    const confirmBtn=btn({style:{width:"100%",padding:"16px",background:"#ccc",color:"#fff",fontSize:15,borderRadius:14,fontWeight:800,marginBottom:10},onClick:()=>{
-      if(txt.value.trim().toUpperCase()!=="APAGAR")return;
-      DATA=emptyData();
-      saveData(DATA);
-      DATA=loadData();
-      if(mv)mv.remove();
-      go("home");
-    }},"🗑️ Confirmar e Apagar Tudo");
-    confirmBtn.disabled=true;
-    txt.addEventListener("input",()=>{
-      const ok=txt.value.trim().toUpperCase()==="APAGAR";
-      confirmBtn.disabled=!ok;
-      confirmBtn.style.background=ok?"linear-gradient(135deg,#e53e3e,#ff8080)":"#ccc";
-    });
-    cont.appendChild(confirmBtn);
-    cont.appendChild(btn({style:{width:"100%",padding:"14px",background:"#F5F5F7",color:"#1A1A2E",fontSize:14,borderRadius:14,fontWeight:700},onClick:()=>{etapa=1;render1();}},"Voltar"));
-  }
-
-  render1();
-  mv=openModal("Zerar App",cont,null,true);
-  mv.id="modal-zerar";
 }
 
 // ── MENU CADASTRO ─────────────────────────────────────────────────────────────
@@ -1072,16 +590,11 @@ function abrirCadastroPetModal(casaNum,pref,onDone){
   // ── Coleta raças já cadastradas no banco (modelos + atendimentos) ─────────────
   function getRacasConhecidas(){
     const racas=new Set();
-    // raças base conhecidas
-    ["SRD Canino","SRD Felino","Poodle Toy","Poodle Micro","Poodle Standard","Shih-Tzu","Yorkshire Terrier",
-     "Lhasa Apso","Maltês","Pinscher","Dachshund","Golden Retriever","Labrador","Border Collie",
-     "Buldogue Francês","Buldogue Inglês","Schnauzer","Chihuahua","Husky Siberiano","Pastor Alemão",
-     "Pastor Belga","Rottweiler","Pit Bull","American Staffordshire","Fila Brasileiro","Boxer",
-     "Cocker Spaniel","Beagle","Dogue Alemão","Chow Chow","Spitz Alemão","Lulu da Pomerânia",
-     "Maine Coon","Persa","Siamês","Ragdoll","Bengal","Angora","British Shorthair","Scottish Fold",
-     "Cimarron Uruguaio","Fox Terrier","Dachshund Miniatura","Pequinês","Pug","Basenji","Collie",
-     "Dobermann","Akita","Sharpei","Shar Pei","Weimaraner","Dálmata","Setter Irlandês"].forEach(r=>racas.add(r));
-    // das cobranças
+    // dos modelos
+    Object.values(DATA.modelos||{}).forEach(lista=>{
+      (lista||[]).forEach(p=>{if(p.raca&&p.raca.trim())racas.add(p.raca.trim());});
+    });
+    // dos atendimentos (cobrancas + cobrancas2)
     [DATA.cobrancas,DATA.cobrancas2||{}].forEach(src=>{
       Object.values(src||{}).forEach(cbMes=>{
         Object.values(cbMes||{}).forEach(cb=>{
@@ -1094,10 +607,6 @@ function abrirCadastroPetModal(casaNum,pref,onDone){
     // das casas (campo pets)
     [...Object.values(DATA.casas||{}),...Object.values(DATA.casas2||{})].forEach(casa=>{
       (casa.pets||[]).forEach(p=>{if(p.raca&&p.raca.trim())racas.add(p.raca.trim());});
-    });
-    // dos modelos
-    Object.values(DATA.modelos||{}).forEach(lista=>{
-      (lista||[]).forEach(p=>{if(p.raca&&p.raca.trim())racas.add(p.raca.trim());});
     });
     return [...racas].sort((a,b)=>a.localeCompare(b));
   }
@@ -1123,38 +632,22 @@ function abrirCadastroPetModal(casaNum,pref,onDone){
       nI.addEventListener("input",()=>pets[i].nome=nI.value);
       pb.appendChild(nI);
       pb.appendChild(lbl("Raça"));
-      // input com datalist + busca filtrada em tempo real
-      const rI=inp({className:"fi",placeholder:"Digite para buscar raça...",value:p.raca,style:{marginBottom:4}});
-      rI.addEventListener("input",()=>{pets[i].raca=rI.value;buildRacaChips(rI.value,chipsDiv,rI,i);});
-
-      const chipsDiv=div({style:{display:"flex",flexWrap:"wrap",gap:5,marginTop:6,marginBottom:4,maxHeight:120,overflowY:"auto"}});
-
-      function buildRacaChips(q,wrap,input,pi){
-        wrap.innerHTML="";
-        const todas=getRacasConhecidas();
-        const filtradas=q.length<1?todas.slice(0,20):todas.filter(r=>r.toLowerCase().includes(q.toLowerCase())).slice(0,30);
-        filtradas.forEach(r=>{
-          const isSel=pets[pi].raca===r;
-          const c=btn({style:{
-            padding:"4px 10px",fontSize:11,fontWeight:700,
-            background:isSel?"#FF6B9D":"#FFF5F9",
-            color:isSel?"#fff":"#FF6B9D",
-            border:"1.5px solid "+(isSel?"#FF6B9D":"#FFE4EF"),
-            borderRadius:20,whiteSpace:"nowrap"
-          },onClick:()=>{
-            input.value=r;pets[pi].raca=r;
-            buildRacaChips(r,wrap,input,pi);
-          }},r);
-          wrap.appendChild(c);
+      // input com datalist para autocomplete dinâmico
+      const rI=inp({className:"fi",placeholder:"Digite ou escolha...",value:p.raca,style:{marginBottom:4}});
+      rI.setAttribute("list",dlId);
+      rI.addEventListener("input",()=>pets[i].raca=rI.value);
+      // chips de raças mais usadas (top 5)
+      const topRacas=getRacasConhecidas().slice(0,5);
+      if(topRacas.length>0){
+        const chips=div({style:{display:"flex",flexWrap:"wrap",gap:5,marginTop:6,marginBottom:2}});
+        topRacas.forEach(r=>{
+          const c=btn({style:{padding:"4px 10px",fontSize:11,fontWeight:700,background:"#FFF5F9",color:"#FF6B9D",border:"1.5px solid #FFE4EF",borderRadius:20},onClick:()=>{rI.value=r;pets[i].raca=r;}},r);
+          chips.appendChild(c);
         });
-        if(!filtradas.length){
-          const nada=div({style:{fontSize:11,color:"#8B8FA8",padding:"4px 8px"}});
-          nada.textContent="Nenhuma raça encontrada — digitada acima será salva";
-          wrap.appendChild(nada);
-        }
+        pb.appendChild(rI);pb.appendChild(chips);
+      } else {
+        pb.appendChild(rI);
       }
-      buildRacaChips(p.raca,chipsDiv,rI,i);
-      pb.appendChild(rI);pb.appendChild(chipsDiv);
       petsWrap.appendChild(pb);
     });
   }
@@ -1841,22 +1334,19 @@ function renderFin(titulo,casas,cobs,pref){
 }
 
 // ── AGENDA ────────────────────────────────────────────────────────────────────
-function renderAgenda(gerente,embutido){
-  const w=div({className:embutido?"":"screen"});
+function renderAgenda(gerente){
+  const w=div({className:"screen"});
   const gwa=DATA.gruposWA||{};
   const grpBtn=btn({style:{background:"rgba(255,255,255,.35)",color:"#1A1A2E",padding:"8px 12px",fontSize:12,borderRadius:10},onClick:()=>abrirGruposModal()},"📲 Grupos");
-  if(!embutido){
-    if(gerente)w.appendChild(mkHdr("Agenda — Banho e Tosa",null,grpBtn));
-    else w.appendChild(mkHdr("Agenda",()=>go("home"),grpBtn));
-  }
+  if(gerente)w.appendChild(mkHdr("Agenda — Banho e Tosa",null,grpBtn));
+  else w.appendChild(mkHdr("Agenda",()=>go("home"),grpBtn));
 
   let ano=new Date().getFullYear(),mes=new Date().getMonth();
   let diaSel=hoje();
   let filtroStatus="todos";
-  let calAberto=true;
 
   // ── Container principal (sem padding-bottom no wrapper, adicionamos abaixo)
-  const calWrap=div({style:{padding:embutido?"0 14px 10px":"0 14px 120px"}});
+  const calWrap=div({style:{padding:"0 14px 120px"}});
   w.appendChild(calWrap);
 
   // ── Seção calendário (cabeçalho fixo)
@@ -1871,17 +1361,12 @@ function renderAgenda(gerente,embutido){
     calSection.innerHTML="";
 
     // Navegação mês
-    const navRow=div({style:{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 4px 4px"}});
+    const navRow=div({style:{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 4px 8px"}});
     navRow.appendChild(btn({style:{background:"#FF6B9D",color:"#fff",padding:"8px 16px",borderRadius:12,fontSize:18},onClick:()=>{mes--;if(mes<0){mes=11;ano--;}buildCal();}},"‹"));
-    const navCenter=div({style:{display:"flex",alignItems:"center",gap:8,cursor:"pointer"},onClick:()=>{calAberto=!calAberto;buildCal();}});
-    navCenter.appendChild(h("span",{style:{fontFamily:"'Fredoka One',sans-serif",fontSize:20,color:"#1A1A2E"}},MESES[mes]+" "+ano));
-    navCenter.appendChild(h("span",{style:{fontSize:14,color:"#FF6B9D"}},calAberto?"▲":"▼"));
-    navRow.appendChild(navCenter);
+    navRow.appendChild(h("span",{style:{fontFamily:"'Fredoka One',sans-serif",fontSize:20,color:"#1A1A2E"}},MESES[mes]+" "+ano));
     navRow.appendChild(btn({style:{background:"#FF6B9D",color:"#fff",padding:"8px 16px",borderRadius:12,fontSize:18},onClick:()=>{mes++;if(mes>11){mes=0;ano++;}buildCal();}},"›"));
-
     calSection.appendChild(navRow);
 
-    if(calAberto){
     // Cabeçalho dias semana
     const wd=div({style:{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2,marginBottom:4}});
     DIAS_SEM.forEach(d=>{wd.appendChild(div({style:{textAlign:"center",fontSize:11,fontWeight:800,color:"#8B8FA8",padding:"4px 0"}},d));});
@@ -1903,7 +1388,6 @@ function renderAgenda(gerente,embutido){
         const dObj=new Date(ds+"T12:00:00");
         ano=dObj.getFullYear();mes=dObj.getMonth();
         buildCal();
-
         // Rola até a seção de eventos SEM recriar a tela
         setTimeout(()=>{evSection.scrollIntoView({behavior:"smooth",block:"start"});},80);
       }});
@@ -1912,7 +1396,6 @@ function renderAgenda(gerente,embutido){
       grid2.appendChild(c);
     }
     calSection.appendChild(grid2);
-    } // fim if(calAberto)
 
     // Botão Hoje
     calSection.appendChild(btn({style:{width:"100%",padding:"11px",background:"linear-gradient(135deg,#FF6B9D,#FFD93D)",color:"#fff",fontSize:13,borderRadius:12,marginBottom:4},onClick:()=>{
@@ -2038,37 +1521,31 @@ const ids=new Set(grupo.map(e=>e.id));const grupoAtual=(DATA.agenda||[]).filter(
   }
 
   function getAllPets(){
-    const pets=[];const visto=new Set();
-    function processarCadastro(casasObj,cobrancasObj,isCad1){
-      Object.entries(casasObj||{}).forEach(([num,casa])=>{
-        const endObj=(DATA.enderecos||{})[num]||{};
-        const endStr=endObj.rua?`${endObj.rua}, ${endObj.numero||""}, ${endObj.bairro||""}`:"";
-        const numCasaC1=endObj.numero||"";
-        const vis=new Set();
-        const pref=(isCad1?"c1_":"c2_")+num+"_";
-        // 1) Pets dos atendimentos de cobrança (só do cadastro correspondente)
-        Object.values(cobrancasObj||{}).forEach(cbM=>{
-          const cb=cbM[num];if(!cb)return;
-          (cb.atendimentos||[]).forEach(at=>(at.caes||[]).forEach(c=>{
-            if(c.nome&&!vis.has(c.nome)){vis.add(c.nome);const uid=pref+c.nome;if(!visto.has(uid)){visto.add(uid);pets.push({pet:c.nome,casa:Number(num),morador:casa.morador||"",endereco:endStr,telefone:casa.telefone||"",numCasa:numCasaC1,isCad1:isCad1});}}
-          }));
-        });
-        // 2) Pets do campo modelos (cadastrados via modal de pets)
-        const modPets=DATA.modelos?.[num]||[];
-        modPets.forEach(p=>{
-          if(p.nome&&!vis.has(p.nome)){vis.add(p.nome);const uid=pref+p.nome;if(!visto.has(uid)){visto.add(uid);pets.push({pet:p.nome,casa:Number(num),morador:casa.morador||"",endereco:endStr,telefone:casa.telefone||"",numCasa:numCasaC1,isCad1:isCad1});}}
-        });
-        // 3) Pets do campo pets da casa (campo direto do cadastro)
-        const casaPets=casa.pets||[];
-        casaPets.forEach(p=>{
-          if(p.nome&&!vis.has(p.nome)){vis.add(p.nome);const uid=pref+p.nome;if(!visto.has(uid)){visto.add(uid);pets.push({pet:p.nome,casa:Number(num),morador:casa.morador||"",endereco:endStr,telefone:casa.telefone||"",numCasa:numCasaC1,isCad1:isCad1});}}
-        });
-        // 4) Se ainda não tem nenhum pet, exibe tutor para cadastrar
-        if(vis.size===0){const uid=pref+"__vazio__";if(!visto.has(uid)){visto.add(uid);pets.push({pet:"",casa:Number(num),morador:casa.morador||"",endereco:endStr,telefone:casa.telefone||"",numCasa:numCasaC1,isCad1:isCad1});}}
+    const all={...DATA.casas,...DATA.casas2||{}};const pets=[];const visto=new Set();
+    Object.entries(all).forEach(([num,casa])=>{
+      const endObj=(DATA.enderecos||{})[num]||{};
+      const endStr=endObj.rua?`${endObj.rua}, ${endObj.numero||""}, ${endObj.bairro||""}`:"";
+      const vis=new Set();
+      // 1) Pets dos atendimentos de cobrança (fonte original)
+      [...Object.values(DATA.cobrancas||{}),...Object.values(DATA.cobrancas2||{})].forEach(cbM=>{
+        const cb=cbM[num];if(!cb)return;
+        (cb.atendimentos||[]).forEach(at=>(at.caes||[]).forEach(c=>{
+          if(c.nome&&!vis.has(c.nome)){vis.add(c.nome);const uid=num+"_"+c.nome;if(!visto.has(uid)){visto.add(uid);pets.push({pet:c.nome,casa:Number(num),morador:casa.morador||"",endereco:endStr,telefone:casa.telefone||"",});}}
+        }));
       });
-    }
-    processarCadastro(DATA.casas,DATA.cobrancas,true);
-    processarCadastro(DATA.casas2,DATA.cobrancas2,false);
+      // 2) Pets do campo modelos (cadastrados via modal de pets)
+      const modPets=DATA.modelos?.[num]||[];
+      modPets.forEach(p=>{
+        if(p.nome&&!vis.has(p.nome)){vis.add(p.nome);const uid=num+"_"+p.nome;if(!visto.has(uid)){visto.add(uid);pets.push({pet:p.nome,casa:Number(num),morador:casa.morador||"",endereco:endStr,telefone:casa.telefone||"",});}}
+      });
+      // 3) Pets do campo pets da casa (campo direto do cadastro)
+      const casaPets=casa.pets||[];
+      casaPets.forEach(p=>{
+        if(p.nome&&!vis.has(p.nome)){vis.add(p.nome);const uid=num+"_"+p.nome;if(!visto.has(uid)){visto.add(uid);pets.push({pet:p.nome,casa:Number(num),morador:casa.morador||"",endereco:endStr,telefone:casa.telefone||"",});}}
+      });
+      // 4) Se ainda não tem nenhum pet, exibe tutor para cadastrar
+      if(vis.size===0){const uid=num+"_";if(!visto.has(uid)){visto.add(uid);pets.push({pet:"",casa:Number(num),morador:casa.morador||"",endereco:endStr,telefone:casa.telefone||"",});}}
+    });
     return pets;
   }
 
@@ -2174,11 +1651,8 @@ function abrirGruposModal(){
   secRota.appendChild(h("p",{style:{fontSize:11,color:"#8B8FA8",fontWeight:600,marginBottom:12}},"Link do grupo que recebe a mensagem de rota/busca"));
   DIAS_FULL.forEach((dia,i)=>{
     secRota.appendChild(lbl(dia));
-    const inp2=document.createElement("input");
-    inp2.className="fi";inp2.placeholder="https://chat.whatsapp.com/...";inp2.value=ge[i]||"";inp2.type="url";
-    inp2.addEventListener("input",()=>{ge[i]=inp2.value.trim();});
-    inp2.addEventListener("paste",e=>{setTimeout(()=>{ge[i]=inp2.value.trim();},50);});
-    secRota.appendChild(inp2);secRota.appendChild(div({style:{height:6}}));
+    const inp2=inp({className:"fi",placeholder:"https://chat.whatsapp.com/...",value:ge[i]||""});
+    inp2.addEventListener("input",()=>ge[i]=inp2.value);secRota.appendChild(inp2);secRota.appendChild(div({style:{height:6}}));
   });
   cont.appendChild(secRota);
   // Seção Pagamento
@@ -2187,18 +1661,12 @@ function abrirGruposModal(){
   secPag.appendChild(h("p",{style:{fontSize:11,color:"#8B8FA8",fontWeight:600,marginBottom:12}},"Link do grupo que recebe a mensagem de forma de pagamento"));
   DIAS_FULL.forEach((dia,i)=>{
     secPag.appendChild(lbl(dia));
-    const inp3=document.createElement("input");
-    inp3.className="fi";inp3.placeholder="https://chat.whatsapp.com/...";inp3.value=gpe[i]||"";inp3.type="url";
-    inp3.addEventListener("input",()=>{gpe[i]=inp3.value.trim();});
-    inp3.addEventListener("paste",e=>{setTimeout(()=>{gpe[i]=inp3.value.trim();},50);});
-    secPag.appendChild(inp3);secPag.appendChild(div({style:{height:6}}));
+    const inp3=inp({className:"fi",placeholder:"https://chat.whatsapp.com/...",value:gpe[i]||""});
+    inp3.addEventListener("input",()=>gpe[i]=inp3.value);secPag.appendChild(inp3);secPag.appendChild(div({style:{height:6}}));
   });
   cont.appendChild(secPag);
   let mv=null;
   cont.appendChild(btn({style:{width:"100%",padding:"16px",background:"linear-gradient(135deg,#FF6B9D,#FFD93D)",color:"#fff",fontSize:15,borderRadius:14,marginTop:4},onClick:()=>{updSilent(d=>({...d,gruposWA:{...ge},gruposWAPag:{...gpe}}));if(mv)mv.remove();}},"💾 Salvar Grupos"));
-  const obs=div({style:{background:"#FFFBEE",border:"1.5px solid #FFD93D",borderRadius:12,padding:"12px 14px",fontSize:12,color:"#92400e",fontWeight:700,lineHeight:1.7,marginBottom:4}});
-  obs.innerHTML="ℹ️ Ambos os grupos funcionam igual:<br>• Copia mensagem automaticamente<br>• Abre o WA pessoal com mensagem<br>• Após 1,5s abre o grupo para colar";
-  cont.appendChild(obs);
   mv=openModal("Grupos WA por Dia",cont);
 }
 
@@ -2223,23 +1691,19 @@ function abrirWATelebusca(grupo,gwa){
 
   // Botão copiar
   const cpBtn=btn({style:{width:"100%",padding:"13px",background:"linear-gradient(135deg,#1A1A2E,#2d2d4e)",color:"#fff",fontSize:14,fontWeight:800,borderRadius:12,marginBottom:10},onClick:()=>{
-    copiarTexto(msg,cpBtn);
+    navigator.clipboard.writeText(msg).then(()=>{cpBtn.textContent="✅ Copiado!";setTimeout(()=>cpBtn.textContent="📋 Copiar Mensagem",2000);});
   }},"📋 Copiar Mensagem");
   cont.appendChild(cpBtn);
 
   // Botão abrir grupo (se cadastrado)
   if(linkGrupo.startsWith("https://")){
     cont.appendChild(btn({style:{width:"100%",padding:"13px",background:"linear-gradient(135deg,#25D366,#128C7E)",color:"#fff",fontSize:14,fontWeight:800,borderRadius:12,marginBottom:10},onClick:()=>{
-      // Copia a mensagem
-      navigator.clipboard.writeText(msg).catch(()=>{});
-      // Abre o grupo imediatamente — sem fechar o modal, sem toast que some
-      window.open(linkGrupo,"_blank");
-      // Toast DEPOIS de abrir, para o usuário saber que foi copiado
+      navigator.clipboard.writeText(msg);
       const toast=div({style:{position:"fixed",bottom:100,left:"50%",transform:"translateX(-50%)",background:"#1A1A2E",color:"#FFD93D",padding:"12px 20px",borderRadius:14,fontSize:14,fontWeight:800,zIndex:9999,textAlign:"center",boxShadow:"0 4px 20px rgba(0,0,0,.4)",maxWidth:"80vw"}});
       toast.textContent="📋 Mensagem copiada! Cole no grupo.";
       document.body.appendChild(toast);
-      setTimeout(()=>{toast.remove();},3000);
-      // NÃO fecha o modal — usuário pode copiar de novo se precisar
+      setTimeout(()=>{toast.remove();window.open(linkGrupo,"_blank");},1500);
+      if(mv)mv.remove();
     }},"📲 Copiar + Abrir Grupo WA"));
   }
 
@@ -2270,23 +1734,13 @@ function darBaixaGrupo(grupo,onDone){
     }
     return{nome:ev.pet||"Pet",raca:"",servicos:[{nome:ev.servico||"Banho",valor:valorFinal}]};
   });
-  // ── Anti-duplicata: mesmo dia → substitui, não acumula ─────────────────────
-  const jaExisteDia=(cbCasa.atendimentos||[]).some(at=>at.data===rep.data&&grupo.some(ev=>(at.caes||[]).find(c=>c.nome===ev.pet)));
-  let novosAts;
-  if(jaExisteDia){
-    novosAts=(cbCasa.atendimentos||[]).map(at=>{
-      const isEste=at.data===rep.data&&grupo.some(ev=>(at.caes||[]).find(c=>c.nome===ev.pet));
-      return isEste?{...at,caes}:at;
-    });
-  } else {
-    const novoAt={id:Date.now(),data:rep.data,caes,pago:false};
-    novosAts=[...(cbCasa.atendimentos||[]),novoAt].sort((a,b)=>a.data.localeCompare(b.data));
-  }
+  const novoAt={id:Date.now(),data:rep.data,caes,pago:false};
+  const novosAts=[...(cbCasa.atendimentos||[]),novoAt].sort((a,b)=>a.data.localeCompare(b.data));
   const novaCb={...cbCasa,atendimentos:novosAts};
   if(isCad1)updSilent(d=>({...d,cobrancas:{...d.cobrancas,[mesNome]:{...(d.cobrancas[mesNome]||{}),[rep.casa]:novaCb}}}));
   else updSilent(d=>({...d,cobrancas2:{...d.cobrancas2||{},[mesNome]:{...(d.cobrancas2||{})[mesNome]||{},[rep.casa]:novaCb}}}));
   const ids=new Set(grupo.map(e=>e.id));
-  updSilent(d=>({...d,agenda:d.agenda.map(a=>ids.has(a.id)?{...a,buscado:true,statusCor:"finalizado"}:a)}));
+  updSilent(d=>({...d,agenda:d.agenda.map(a=>ids.has(a.id)?{...a,buscado:true}:a)}));
   DATA=loadData();onDone&&onDone();
 }
 
@@ -2353,7 +1807,7 @@ function abrirPagamentoModal(grupo,onDone,gwaRota,semWA){
   const montarMsg=(formaPag)=>{
     const labels={dinheiro:"Dinheiro 💵",cartao:"Cartao 💳",pix:"Pix 📱",pl:"Retirou na Loja 🏪",naopagou:"Pendente ⚠️"};
     const vetusId=rep.casa>=10001?rep.casa-10000:rep.casa;
-            let msg=`📅 ${fmtD(rep.data)}\nId Vetus ${vetusId} - *${rep.morador||""}*\n`;
+    let msg=`📅 ${fmtD(rep.data)}\nId Vetus ${vetusId} - ${rep.morador||""}\n`;
     if(isClienteNovo)msg+=`🆕 *Cliente novo*\n`;
     if(isClienteNovo&&telCliente)msg+=`📞 ${telCliente}\n`;
     if(isClienteNovo){
@@ -2362,7 +1816,7 @@ function abrirPagamentoModal(grupo,onDone,gwaRota,semWA){
         const pets=(DATA.modelos&&DATA.modelos[rep.casa])||[];
         const petObj=pets.find(p=>p.nome===ev.pet);
         const raca=petObj?.raca||(ev.raca||"");
-        if(raca)msg+=`🐾 _${ev.pet}_: ${raca}\n`;
+        if(raca)msg+=`🐾 ${ev.pet}: ${raca}\n`;
       });
       // Endereço
       const endObj=(DATA.enderecos&&DATA.enderecos[rep.casa])||{};
@@ -2371,9 +1825,9 @@ function abrirPagamentoModal(grupo,onDone,gwaRota,semWA){
     }
     grupo.forEach(ev=>{
       const val=getValorEvento(ev);
-      msg+=`🐶 *_${ev.pet||"Pet"}_* ${ev.servico||"Banho"}${val>0?"  R$ "+val.toFixed(2):""}\n`;
+      msg+=`🐶 ${ev.pet||"Pet"} ${ev.servico||"Banho"}${val>0?"  R$ "+val.toFixed(2):""}\n`;
     });
-    msg+=`\n💰 Total: *R$ ${totalG.toFixed(2)}*\n`;
+    msg+=`\n💰 Total: R$ ${totalG.toFixed(2)}\n`;
     if(formaPag==="naopagou")msg+="⚠️ Pagamento pendente";
     else if(formaPag==="pl")msg+=`🏪 Retirou na loja · ✅ Pagou: ${labels[formaPag]}`;
     else msg+=`✅ Pagou: ${labels[formaPag]}`;
@@ -2398,7 +1852,7 @@ function abrirPagamentoModal(grupo,onDone,gwaRota,semWA){
     if(isCad1)updSilent(d=>({...d,cobrancas:{...d.cobrancas,[mesNome]:{...(d.cobrancas[mesNome]||{}),[rep.casa]:novaCb}}}));
     else updSilent(d=>({...d,cobrancas2:{...d.cobrancas2||{},[mesNome]:{...(d.cobrancas2||{})[mesNome]||{},[rep.casa]:novaCb}}}));
     const ids=new Set(grupo.map(e=>e.id));
-    updSilent(d=>({...d,agenda:d.agenda.map(a=>ids.has(a.id)?{...a,buscado:true,statusCor:"finalizado"}:a)}));
+    updSilent(d=>({...d,agenda:d.agenda.map(a=>ids.has(a.id)?{...a,buscado:true}:a)}));
     DATA=loadData();
   };
 
@@ -2440,7 +1894,7 @@ function abrirPagamentoModal(grupo,onDone,gwaRota,semWA){
   // ── Seletor de próximo retorno ────────────────────────────────────────────
   const repSel=div({style:{marginBottom:14}});
   repSel.appendChild(h("p",{style:{fontWeight:800,color:"#1A1A2E",fontSize:12,marginBottom:4,textTransform:"uppercase",letterSpacing:.7}},"🔁 Próximo retorno"));
-  const repOpts=[{l:"7 dias",d:7},{l:"10 dias",d:10},{l:"14 dias",d:14},{l:"21 dias",d:21},{l:"28 dias",d:28},{l:"Sem repetir",d:0}];
+  const repOpts=[{l:"7 dias",d:7},{l:"10 dias",d:10},{l:"14 dias",d:14},{l:"30 dias",d:30},{l:"Sem repetir",d:0}];
   const repGrid=div({style:{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}});
   function buildRepGrid(){
     repGrid.innerHTML="";
@@ -2472,35 +1926,17 @@ function abrirPagamentoModal(grupo,onDone,gwaRota,semWA){
         novaData=reagendarProximo(repSelecionado);
       }
       if(!semWA){
+        // Copia mensagem e abre grupo/WA
         const txtMsg=decodeURIComponent(msg);
-        if(mv)mv.remove();
-        const cont2=div();
-        const pre2=h("textarea",{style:{width:"100%",height:120,padding:"10px",borderRadius:12,border:"1.5px solid #FFE4EF",fontSize:11,fontFamily:"monospace",resize:"none",background:"#FAFAFA",color:"#1A1A2E",marginBottom:12}});
-        pre2.value=txtMsg;pre2.readOnly=true;
-        cont2.appendChild(pre2);
-        // Botão 1: Copiar Mensagem
-        const cpBtn2=btn({style:{width:"100%",padding:"13px",background:"linear-gradient(135deg,#1A1A2E,#2d2d4e)",color:"#fff",fontSize:14,fontWeight:800,borderRadius:12,marginBottom:10},onClick:()=>{
-          copiarTexto(txtMsg,cpBtn2);
-        }},"📋 Copiar Mensagem");
-        cont2.appendChild(cpBtn2);
-        // Botão 2: Copiar + Abrir Grupo (se tiver link cadastrado)
+        navigator.clipboard.writeText(txtMsg).catch(()=>{});
         if(linkGrupoPag.startsWith("https://")){
-          const grpBtn2=btn({style:{width:"100%",padding:"13px",background:"linear-gradient(135deg,#25D366,#128C7E)",color:"#fff",fontSize:14,fontWeight:800,borderRadius:12,marginBottom:10},onClick:()=>{
-            copiarTexto(txtMsg,grpBtn2);
-            const toast2=div({style:{position:"fixed",bottom:100,left:"50%",transform:"translateX(-50%)",background:"#1A1A2E",color:"#FFD93D",padding:"12px 20px",borderRadius:14,fontSize:14,fontWeight:800,zIndex:9999,textAlign:"center",boxShadow:"0 4px 20px rgba(0,0,0,.4)",maxWidth:"80vw"}});
-            toast2.textContent="📋 Mensagem copiada! Cole no grupo.";
-            document.body.appendChild(toast2);
-            setTimeout(()=>{toast2.remove();},3000);
-            window.open(linkGrupoPag,"_blank");
-          }},"📲 Copiar + Abrir Grupo");
-          cont2.appendChild(grpBtn2);
-        }
-        // Botão 3: Abrir WA com Mensagem
-        const waBtn3=btn({style:{width:"100%",padding:"13px",background:"linear-gradient(135deg,#3B82F6,#60a5fa)",color:"#fff",fontSize:14,fontWeight:800,borderRadius:12},onClick:()=>{
+          const toast=div({style:{position:"fixed",bottom:100,left:"50%",transform:"translateX(-50%)",background:"#1A1A2E",color:"#FFD93D",padding:"12px 20px",borderRadius:14,fontSize:14,fontWeight:800,zIndex:9999,textAlign:"center",boxShadow:"0 4px 20px rgba(0,0,0,.4)",maxWidth:"80vw"}});
+          toast.textContent="📋 Mensagem copiada! Cole no grupo.";
+          document.body.appendChild(toast);
+          setTimeout(()=>{toast.remove();window.open(linkGrupoPag,"_blank");},1500);
+        } else {
           window.open("https://api.whatsapp.com/send?text="+msg,"_blank");
-        }},"💬 Abrir WA com Mensagem");
-        cont2.appendChild(waBtn3);
-        openModal("💬 Pagamento — "+rep.morador,cont2,()=>{},true);
+        }
       }
       if(mv)mv.remove();
       if(novaData)setTimeout(()=>alert(`✅ Próximo agendamento criado para ${fmtD(novaData)}!`),700);
@@ -2535,7 +1971,6 @@ function abrirAgModal(dataInicial,onDone,getAllPets,gerente){
   const cont=div();
   const dI=inp({className:"fi",type:"date",value:dataInicial,style:{marginBottom:12}});
   const buscaNum=inp({className:"fi",placeholder:"Ex: 608, 1029...",style:{marginBottom:8,border:"2px solid #4285F4"}});
-  const buscaCasaC1=inp({className:"fi",placeholder:"Ex: 120, 45A...",style:{marginBottom:8,border:"2px solid #4285F4"}});
   const buscaCao=inp({className:"fi",placeholder:"Cao...",style:{marginBottom:0,border:"2px solid #FF6B9D"}});
   const buscaTutor=inp({className:"fi",placeholder:"Tutor / telefone...",style:{marginBottom:0,border:"2px solid #FF6B9D"}});
   const buscaEnd=inp({className:"fi",placeholder:"Rua, bairro...",style:{marginBottom:8,border:"2px solid #2DC653"}});
@@ -2543,14 +1978,12 @@ function abrirAgModal(dataInicial,onDone,getAllPets,gerente){
   const selInfo=div({style:{fontSize:12,fontWeight:700,color:"#FF6B9D",marginBottom:8,minHeight:18}});
   function filtrarPets(){
     const qNum=buscaNum.value.toLowerCase().trim();
-    const qCasaC1=buscaCasaC1.value.toLowerCase().trim();
     const qCao=buscaCao.value.toLowerCase().trim();
     const qTutor=buscaTutor.value.toLowerCase().trim();
     const qTutorDig=qTutor.replace(/\D/g,"");
     const qEnd=buscaEnd.value.toLowerCase().trim();
     return pets.filter(p=>{
       if(qNum&&!String(p.casa).includes(qNum))return false;
-      if(qCasaC1&&!(p.isCad1&&String(p.numCasa).toLowerCase().includes(qCasaC1)))return false;
       if(qCao&&!p.pet.toLowerCase().includes(qCao))return false;
       if(qTutor){
         const tutorOk=p.morador.toLowerCase().includes(qTutor);
@@ -2568,7 +2001,7 @@ function abrirAgModal(dataInicial,onDone,getAllPets,gerente){
     let melhorData="",melhorValor=0;
     [DATA.cobrancas,DATA.cobrancas2||{}].forEach(src=>{
       MESES.forEach(m=>{
-        (((src[m]||{})[casa]||{}).atendimentos||[]).forEach(at=>{
+        ((src[m]||{})[casa]||{atendimentos:[]}).atendimentos.forEach(at=>{
           (at.caes||[]).forEach(c=>{
             if(c.nome===pet){
               const v=(c.servicos||[]).reduce((s,sv)=>s+(parseFloat(sv.valor)||0),0);
@@ -2620,7 +2053,8 @@ function abrirAgModal(dataInicial,onDone,getAllPets,gerente){
         }
         buildLista();
       }});
-      inf.innerHTML=`<div style="display:flex;align-items:center;gap:8px"><span style="font-weight:800;color:${p.pet?"#1A1A2E":"#E8A000"};font-size:14px">${p.pet||"(sem pet)"}</span>${p.pet?"":`<span style="background:#FFFBEE;color:#E8A000;border-radius:6px;padding:1px 7px;font-size:10px;font-weight:800">Toque para cadastrar pet 🐾</span>`}</div><div style="font-size:11px;color:#8B8FA8">Casa ${p.casa} - ${p.morador}</div>${p.endereco?`<div style="font-size:10px;color:#FF6B9D">📍 ${p.endereco}</div>`:""}`;
+      const ult=getUltimoValorPet(p.casa,p.pet);
+      inf.innerHTML=`<div style="display:flex;align-items:center;gap:8px"><span style="font-weight:800;color:${p.pet?"#1A1A2E":"#E8A000"};font-size:14px">${p.pet||"(sem pet)"}</span>${p.pet?(!gerente&&ult>0?`<span style="background:#e8fbed;color:#2DC653;border-radius:6px;padding:1px 7px;font-size:11px;font-weight:800">R$ ${ult.toFixed(2)}</span>`:""):`<span style="background:#FFFBEE;color:#E8A000;border-radius:6px;padding:1px 7px;font-size:10px;font-weight:800">Toque para cadastrar pet 🐾</span>`}</div><div style="font-size:11px;color:#8B8FA8">Casa ${p.casa} - ${p.morador}</div>${p.endereco?`<div style="font-size:10px;color:#FF6B9D">📍 ${p.endereco}</div>`:""}`;
       const togBtn=btn({style:{width:44,height:44,borderRadius:12,background:isSel?"#FF6B9D":"#fff",border:"2px solid "+(isSel?"#FF6B9D":"#FFE4EF"),color:isSel?"#fff":"#FF6B9D",fontSize:22,fontWeight:900,flexShrink:0,margin:"0 8px",display:"flex",alignItems:"center",justifyContent:"center"},onClick:()=>{
         if(!p.pet){
           const pref2=DATA.casas[p.casa]?"cad1":"cad2";
@@ -2662,8 +2096,9 @@ function abrirAgModal(dataInicial,onDone,getAllPets,gerente){
     const res=div({style:{background:"#FFF5F9",borderRadius:14,padding:"12px 14px",border:"1.5px solid #FF6B9D"}});
     res.appendChild(h("p",{style:{fontWeight:800,color:"#FF6B9D",fontSize:12,marginBottom:8,textTransform:"uppercase",letterSpacing:.6}},"Pets selecionados"));
     selecionados.forEach(p=>{
+      const ult=getUltimoValorPet(p.casa,p.pet);
       const row2=div({style:{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}});
-      row2.innerHTML=`<span style="font-weight:700;color:#1A1A2E;font-size:13px">🐶 ${p.pet||"(sem pet)"} <span style="color:#8B8FA8;font-weight:600;font-size:11px">Casa ${p.casa}</span></span>`;
+      row2.innerHTML=`<span style="font-weight:700;color:#1A1A2E;font-size:13px">🐶 ${p.pet||"(sem pet)"} <span style="color:#8B8FA8;font-weight:600;font-size:11px">Casa ${p.casa}</span></span>${(!gerente&&ult>0)?`<span style="font-weight:800;color:#2DC653;font-size:13px">R$ ${ult.toFixed(2)}</span>`:(!gerente?`<span style="font-size:11px;color:#8B8FA8">sem histórico</span>`:"")}`;
       res.appendChild(row2);
     });
     resumoDiv.appendChild(res);
@@ -2673,7 +2108,7 @@ function abrirAgModal(dataInicial,onDone,getAllPets,gerente){
     selIdxs=[];casaSelecionada=null;
     buildLista();
   };
-  buscaNum.addEventListener("input",onInput);buscaCasaC1.addEventListener("input",onInput);buscaCao.addEventListener("input",onInput);buscaTutor.addEventListener("input",onInput);buscaEnd.addEventListener("input",onInput);
+  buscaNum.addEventListener("input",onInput);buscaCao.addEventListener("input",onInput);buscaTutor.addEventListener("input",onInput);buscaEnd.addEventListener("input",onInput);
   const selTodos=btn({style:{padding:"7px 12px",background:"#FF6B9D",color:"#fff",borderRadius:10,fontSize:12,fontWeight:800,marginBottom:8},onClick:()=>{
     // "Todos" só funciona se já há tutor selecionado (adiciona todos os pets desse tutor)
     // ou sem seleção, não faz sentido selecionar todos de tutores diferentes
@@ -2689,19 +2124,13 @@ function abrirAgModal(dataInicial,onDone,getAllPets,gerente){
   const svSel2=sel({className:"fi",style:{marginBottom:12}},SERVICOS.map(s=>({v:s,l:s})));svSel2.addEventListener("change",()=>servicoSel=svSel2.value);
   const fSel2=sel({className:"fi",style:{marginBottom:12}},FUNCS.map((f,i)=>({v:i,l:f.n+" - "+f.c})));fSel2.addEventListener("change",()=>funcIdx=Number(fSel2.value));
   const hI=inp({className:"fi",type:"time",value:"08:00",style:{marginBottom:14}});
-  let repetir=0;
-  const repGrid=div({style:{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:16}});
-  function buildRepGrid2(){
-    repGrid.innerHTML="";
-    REPS.forEach(r=>{
-      const b=btn({style:{padding:"10px 4px",fontSize:12,background:repetir===r.d?"#FF6B9D":"#fff",color:repetir===r.d?"#fff":"#1A1A2E",border:"2px solid "+(repetir===r.d?"#FF6B9D":"#FFE4EF"),borderRadius:12},onClick:()=>{
-        repetir=repetir===r.d?0:r.d;
-        buildRepGrid2();
-      }},r.l);
-      repGrid.appendChild(b);
-    });
-  }
-  buildRepGrid2();
+  const repGrid=div({style:{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:8,marginBottom:16}});
+  REPS.forEach(r=>{
+    const b=btn({style:{padding:"10px 4px",fontSize:12,background:"#fff",color:"#1A1A2E",border:"2px solid #FFE4EF",borderRadius:12},onClick:()=>{
+      repetir=repetir===r.d?null:r.d;
+      repGrid.querySelectorAll("button").forEach((bb,i)=>{bb.style.background=REPS[i].d===repetir?"#FF6B9D":"#fff";bb.style.color=REPS[i].d===repetir?"#fff":"#1A1A2E";bb.style.border="2px solid "+(REPS[i].d===repetir?"#FF6B9D":"#FFE4EF");});
+    }},r.l);repGrid.appendChild(b);
+  });
   const selRow=div({style:{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}});
   selRow.appendChild(lbl("Selecione os pets"));selRow.appendChild(selTodos);
   // linha de busca dupla: cao + tutor lado a lado
@@ -2772,17 +2201,8 @@ function abrirAgModal(dataInicial,onDone,getAllPets,gerente){
   const divider=div({style:{borderTop:"2px dashed #FFE4EF",marginBottom:12}});
   cont.appendChild(divider);
 
-  const buscaColEsq=div({style:{flex:1}});
-  buscaColEsq.appendChild(h("span",{style:{fontWeight:700,color:"#4285F4",fontSize:10,textTransform:"uppercase",letterSpacing:.8,display:"block",marginBottom:4}},"ID Vetus"));
-  buscaColEsq.appendChild(buscaNum);
-  const buscaColDir=div({style:{flex:1}});
-  buscaColDir.appendChild(h("span",{style:{fontWeight:700,color:"#4285F4",fontSize:10,textTransform:"uppercase",letterSpacing:.8,display:"block",marginBottom:4}},"Nº casa (C1)"));
-  buscaColDir.appendChild(buscaCasaC1);
-  const buscaDoisCol=div({style:{display:"flex",gap:8}});
-  buscaDoisCol.appendChild(buscaColEsq);buscaDoisCol.appendChild(buscaColDir);
-
   [lbl("Data"),dI,
-   buscaDoisCol,
+   h("span",{style:{fontWeight:700,color:"#4285F4",fontSize:10,textTransform:"uppercase",letterSpacing:.8,display:"block",marginBottom:4}},"Buscar por numero da casa"),buscaNum,
    buscaDupla,
    h("span",{style:{fontWeight:700,color:"#2DC653",fontSize:10,textTransform:"uppercase",letterSpacing:.8,display:"block",marginBottom:4}},"Buscar por rua / endereco"),buscaEnd,
    selRow,selInfo,listaDiv,
@@ -3070,9 +2490,6 @@ function abrirSaidaModal(cat,onDone){
   const svB=btn({style:{width:"100%",padding:"17px",background:"linear-gradient(135deg,#FF6B9D,#FFD93D)",color:"#fff",fontSize:16,borderRadius:16,marginTop:4},onClick:()=>{
     if(!vI.value){alert("Informe o valor!");return;}
     const descFinal=dcI.value.trim()||subtipoSel||ci.l;
-    // ── Anti-duplicata: alerta se mesma categ+valor+data já existe ──
-    const jaDupl=(DATA.saidas||[]).some(s=>s.cat===cat&&String(s.val)===String(vI.value)&&s.data===dI.value&&(s.func||'')===(funcSel||''));
-    if(jaDupl){if(!confirm('⚠️ Já existe uma saída com mesmo tipo, valor e data.\nLançar mesmo assim?'))return;}
     updSilent(d=>({...d,saidas:[...(d.saidas||[]),{cat,subtipo:subtipoSel,func:funcSel,val:vI.value,desc:descFinal,data:dI.value,id:Date.now()}]}));
     DATA=loadData();if(mv)mv.remove();onDone();
   }},"Salvar");
@@ -3434,19 +2851,15 @@ function renderStats(){
   body.appendChild(secGrafico);
 
   // ── Seção 3: Abas interativas ────────────────────────────────────────────────
-  let abaAtiva="dia";
-  let diaSel=hoje();
-  let mesSelBairro="__todos__";
+  let abaAtiva="pets";
   const abaWrap=div({style:{marginBottom:18}});
   const abaTabs=div({style:{display:"flex",gap:6,marginBottom:12,overflowX:"auto",paddingBottom:2}});
   const abaContent=div();
 
   const ABAS=[
-    {k:"dia",l:"🛁 Banhos do Dia"},
     {k:"pets",l:"🐾 Top Pets"},
     {k:"clientes",l:"👤 Clientes"},
     {k:"mes",l:"📋 Por Mês"},
-    {k:"bairros",l:"🗺️ Bairros"},
     {k:"texto",l:"📋 Relatório"},
   ];
 
@@ -3460,95 +2873,9 @@ function renderStats(){
 
   let mesSel=mesNomeAt;
 
-  // Detecta bairro de um cliente (usado nas abas Dia e Bairros)
-  const BAIRROS_CONHECIDOS_G=["Terra Ville","Lami","Chapéu do Sol","Chapeu do Sol","Belém Novo","Belem Novo","Bom Jesus","Espírito Santo","Espirito Santo","Ipanema","Guarujá","Guaruja","Jardim Itu","Jardim Isabel","Camaquã","Camaqua","Tristeza","Cavalhada","Aberta dos Morros","Restinga","Ponta Grossa","Lageado","Lajeado","Canta Galo","Belém Velho","Belem Velho","Itapuã","Itapua","Viamão","Viamao","Hípica","Hipica","Serraria","Vila Nova","Cristal","Nonoai","Santa Tereza","Teresópolis","Teresopolis","Menino Deus","Partenon","Centro"];
-  function getBairroCli(casaNum){
-    const casa=(DATA.casas||{})[casaNum]||(DATA.casas2||{})[casaNum]||{};
-    const endObj=(DATA.enderecos||{})[casaNum]||{};
-    const endStr=[casa.endereco||"",typeof endObj==="string"?endObj:"",typeof endObj==="object"?(endObj.bairro||endObj.rua||""):""].join(" ");
-    if(!endStr.trim())return"Não informado";
-    for(const b of BAIRROS_CONHECIDOS_G){if(endStr.toLowerCase().includes(b.toLowerCase()))return b;}
-    const partes=endStr.split(/[,\-–]/);
-    for(let i=partes.length-1;i>=0;i--){const p=partes[i].trim();if(p.length>3&&!/^\d/.test(p)&&!/porto alegre/i.test(p)&&!/^RS$/i.test(p)&&p.split(" ").length<=4)return p;}
-    return"Não informado";
-  }
-
   function buildAbaContent(){
     abaContent.innerHTML="";
-    if(abaAtiva==="dia"){
-      // ── Banhos do dia por bairro ─────────────────────────────────────────
-      // Seletor de data
-      const selData=div({style:{marginBottom:14}});
-      selData.appendChild(lbl("Dia"));
-      const dInp=inp({type:"date",className:"fi",value:diaSel,onChange:e=>{diaSel=e.target.value;buildAbaContent();}});
-      selData.appendChild(dInp);
-      // Botões rápidos: hoje / ontem
-      const quick=div({style:{display:"flex",gap:8,marginTop:8}});
-      [["Hoje",hoje()],["Ontem",addD(hoje(),-1)]].forEach(([lab,ds])=>{
-        const on=diaSel===ds;
-        quick.appendChild(btn({style:{flex:1,padding:"9px",fontSize:12,fontWeight:800,borderRadius:10,background:on?"#FF6B9D":"#fff",color:on?"#fff":"#8B8FA8",border:"2px solid "+(on?"#FF6B9D":"#FFE4EF")},onClick:()=>{diaSel=ds;buildAbaContent();}},lab));
-      });
-      selData.appendChild(quick);
-      abaContent.appendChild(selData);
-
-      // Coleta atendimentos do dia (cobrancas C1 + C2) pela data exata
-      const bairroDia={};
-      let totBanhos=0,totGanho=0;
-      [DATA.cobrancas||{},(DATA.cobrancas2||{})].forEach(src=>{
-        MESES.forEach(m=>{
-          Object.entries(src[m]||{}).forEach(([casaNum,cb])=>{
-            (cb.atendimentos||[]).forEach(at=>{
-              if(at.data!==diaSel)return;
-              const val=totAts([at]);
-              const nPets=(at.caes||[]).length||1;
-              const bairro=getBairroCli(casaNum);
-              if(!bairroDia[bairro])bairroDia[bairro]={ganho:0,banhos:0};
-              bairroDia[bairro].ganho+=val;
-              bairroDia[bairro].banhos+=nPets;
-              totBanhos+=nPets;
-              totGanho+=val;
-            });
-          });
-        });
-      });
-      const ticketGeral=totBanhos>0?totGanho/totBanhos:0;
-
-      // Cards resumo do dia
-      const resumo=div({style:{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:14}});
-      [{l:"🛁 Banhos",v:totBanhos,c:"#3B82F6"},{l:"💰 Ganho",v:fmtR(totGanho),c:"#2DC653"},{l:"🎫 Ticket",v:fmtR(ticketGeral),c:"#FF6B9D"}].forEach(it=>{
-        const c=div({style:{background:it.c+"18",borderRadius:14,padding:"12px 8px",textAlign:"center"}});
-        c.innerHTML='<div style="font-size:10px;font-weight:700;color:'+it.c+';text-transform:uppercase;letter-spacing:.5px">'+it.l+'</div><div style="font-weight:800;color:'+it.c+';font-size:15px;font-family:\'Fredoka One\',sans-serif;margin-top:3px">'+it.v+'</div>';
-        resumo.appendChild(c);
-      });
-      abaContent.appendChild(resumo);
-
-      const bairrosDiaArr=Object.entries(bairroDia).sort((a,b)=>b[1].ganho-a[1].ganho);
-      if(bairrosDiaArr.length===0){
-        const vazio=div({style:{textAlign:"center",padding:"30px 20px",color:"#8B8FA8",fontSize:13,background:"#fff",borderRadius:18,boxShadow:"0 2px 12px rgba(0,0,0,.06)"}});
-        vazio.innerHTML='<div style="font-size:38px;margin-bottom:8px">🛁</div><div style="font-weight:800;color:#1A1A2E;font-size:14px;margin-bottom:6px">Nenhum banho em '+fmtD(diaSel)+'</div><div style="font-size:12px">Lance os atendimentos nas cobranças<br>para ver o resumo do dia por bairro</div>';
-        abaContent.appendChild(vazio);
-      } else {
-        const lista=div({style:{background:"#fff",borderRadius:18,padding:"16px",boxShadow:"0 2px 12px rgba(0,0,0,.06)"}});
-        lista.appendChild(h("p",{style:{fontFamily:"'Fredoka One',sans-serif",fontSize:14,color:"#1A1A2E",marginBottom:10}},"🗺️ Por Bairro — "+fmtD(diaSel)));
-        const CORES_D=["#FF6B9D","#FFD93D","#3B82F6","#2DC653","#9B59B6","#E8A000","#e53e3e","#06b6d4","#84cc16","#ec4899"];
-        bairrosDiaArr.forEach(([bairro,d],i)=>{
-          const ticketB=d.banhos>0?d.ganho/d.banhos:0;
-          const row=div({style:{marginBottom:10,borderRadius:14,padding:"11px 12px",background:"#f8f8f8",border:"1.5px solid #f0f0f0"}});
-          const topR=div({style:{display:"flex",alignItems:"center",gap:8,marginBottom:6}});
-          const badge=div({style:{width:12,height:12,borderRadius:6,background:CORES_D[i%CORES_D.length],flexShrink:0}});
-          const nm=h("span",{style:{fontWeight:800,fontSize:13,color:"#1A1A2E",flex:1}},bairro);
-          const vl=h("span",{style:{fontWeight:800,fontSize:13,color:CORES_D[i%CORES_D.length]}},fmtR(d.ganho));
-          [badge,nm,vl].forEach(el=>topR.appendChild(el));
-          row.appendChild(topR);
-          const sub=div({style:{display:"flex",gap:12,fontSize:11,color:"#8B8FA8",fontWeight:700}});
-          sub.innerHTML='<span>🛁 '+d.banhos+' banho'+(d.banhos>1?"s":"")+'</span><span>🎫 '+fmtR(ticketB)+'/pet</span>';
-          row.appendChild(sub);
-          lista.appendChild(row);
-        });
-        abaContent.appendChild(lista);
-      }
-
-    }else if(abaAtiva==="pets"){
+    if(abaAtiva==="pets"){
       const tops=getPetsLucro();
       if(tops.length===0){abaContent.appendChild(div({style:{textAlign:"center",padding:"20px",color:"#8B8FA8",fontSize:13}},"Sem dados de atendimento ainda"));return;}
       const maxP=tops[0][1];
@@ -3584,40 +2911,22 @@ function renderStats(){
       });
 
     }else if(abaAtiva==="mes"){
-      // ── Tabela de meses clicáveis (com split Cad1/Cad2) ──────────────────────
-      // Calcula receita separada por cadastro
-      function getReceitaMesSplit(mesNome){
-        let c1=0,c2=0,p1=0,p2=0,pets1=0,pets2=0;
-        Object.values(DATA.cobrancas[mesNome]||{}).forEach(cb=>{
-          const v=totAts(cb.atendimentos);const vp=totAts((cb.atendimentos||[]).filter(a=>a.pago));
-          const np=(cb.atendimentos||[]).reduce((s,a)=>s+(a.caes||[]).length,0);
-          c1+=v;p1+=vp;pets1+=np;
-        });
-        Object.values((DATA.cobrancas2||{})[mesNome]||{}).forEach(cb=>{
-          const v=totAts(cb.atendimentos);const vp=totAts((cb.atendimentos||[]).filter(a=>a.pago));
-          const np=(cb.atendimentos||[]).reduce((s,a)=>s+(a.caes||[]).length,0);
-          c2+=v;p2+=vp;pets2+=np;
-        });
-        return{c1,c2,p1,p2,pets1,pets2,total:c1+c2};
-      }
-
+      // ── Tabela de meses clicáveis ─────────────────────────────────────────
       const tbl=div({style:{background:"#fff",borderRadius:14,overflow:"hidden",boxShadow:"0 1px 8px rgba(0,0,0,.06)",marginBottom:mesSel?16:0}});
-      const hdr2=div({style:{display:"grid",gridTemplateColumns:"1.2fr 1fr 1fr 0.8fr",background:"#FF6B9D",padding:"10px 14px"}});
-      ["Mês","C1","C2","Var."].forEach(t=>hdr2.appendChild(h("span",{style:{fontWeight:800,color:"#fff",fontSize:11,textTransform:"uppercase"}},t)));
+      const hdr2=div({style:{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",background:"#FF6B9D",padding:"10px 14px"}});
+      ["Mês","Faturado","Var."].forEach(t=>hdr2.appendChild(h("span",{style:{fontWeight:800,color:"#fff",fontSize:11,textTransform:"uppercase"}},t)));
       tbl.appendChild(hdr2);
       MESES.forEach((m,mi)=>{
-        const sp=getReceitaMesSplit(m);
-        const v=sp.total;
-        const vAnt=mi>0?getReceitaMesSplit(MESES[mi-1]).total:0;
+        const v=recMes[m].faturado;
+        const vAnt=mi>0?recMes[MESES[mi-1]].faturado:0;
         const varPct=vAnt>0?((v-vAnt)/vAnt*100):0;
         const isAt=mi===mesAt;
         const isSel=mesSel===m;
-        const row=div({style:{display:"grid",gridTemplateColumns:"1.2fr 1fr 1fr 0.8fr",padding:"9px 14px",borderBottom:"1px solid #FFE4EF",background:isSel?"#FFF0F7":(isAt?"#FFF5F9":"#fff"),cursor:"pointer"},onClick:()=>{mesSel=isSel?null:m;buildAbaContent();}});
+        const row=div({style:{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",padding:"9px 14px",borderBottom:"1px solid #FFE4EF",background:isSel?"#FFF0F7":(isAt?"#FFF5F9":"#fff"),cursor:"pointer"},onClick:()=>{mesSel=isSel?null:m;buildAbaContent();}});
         row.appendChild(h("span",{style:{fontWeight:isSel||isAt?800:600,fontSize:12,color:isSel?"#FF6B9D":(isAt?"#FF6B9D":"#1A1A2E")}},m.slice(0,3)+(isAt?" ◀":"")+(isSel?" 🔍":"")));
-        row.appendChild(h("span",{style:{fontWeight:700,fontSize:11,color:"#FF6B9D"}},sp.c1>0?fmtR(sp.c1):"—"));
-        row.appendChild(h("span",{style:{fontWeight:700,fontSize:11,color:"#9B59B6"}},sp.c2>0?fmtR(sp.c2):"—"));
+        row.appendChild(h("span",{style:{fontWeight:700,fontSize:12,color:"#1A1A2E"}},fmtR(v)));
         const vc=varPct>=0?"#2DC653":"#e53e3e";
-        row.appendChild(h("span",{style:{fontWeight:700,fontSize:10,color:vAnt===0?"#ccc":vc}},vAnt===0?"—":(varPct>=0?"▲":"▼")+Math.abs(varPct).toFixed(0)+"%"));
+        row.appendChild(h("span",{style:{fontWeight:700,fontSize:11,color:vAnt===0?"#ccc":vc}},vAnt===0?"—":(varPct>=0?"▲":"▼")+Math.abs(varPct).toFixed(0)+"%"));
         tbl.appendChild(row);
       });
       abaContent.appendChild(tbl);
@@ -3625,27 +2934,10 @@ function renderStats(){
       // ── Detalhes por semana do mês selecionado ────────────────────────────
       if(mesSel){
         const miSel=MESES.indexOf(mesSel);
-        const spMes=getReceitaMesSplit(mesSel);
         const detWrap=div({style:{background:"#fff",borderRadius:18,padding:"16px",boxShadow:"0 2px 12px rgba(0,0,0,.07)",border:"2px solid #FF6B9D"}});
         detWrap.appendChild(h("p",{style:{fontFamily:"'Fredoka One',sans-serif",fontSize:16,color:"#FF6B9D",marginBottom:12}},"📊 "+mesSel+" — por semana"));
 
-        // ── Mini cards Cad1 vs Cad2 ──────────────────────────────────────────
-        const cadGrid=div({style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}});
-        const mkCadCard=(label,val,rec,pets,cor)=>{
-          const c=div({style:{background:cor+"15",borderRadius:12,padding:"10px",border:"1.5px solid "+cor+"44"}});
-          c.innerHTML='<div style="font-size:9px;font-weight:800;color:'+cor+';text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">'+label+'</div><div style="font-weight:800;color:'+cor+';font-size:13px">'+fmtR(val)+'</div><div style="font-size:10px;color:#8B8FA8;margin-top:2px">Rec: '+fmtR(rec)+'</div><div style="font-size:10px;color:#8B8FA8">'+pets+' pets</div>';
-          return c;
-        };
-        cadGrid.appendChild(mkCadCard("📁 Cadastro 1",spMes.c1,spMes.p1,spMes.pets1,"#FF6B9D"));
-        cadGrid.appendChild(mkCadCard("📂 Cadastro 2",spMes.c2,spMes.p2,spMes.pets2,"#9B59B6"));
-        detWrap.appendChild(cadGrid);
-
-        // ── Resumo total do mês com médias ───────────────────────────────────
-        const totalM=spMes.total;
-        const pagosM=spMes.p1+spMes.p2;
-        const totalPetsM=spMes.pets1+spMes.pets2;
-
-        // Coleta atendimentos do mês para semanas
+        // Coleta atendimentos do mês
         function getAtsDoMes(mesNome){
           const ats=[];
           [DATA.cobrancas[mesNome]||{},(DATA.cobrancas2||{})[mesNome]||{}].forEach(cbM=>{
@@ -3658,35 +2950,33 @@ function renderStats(){
           });
           return ats.sort((a,b)=>a.data.localeCompare(b.data));
         }
+
         const atsM=getAtsDoMes(mesSel);
+        const totalM=atsM.reduce((s,a)=>s+a.valor,0);
+        const pagosM=atsM.filter(a=>a.pago).reduce((s,a)=>s+a.valor,0);
+        const totalPetsM=atsM.reduce((s,a)=>s+a.caes,0);
 
-        // Médias
-        const diasComMov=new Set(atsM.map(a=>a.data)).size||1;
-        const mediaDia=totalPetsM/Math.max(diasComMov,1);
-        const ticketMedio=totalPetsM>0?totalM/totalPetsM:0;
-
-        const resumoMes=div({style:{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}});
+        // Resumo do mês
+        const resumoMes=div({style:{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:16}});
         [{l:"Faturado",v:fmtR(totalM),c:"#FF6B9D"},{l:"Recebido",v:fmtR(pagosM),c:"#2DC653"},{l:"Pets",v:totalPetsM+" banhos",c:"#3B82F6"}].forEach(it=>{
           const c=div({style:{background:it.c+"18",borderRadius:12,padding:"10px 8px",textAlign:"center"}});
-          c.innerHTML='<div style="font-size:10px;font-weight:700;color:'+it.c+';text-transform:uppercase;letter-spacing:.6px">'+it.l+'</div><div style="font-weight:800;color:'+it.c+';font-size:13px;margin-top:3px">'+it.v+'</div>';
+          c.innerHTML=`<div style="font-size:10px;font-weight:700;color:${it.c};text-transform:uppercase;letter-spacing:.6px">${it.l}</div><div style="font-weight:800;color:${it.c};font-size:13px;margin-top:3px">${it.v}</div>`;
           resumoMes.appendChild(c);
         });
         detWrap.appendChild(resumoMes);
 
-        // Médias em linha
-        const mediasRow=div({style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}});
-        [{l:"🐾 Média/dia",v:mediaDia.toFixed(1)+" pets",c:"#E8A000"},{l:"💰 Ticket médio",v:fmtR(ticketMedio),c:"#8B8FA8"}].forEach(it=>{
-          const c=div({style:{background:it.c+"18",borderRadius:10,padding:"8px",textAlign:"center"}});
-          c.innerHTML='<div style="font-size:9px;font-weight:700;color:'+it.c+';text-transform:uppercase">'+it.l+'</div><div style="font-weight:800;color:'+it.c+';font-size:12px;margin-top:2px">'+it.v+'</div>';
-          mediasRow.appendChild(c);
-        });
-        detWrap.appendChild(mediasRow);
+        // Dividir em semanas (Seg a Dom)
+        const ano2=new Date().getFullYear();
+        const primDiaMes=new Date(ano2,miSel,1);
+        const ultDiaMes=new Date(ano2,miSel+1,0);
 
-        // Dividir em semanas
+        // Agrupa por semana do mês
         function semanaDoMes(dataStr){
           const d=new Date(dataStr+"T12:00:00");
-          return Math.ceil(d.getDate()/7);
+          const dia=d.getDate();
+          return Math.ceil(dia/7);
         }
+
         const semanas={};
         atsM.forEach(at=>{
           const s=semanaDoMes(at.data);
@@ -3700,24 +2990,27 @@ function renderStats(){
         const nSems=Object.keys(semanas).map(Number).sort((a,b)=>a-b);
         if(nSems.length===0){detWrap.appendChild(div({style:{textAlign:"center",padding:"20px",color:"#8B8FA8",fontSize:13}},"Sem atendimentos em "+mesSel));}
         else{
+          // encontra semana com maior faturamento
           const melhorSem=nSems.reduce((best,s)=>semanas[s].valor>semanas[best].valor?s:best,nSems[0]);
+
           nSems.forEach(s=>{
             const sm=semanas[s];
             const isMelhor=s===melhorSem&&sm.valor>0;
             const semRow=div({style:{marginBottom:10,background:isMelhor?"#FFFBEE":"#f8f8f8",borderRadius:14,padding:"10px 12px",border:isMelhor?"2px solid #FFD93D":"1.5px solid #f0f0f0"}});
             const topSem=div({style:{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}});
-            topSem.innerHTML='<div><span style="font-weight:800;color:#1A1A2E;font-size:13px">Semana '+s+'</span>'+( isMelhor?'<span style="background:#FFD93D;color:#1A1A2E;font-size:9px;font-weight:800;padding:2px 6px;border-radius:6px;margin-left:6px">⭐ MELHOR</span>':"")+('</div><span style="font-weight:800;color:#FF6B9D;font-size:14px">'+fmtR(sm.valor)+'</span>');
+            topSem.innerHTML=`<div><span style="font-weight:800;color:#1A1A2E;font-size:13px">Semana ${s}</span>${isMelhor?'<span style="background:#FFD93D;color:#1A1A2E;font-size:9px;font-weight:800;padding:2px 6px;border-radius:6px;margin-left:6px">⭐ MELHOR</span>':""}</div><span style="font-weight:800;color:#FF6B9D;font-size:14px">${fmtR(sm.valor)}</span>`;
             semRow.appendChild(topSem);
+            // Barra progresso
             const pct=totalM>0?sm.valor/totalM:0;
             const barWrap=div({style:{background:"#FFE4EF",borderRadius:6,height:8,marginBottom:6}});
             barWrap.appendChild(div({style:{background:isMelhor?"#FFD93D":"#FF6B9D",borderRadius:6,height:8,width:(pct*100).toFixed(1)+"%",minWidth:"4px"}}));
             semRow.appendChild(barWrap);
             const info2=div({style:{display:"flex",gap:12,fontSize:11,color:"#8B8FA8",fontWeight:700}});
-            const mediaSem=sm.pets>0?sm.valor/sm.pets:0;
-            info2.innerHTML='<span>✅ Rec: '+fmtR(sm.pago)+'</span><span>🐾 '+sm.pets+' pets</span><span>📅 '+sm.dias.size+' dia'+(sm.dias.size>1?"s":"")+'</span><span>💰 '+fmtR(mediaSem)+'/pet</span>';
+            info2.innerHTML=`<span>✅ Rec: ${fmtR(sm.pago)}</span><span>🐾 ${sm.pets} pets</span><span>📅 ${sm.dias.size} dia${sm.dias.size>1?"s":""}</span>`;
             semRow.appendChild(info2);
             detWrap.appendChild(semRow);
           });
+
           // Comparativo entre semanas
           if(nSems.length>=2){
             const compWrap=div({style:{background:"linear-gradient(135deg,#1A1A2E,#2d3561)",borderRadius:14,padding:"12px 14px",marginTop:8}});
@@ -3738,138 +3031,7 @@ function renderStats(){
         }
         abaContent.appendChild(detWrap);
       }
-    }else if(abaAtiva==="bairros"){
-      // ── Gráfico de pizza por bairro ─────────────────────────────────────────
-      const getBairroDoCliente=getBairroCli;
 
-      // Seletor de mês em chips clicáveis (Todos + cada mês)
-      const selWrap=div({style:{marginBottom:14}});
-      selWrap.appendChild(lbl("Mês do gráfico"));
-      const chips=div({style:{display:"flex",gap:6,overflowX:"auto",paddingBottom:4,marginTop:4}});
-      const opcoes=[{k:"__todos__",l:"Todos"}].concat(MESES.map(m=>({k:m,l:m.slice(0,3)})));
-      opcoes.forEach(op=>{
-        const on=mesSelBairro===op.k;
-        chips.appendChild(btn({style:{flexShrink:0,padding:"7px 14px",fontSize:12,fontWeight:800,borderRadius:18,whiteSpace:"nowrap",background:on?"#FF6B9D":"#fff",color:on?"#fff":"#8B8FA8",border:"2px solid "+(on?"#FF6B9D":"#FFE4EF")},onClick:()=>{mesSelBairro=op.k;buildAbaContent();}},op.l));
-      });
-      selWrap.appendChild(chips);
-      abaContent.appendChild(selWrap);
-
-      // Meses a considerar conforme seleção
-      const mesesAlvo=mesSelBairro==="__todos__"?MESES:[mesSelBairro];
-
-      // Agrupa receita e pets por bairro (mês selecionado ou todos)
-      const bairroMap={};
-      mesesAlvo.forEach(m=>{
-        [DATA.cobrancas[m]||{},(DATA.cobrancas2||{})[m]||{}].forEach(cbM=>{
-          Object.entries(cbM).forEach(([casaNum,cb])=>{
-            const v=totAts(cb.atendimentos);
-            if(v<=0)return;
-            const bairro=getBairroDoCliente(casaNum);
-            if(!bairroMap[bairro])bairroMap[bairro]={valor:0,pets:0,clientes:new Set()};
-            bairroMap[bairro].valor+=v;
-            bairroMap[bairro].clientes.add(String(casaNum));
-            (cb.atendimentos||[]).forEach(at=>bairroMap[bairro].pets+=(at.caes||[]).length);
-          });
-        });
-      });
-
-      const bairrosArr=Object.entries(bairroMap).sort((a,b)=>b[1].valor-a[1].valor);
-      const totalBairros=bairrosArr.reduce((s,[,b])=>s+b.valor,0);
-      const CORES=["#FF6B9D","#FFD93D","#3B82F6","#2DC653","#9B59B6","#E8A000","#e53e3e","#06b6d4","#84cc16","#f59e0b","#ec4899","#8b5cf6"];
-
-      if(bairrosArr.length===0||totalBairros===0){
-        const aviso=div({style:{textAlign:"center",padding:"40px 20px",color:"#8B8FA8",fontSize:13,background:"#fff",borderRadius:18,padding:"30px 20px"}});
-        aviso.innerHTML='<div style="font-size:40px;margin-bottom:10px">🗺️</div><div style="font-weight:800;color:#1A1A2E;font-size:14px;margin-bottom:8px">Sem dados de bairro ainda</div><div style="font-size:12px;color:#8B8FA8">Adicione o endereço dos clientes<br>no cadastro para ver o mapa por bairro</div>';
-        abaContent.appendChild(aviso);
-      } else {
-        // ── Gráfico de pizza SVG tipo donut ──────────────────────────────────
-        const pizzaWrap=div({style:{background:"#fff",borderRadius:18,padding:"16px",boxShadow:"0 2px 12px rgba(0,0,0,.07)",marginBottom:14}});
-        pizzaWrap.appendChild(h("p",{style:{fontFamily:"'Fredoka One',sans-serif",fontSize:15,color:"#1A1A2E",marginBottom:12,textAlign:"center"}},"🗺️ Receita por Bairro · "+(mesSelBairro==="__todos__"?"Todos os meses":mesSelBairro)));
-
-        const SZ=220,cx=110,cy=110,R=90,ri=45;
-        const ns="http://www.w3.org/2000/svg";
-        const svg=document.createElementNS(ns,"svg");
-        svg.setAttribute("viewBox","0 0 "+SZ+" "+SZ);
-        svg.setAttribute("width","100%");svg.setAttribute("height",SZ);
-        svg.style.cssText="display:block;max-width:"+SZ+"px;margin:0 auto";
-
-        const top10=bairrosArr.slice(0,10);
-        // Se houver mais de 10, agrupa o resto em "Outros"
-        if(bairrosArr.length>10){
-          const outrosVal=bairrosArr.slice(10).reduce((s,[,b])=>s+b.valor,0);
-          const outrosPets=bairrosArr.slice(10).reduce((s,[,b])=>s+b.pets,0);
-          const outrosCl=new Set(bairrosArr.slice(10).flatMap(([,b])=>[...b.clientes]));
-          top10.push(["Outros",{valor:outrosVal,pets:outrosPets,clientes:outrosCl}]);
-        }
-
-        let angS=-Math.PI/2;
-        top10.forEach(([bairro,data],i)=>{
-          const pct=data.valor/totalBairros;
-          if(pct<=0)return;
-          const angE=angS+pct*2*Math.PI;
-          const x1=cx+R*Math.cos(angS),y1=cy+R*Math.sin(angS);
-          const x2=cx+R*Math.cos(angE),y2=cy+R*Math.sin(angE);
-          const xi1=cx+ri*Math.cos(angS),yi1=cy+ri*Math.sin(angS);
-          const xi2=cx+ri*Math.cos(angE),yi2=cy+ri*Math.sin(angE);
-          const large=pct>0.5?1:0;
-          const path=document.createElementNS(ns,"path");
-          path.setAttribute("d","M"+xi1+","+yi1+" L"+x1+","+y1+" A"+R+","+R+" 0 "+large+",1 "+x2+","+y2+" L"+xi2+","+yi2+" A"+ri+","+ri+" 0 "+large+",0 "+xi1+","+yi1+" Z");
-          path.setAttribute("fill",CORES[i%CORES.length]);
-          path.setAttribute("stroke","#fff");path.setAttribute("stroke-width","2");
-          svg.appendChild(path);
-          angS=angE;
-        });
-
-        // Texto central
-        const tc=document.createElementNS(ns,"text");
-        tc.setAttribute("x",cx);tc.setAttribute("y",cy-8);
-        tc.setAttribute("text-anchor","middle");tc.setAttribute("font-size","9");
-        tc.setAttribute("font-weight","800");tc.setAttribute("fill","#8B8FA8");
-        tc.setAttribute("font-family","Nunito,sans-serif");tc.textContent="RECEITA TOTAL";
-        const tv=document.createElementNS(ns,"text");
-        tv.setAttribute("x",cx);tv.setAttribute("y",cy+10);
-        tv.setAttribute("text-anchor","middle");tv.setAttribute("font-size","13");
-        tv.setAttribute("font-weight","800");tv.setAttribute("fill","#1A1A2E");
-        tv.setAttribute("font-family","Nunito,sans-serif");tv.textContent=fmtR(totalBairros);
-        [tc,tv].forEach(t=>svg.appendChild(t));
-        pizzaWrap.appendChild(svg);
-
-        // Legenda colorida com espaçamento
-        const leg=div({style:{display:"flex",flexWrap:"wrap",gap:8,marginTop:12,justifyContent:"center"}});
-        top10.forEach(([bairro,],i)=>{
-          const li=div({style:{display:"flex",alignItems:"center",gap:5,fontSize:11,fontWeight:700,color:"#1A1A2E",background:"#f8f8f8",borderRadius:20,padding:"4px 10px"}});
-          const dot=div({style:{width:10,height:10,borderRadius:5,background:CORES[i%CORES.length],flexShrink:0}});
-          li.appendChild(dot);
-          // nome curto
-          const nm=bairro.split(" ").slice(0,3).join(" ");
-          li.appendChild(document.createTextNode(nm));
-          leg.appendChild(li);
-        });
-        pizzaWrap.appendChild(leg);
-        abaContent.appendChild(pizzaWrap);
-
-        // ── Lista detalhada por bairro ──────────────────────────────────────
-        const listaDiv=div({style:{background:"#fff",borderRadius:18,padding:"16px",boxShadow:"0 2px 12px rgba(0,0,0,.06)"}});
-        listaDiv.appendChild(h("p",{style:{fontFamily:"'Fredoka One',sans-serif",fontSize:14,color:"#1A1A2E",marginBottom:10}},"🏘️ Detalhes por Bairro"));
-        top10.forEach(([bairro,data],i)=>{
-          const pct=totalBairros>0?(data.valor/totalBairros*100):0;
-          const row=div({style:{marginBottom:10,borderRadius:14,padding:"10px 12px",background:"#f8f8f8",border:"1.5px solid #f0f0f0"}});
-          const topR=div({style:{display:"flex",alignItems:"center",gap:8,marginBottom:5}});
-          const badge=div({style:{width:12,height:12,borderRadius:6,background:CORES[i%CORES.length],flexShrink:0}});
-          const nm=h("span",{style:{fontWeight:800,fontSize:13,color:"#1A1A2E",flex:1}},bairro);
-          const vl=h("span",{style:{fontWeight:800,fontSize:12,color:CORES[i%CORES.length]}},fmtR(data.valor));
-          [badge,nm,vl].forEach(el=>topR.appendChild(el));
-          row.appendChild(topR);
-          const bar=div({style:{background:"#f0f0f0",borderRadius:6,height:6,marginBottom:5}});
-          bar.appendChild(div({style:{background:CORES[i%CORES.length],borderRadius:6,height:6,width:pct.toFixed(1)+"%",minWidth:"4px"}}));
-          row.appendChild(bar);
-          const sub=div({style:{display:"flex",gap:10,fontSize:11,color:"#8B8FA8",fontWeight:700}});
-          sub.innerHTML="<span>"+pct.toFixed(1)+"% do total</span><span>🐾 "+data.pets+" pets</span><span>👤 "+data.clientes.size+" clientes</span>";
-          row.appendChild(sub);
-          listaDiv.appendChild(row);
-        });
-        abaContent.appendChild(listaDiv);
-      }
     }else if(abaAtiva==="texto"){
       let tR2=0,tP2=0;
       MESES.forEach(m=>{[DATA.cobrancas[m]||{},(DATA.cobrancas2||{})[m]||{}].forEach(cbM=>Object.values(cbM).forEach(cb=>{const v=totAts(cb.atendimentos);tR2+=v;if(cb.pago)tP2+=v;}));});
@@ -4154,7 +3316,7 @@ function renderRestaurar(){
   const fileI=h("input",{type:"file",accept:".json,application/json",style:{display:"none"}});
   const msg=div({style:{borderRadius:12,padding:"12px 16px",marginBottom:14,fontWeight:700,fontSize:13,whiteSpace:"pre-line",display:"none"}});
   let parsed=null;
-  const rB=btn({style:{width:"100%",padding:"18px",background:"linear-gradient(135deg,#2DC653,#52e87b)",color:"#fff",fontSize:17,borderRadius:16,display:"none",alignItems:"center",justifyContent:"center",gap:10,marginBottom:16},onClick:()=>{if(parsed){const limpo=sanitizeData(parsed);saveData(limpo);DATA=limpo;go("home");alert("Backup restaurado!");}}},[h("span",{style:{fontSize:22}},"✅")," RESTAURAR AGORA"]);
+  const rB=btn({style:{width:"100%",padding:"18px",background:"linear-gradient(135deg,#2DC653,#52e87b)",color:"#fff",fontSize:17,borderRadius:16,display:"none",alignItems:"center",justifyContent:"center",gap:10,marginBottom:16},onClick:()=>{if(parsed){saveData(parsed);DATA=parsed;go("home");alert("Backup restaurado!");}}},[h("span",{style:{fontSize:22}},"✅")," RESTAURAR AGORA"]);
   fileI.addEventListener("change",e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>{try{const p=JSON.parse(ev.target.result);parsed=p;msg.style.display="block";msg.style.background="#e8fbed";msg.style.color="#2DC653";msg.textContent=`Valido! Cad.1: ${Object.keys(p.casas||{}).length} | Cad.2: ${Object.keys(p.casas2||{}).length}`;rB.style.display="flex";}catch(e){msg.style.display="block";msg.style.background="#fff0f0";msg.style.color="#e53e3e";msg.textContent="Erro: "+e.message;parsed=null;rB.style.display="none";}};r.readAsText(f);});
   const selB=btn({style:{width:"100%",padding:"20px",background:"linear-gradient(135deg,#FF6B9D,#FFD93D)",color:"#fff",fontSize:16,borderRadius:16,marginBottom:14,display:"flex",alignItems:"center",justifyContent:"center",gap:10},onClick:()=>{fileI.value="";fileI.click();}},[h("span",{},"📂")," SELECIONAR ARQUIVO"]);
   const lblC=h("p",{style:{fontWeight:800,color:"#8B8FA8",fontSize:13,textTransform:"uppercase",marginBottom:8,marginTop:8}},"Ou cole o JSON:");
@@ -4165,692 +3327,6 @@ function renderRestaurar(){
   }},"Validar JSON");
   [fileI,selB,msg,rB,lblC,ta,valB].forEach(el=>body.appendChild(el));
   w.appendChild(body);return w;
-}
-
-
-
-// ── BOLÃO COPA 2026 ───────────────────────────────────────────────────────────
-const BOLAO_JOGOS=[
-  {id:"g1",fase:"Grupo C",data:"2026-06-13",hora:"19:00",mandante:"Brasil",visitante:"Marrocos",local:"Nova Jersey"},
-  {id:"g2",fase:"Grupo C",data:"2026-06-19",hora:"21:30",mandante:"Brasil",visitante:"Haiti",local:"Filadélfia"},
-  {id:"g3",fase:"Grupo C",data:"2026-06-24",hora:"19:00",mandante:"Escócia",visitante:"Brasil",local:"Miami"},
-  {id:"o1",fase:"Oitavas",data:"2026-06-29",hora:"?",mandante:"Brasil",visitante:"Grupo F",local:"Houston/Monterrey"},
-  {id:"arg1",fase:"Argentina",data:"2026-06-27",hora:"?",mandante:"Argentina",visitante:"Jordânia",local:"—"},
-  {id:"jap1",fase:"Oitavas",data:"2026-07-02",hora:"?",mandante:"Brasil",visitante:"Japão",local:"—"},
-  {id:"nor1",fase:"Mata-mata",data:"2026-07-05",hora:"16:00",mandante:"Brasil",visitante:"Noruega",local:"—"},
-];
-
-// Só atacantes — quem pode fazer gol no bolão
-const ATACANTES_BR=[
-  {n:"Vinicius Junior", clube:"Real Madrid",   num:7,  emoji:"⚡"},
-  {n:"Neymar",          clube:"Santos",         num:10, emoji:"🎩"},
-  {n:"Raphinha",        clube:"Barcelona",      num:11, emoji:"🔥"},
-  {n:"Endrick",         clube:"Lyon",           num:9,  emoji:"💥"},
-  {n:"Gabriel Martinelli",clube:"Arsenal",      num:11, emoji:"🚀"},
-  {n:"Matheus Cunha",   clube:"Man. United",    num:9,  emoji:"🎯"},
-  {n:"Luiz Henrique",   clube:"Zenit",          num:17, emoji:"💨"},
-  {n:"Igor Thiago",     clube:"Brentford",      num:19, emoji:"🦁"},
-  {n:"Rayan",           clube:"Bournemouth",    num:18, emoji:"⭐"},
-];
-
-function getBolao(){
-  if(!DATA.bolao)DATA.bolao={palpites:{},placar:{}};
-  return DATA.bolao;
-}
-
-function proximoJogoBR(){
-  const hj=hoje();
-  return BOLAO_JOGOS.find(j=>j.data>=hj)||(BOLAO_JOGOS[BOLAO_JOGOS.length-1]);
-}
-
-// ── Helpers p/ múltiplos jogadores/goleadores ────────────────────────────────
-// Aceita formato antigo (string em .jogador / .goleador) e novo (array .jogadores / .goleadores)
-function getJogadores(pal){
-  if(!pal)return[];
-  if(Array.isArray(pal.jogadores))return pal.jogadores.filter(Boolean);
-  return pal.jogador?[pal.jogador]:[];
-}
-function getGoleadores(real){
-  if(!real)return[];
-  if(Array.isArray(real.goleadores))return real.goleadores.filter(Boolean);
-  return real.goleador?[real.goleador]:[];
-}
-// Texto curto p/ exibir (só primeiros nomes)
-function jogadoresCurto(pal){return getJogadores(pal).map(n=>n.split(" ")[0]).join(", ");}
-function goleadoresCurto(real){return getGoleadores(real).join(", ");}
-
-// ── Calcula vencedor de um jogo (prêmio banho grátis) ─────────────────────────
-// Regra:
-// • SÓ GANHA quem acertar o PLACAR EXATO do jogo.
-// • Ordem de qualificação (mais qualificado primeiro):
-//     1º) acertou placar exato + goleador
-//     2º) acertou placar exato (só o placar)
-function calcularVencedores(jogoId,real,palpites){
-  if(!real||real.golM===""||real.golV==="")return[];
-  const rm=parseInt(real.golM),rv=parseInt(real.golV);
-  const golsReais=getGoleadores(real);
-  const candidatos=Object.entries(palpites[jogoId]||{}).map(([uid,pal])=>{
-    const pm=parseInt(pal.golM),pv=parseInt(pal.golV);
-    const acertouExato=!isNaN(pm)&&!isNaN(pv)&&pm===rm&&pv===rv;
-    const jogP=getJogadores(pal);
-    const acertouGol=jogP.length>0&&golsReais.length>0&&jogP.some(j=>golsReais.includes(j));
-    return{uid,nome:pal.nome,acertouExato,acertouGol,pal};
-  });
-  // Só entram quem acertou o placar exato
-  const ganhadores=candidatos.filter(c=>c.acertouExato);
-  if(!ganhadores.length)return[];
-  // Pontuação de qualificação para ordenar
-  ganhadores.forEach(c=>{
-    c.qualif=(c.acertouGol?1:0);
-    if(c.acertouGol)c.motivo="🏆 Placar exato + goleador!";
-    else c.motivo="🎯 Acertou o placar exato";
-  });
-  // Mais qualificado primeiro
-  ganhadores.sort((a,b)=>b.qualif-a.qualif);
-  return ganhadores;
-}
-
-function renderBolao(){
-  const w=div({className:"screen"});
-  const bolao=getBolao();
-  const jogo=proximoJogoBR();
-
-  // ── Topo banner próximo jogo ─────────────────────────────────────────────
-  const d=new Date(jogo.data+"T12:00:00");
-  const diasSem=["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
-  const diaS=diasSem[d.getDay()];
-  const dd=String(d.getDate()).padStart(2,"0");
-  const mm=String(d.getMonth()+1).padStart(2,"0");
-  const real=(bolao.placar||{})[jogo.id]||{};
-  const temPlacar=real.golM!==""&&real.golV!==""&&real.golM!=null;
-  const flagVisit=jogo.visitante==="Brasil"?"🇧🇷":
-    jogo.visitante==="Marrocos"?"🇲🇦":
-    jogo.visitante==="Haiti"?"🇭🇹":
-    jogo.visitante==="Noruega"?"🇳🇴":
-    jogo.visitante==="Escócia"?"🏴󠁧󠁢󠁳󠁣󠁴󠁿":"🌍";
-  const flagMand=jogo.mandante==="Brasil"?"🇧🇷":
-    jogo.mandante==="Escócia"?"🏴󠁧󠁢󠁳󠁣󠁴󠁿":"🌍";
-
-  // Monta lista de palpites do próximo jogo
-  const palpitesJogo=bolao.palpites?.[jogo.id]||{};
-  const listaPalpites=Object.entries(palpitesJogo)
-    .filter(([,p])=>p.golM!==""||getJogadores(p).length>0)
-    .sort((a,b)=>a[1].nome.localeCompare(b[1].nome));
-
-  const topo=div({style:{background:"linear-gradient(160deg,#064e26 0%,#15803d 60%,#166534 100%)",padding:"20px 18px 22px"}});
-
-  // ── Monta o topo inteiramente em DOM (sem innerHTML + injeção) ────────────
-  const topoHeader=div({style:{display:"flex",alignItems:"center",gap:8,marginBottom:12}});
-  topoHeader.innerHTML='<span style="font-size:22px">⚽</span><div><div style="font-family:Fredoka One,sans-serif;font-size:13px;color:rgba(255,255,255,.75);letter-spacing:1.2px;text-transform:uppercase">'+( temPlacar?"Resultado":"Próximo Jogo")+' · '+jogo.fase+'</div><div style="font-size:10px;color:rgba(255,255,255,.55)">'+jogo.local+'</div></div>';
-  topo.appendChild(topoHeader);
-
-  const topoScorebox=div({style:{background:"rgba(0,0,0,.3)",borderRadius:18,padding:"16px 14px",display:"flex",alignItems:"center",gap:8}});
-  const boxM=div({style:{flex:1,textAlign:"center"}});
-  boxM.innerHTML='<div style="font-size:32px">'+flagMand+'</div><div style="font-family:Fredoka One,sans-serif;font-size:15px;color:#fff;margin-top:4px">'+jogo.mandante+'</div>';
-  const boxC=div({style:{textAlign:"center",minWidth:70}});
-  if(temPlacar){
-    boxC.innerHTML='<div style="font-family:Fredoka One,sans-serif;font-size:36px;color:#FFD93D;line-height:1">'+real.golM+' × '+real.golV+'</div>'+( goleadoresCurto(real)?'<div style="font-size:10px;color:rgba(255,255,255,.8);margin-top:4px;font-weight:700">⚽ '+goleadoresCurto(real)+'</div>':"");
-  } else {
-    boxC.innerHTML='<div style="font-family:Fredoka One,sans-serif;font-size:20px;color:#FFD93D">'+diaS+' '+dd+'/'+mm+'</div><div style="font-size:14px;color:rgba(255,255,255,.85);font-weight:700;margin-top:2px">'+jogo.hora+'h</div>';
-  }
-  const boxV=div({style:{flex:1,textAlign:"center"}});
-  boxV.innerHTML='<div style="font-size:32px">'+flagVisit+'</div><div style="font-family:Fredoka One,sans-serif;font-size:15px;color:#fff;margin-top:4px">'+jogo.visitante+'</div>';
-  [boxM,boxC,boxV].forEach(b=>topoScorebox.appendChild(b));
-  topo.appendChild(topoScorebox);
-
-  // ── Lista de palpites com botão apagar ────────────────────────────────────
-  if(listaPalpites.length>0){
-    const palWrap=div({style:{marginTop:12,background:"rgba(0,0,0,.2)",borderRadius:14,padding:"10px 12px"}});
-    palWrap.appendChild(h("div",{style:{fontSize:9,fontWeight:800,color:"rgba(255,255,255,.5)",textTransform:"uppercase",letterSpacing:1,marginBottom:6}},
-      "🎯 "+listaPalpites.length+" palpite(s) recebido(s)"));
-    listaPalpites.forEach(([uid,p])=>{
-      const primeiroNome=(p.nome||"?").split(" ")[0];
-      const linha=div({style:{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:"1px solid rgba(255,255,255,.08)"}});
-      const av=div({style:{width:28,height:28,borderRadius:14,background:"rgba(255,255,255,.15)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,color:"#fff",flexShrink:0}});
-      av.textContent=primeiroNome[0].toUpperCase();
-      const nm=div({style:{fontWeight:700,fontSize:12,color:"#fff",flex:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}});
-      nm.textContent=primeiroNome;
-      const inf=div({style:{display:"flex",alignItems:"center",gap:5}});
-      if(p.golM!==""&&p.golV!==""){const pl=document.createElement("span");pl.style.cssText='background:rgba(255,255,255,.2);border-radius:6px;padding:1px 7px;font-weight:900;font-size:12px;color:#FFD93D';pl.textContent=p.golM+"×"+p.golV;inf.appendChild(pl);}
-      const gl=document.createElement("span");
-      if(getJogadores(p).length){gl.style.cssText='background:rgba(0,0,0,.25);border-radius:6px;padding:1px 7px;font-size:11px;color:#86efac';gl.textContent="⚽ "+jogadoresCurto(p);}
-      else{gl.style.cssText='font-size:11px;color:rgba(255,255,255,.35)';gl.textContent="sem goleador";}
-      inf.appendChild(gl);
-      const delBtn=document.createElement("button");
-      delBtn.textContent="🗑";
-      delBtn.style.cssText='background:rgba(220,0,0,.45);border:none;border-radius:8px;color:#fff;font-size:13px;padding:3px 7px;cursor:pointer;flex-shrink:0';
-      delBtn.onclick=(e)=>{
-        e.stopPropagation();
-        if(confirm("Apagar palpite de "+primeiroNome+"?")){
-          updSilent(d=>{if(d.bolao&&d.bolao.palpites&&d.bolao.palpites[jogo.id])delete d.bolao.palpites[jogo.id][uid];return d;});
-          DATA=loadData();go("bolao");
-        }
-      };
-      [av,nm,inf,delBtn].forEach(el=>linha.appendChild(el));
-      palWrap.appendChild(linha);
-    });
-    topo.appendChild(palWrap);
-  } else {
-    const semPal=div({style:{marginTop:10,textAlign:"center",fontSize:11,color:"rgba(255,255,255,.4)"}});
-    semPal.textContent="Nenhum palpite ainda para este jogo";
-    topo.appendChild(semPal);
-  }
-  w.appendChild(topo);
-
-
-  // ── Header com voltar ────────────────────────────────────────────────────
-  w.appendChild(mkHdr("⚽ Bolão Copa 2026",()=>go("home")));
-
-  const body=div({style:{padding:"14px 16px 60px",display:"flex",flexDirection:"column",gap:14}});
-
-  // ── Tabs ─────────────────────────────────────────────────────────────────
-  let tabAtiva="palpites";
-  const tabWrap=div({style:{display:"flex",gap:6,background:"#f3f4f6",borderRadius:14,padding:"4px"}});
-  function mkTab(id,label){
-    const t=btn({style:{flex:1,padding:"9px 4px",background:id==="palpites"?"#15803d":"transparent",color:id==="palpites"?"#fff":"#6b7280",borderRadius:10,fontSize:12,fontWeight:800,transition:"all .2s"},onClick:()=>{tabAtiva=id;atualizarTabs();renderConteudo();}},label);
-    return t;
-  }
-  const tabPal=mkTab("palpites","🎯 Palpites");
-  const tabRank=mkTab("ranking","🏆 Ranking");
-  const tabJogos=mkTab("jogos","📅 Jogos");
-  [tabPal,tabRank,tabJogos].forEach(t=>tabWrap.appendChild(t));
-  body.appendChild(tabWrap);
-
-  function atualizarTabs(){
-    [[tabPal,"palpites"],[tabRank,"ranking"],[tabJogos,"jogos"]].forEach(([t,id])=>{
-      t.style.background=tabAtiva===id?"#15803d":"transparent";
-      t.style.color=tabAtiva===id?"#fff":"#6b7280";
-    });
-  }
-
-  const conteudoWrap=div();
-  body.appendChild(conteudoWrap);
-
-  function renderConteudo(){
-    conteudoWrap.innerHTML="";
-    if(tabAtiva==="palpites")conteudoWrap.appendChild(renderPalpitesTab(bolao,jogo));
-    if(tabAtiva==="ranking")conteudoWrap.appendChild(renderRankingTab(bolao));
-    if(tabAtiva==="jogos")conteudoWrap.appendChild(renderJogosTab(bolao));
-  }
-  renderConteudo();
-  w.appendChild(body);
-  return w;
-}
-
-// ── Tab Palpites — FORMULÁRIO LIVRE (sem cadastro) ────────────────────────────
-function renderPalpitesTab(bolao,jogoAtual){
-  const wrap=div();
-
-  // ── Seletor de jogo ───────────────────────────────────────────────────────
-  const jogoSel=sel({className:"fi",style:{marginBottom:12,fontWeight:700}},
-    BOLAO_JOGOS.map(j=>({v:j.id,l:`${fmtD(j.data)} · ${j.mandante} × ${j.visitante}`,sel:j.id===jogoAtual.id}))
-  );
-  let jogoId=jogoAtual.id;
-  wrap.appendChild(jogoSel);
-  jogoSel.addEventListener("change",()=>{jogoId=jogoSel.value;renderFormulario();});
-
-  // ── Área do formulário + lista de apostadores ────────────────────────────
-  const formArea=div();
-  wrap.appendChild(formArea);
-
-  function renderFormulario(){
-    formArea.innerHTML="";
-    const jAtual=BOLAO_JOGOS.find(j=>j.id===jogoId)||jogoAtual;
-    const fM2=jAtual.mandante==="Brasil"?"🇧🇷":jAtual.mandante==="Escócia"?"🏴󠁧󠁢󠁳󠁣󠁴󠁿":"🌍";
-    const fV2=jAtual.visitante==="Brasil"?"🇧🇷":jAtual.visitante==="Haiti"?"🇭🇹":jAtual.visitante==="Marrocos"?"🇲🇦":jAtual.visitante==="Noruega"?"🇳🇴":"🌍";
-
-    // ── Card formulário de aposta ────────────────────────────────────────────
-    const formCard=div({style:{background:"linear-gradient(135deg,#f0fdf4,#dcfce7)",border:"2px solid #16a34a",borderRadius:18,padding:"16px",marginBottom:14}});
-    formCard.appendChild(h("div",{style:{fontFamily:"'Fredoka One',sans-serif",fontSize:16,color:"#15803d",marginBottom:12}},
-      "🎯 Fazer minha aposta"));
-
-    // Nome + Telefone
-    const dupla=div({style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}});
-    const nomeInp=inp({className:"fi",placeholder:"Nome completo *",style:{border:"2px solid #16a34a"}});
-    const telInp=inp({className:"fi",placeholder:"WhatsApp *",type:"tel",style:{border:"2px solid #16a34a"}});
-    dupla.appendChild(nomeInp);dupla.appendChild(telInp);
-    formCard.appendChild(dupla);
-
-    // Placar
-    formCard.appendChild(h("div",{style:{fontWeight:800,fontSize:11,color:"#166534",textTransform:"uppercase",letterSpacing:1,marginBottom:8}},"Placar que você aposta"));
-    const palRow=div({style:{display:"flex",alignItems:"center",gap:8,marginBottom:14,justifyContent:"center"}});
-    const g1=inp({type:"number",min:"0",max:"20",style:{width:60,padding:"12px 6px",borderRadius:14,border:"2px solid #16a34a",textAlign:"center",fontSize:24,fontWeight:900,color:"#1A1A2E"},placeholder:"0"});
-    const g2=inp({type:"number",min:"0",max:"20",style:{width:60,padding:"12px 6px",borderRadius:14,border:"2px solid #16a34a",textAlign:"center",fontSize:24,fontWeight:900,color:"#1A1A2E"},placeholder:"0"});
-    const xSpan=h("span",{style:{fontSize:26,fontWeight:900,color:"#166534",margin:"0 6px"}},"×");
-    const mn=h("div",{style:{fontSize:12,fontWeight:800,color:"#1A1A2E",textAlign:"center",flex:1}});mn.innerHTML=`<div style="font-size:24px">${fM2}</div>${jAtual.mandante}`;
-    const vn=h("div",{style:{fontSize:12,fontWeight:800,color:"#1A1A2E",textAlign:"center",flex:1}});vn.innerHTML=`<div style="font-size:24px">${fV2}</div>${jAtual.visitante}`;
-    [mn,g1,xSpan,g2,vn].forEach(el=>palRow.appendChild(el));
-    formCard.appendChild(palRow);
-
-    // Goleador(es) — pode escolher MAIS DE UM
-    formCard.appendChild(h("div",{style:{fontWeight:800,fontSize:11,color:"#166534",textTransform:"uppercase",letterSpacing:1,marginBottom:8}},"Quem vai fazer o gol? ⚽ (pode marcar vários)"));
-    const chipsWrap=div({style:{display:"flex",flexWrap:"wrap",gap:7,marginBottom:14}});
-    let jogSelecionados=[];
-    const chipEls={};
-
-    function atualizarChips(){
-      Object.entries(chipEls).forEach(([nome,el])=>{
-        if(nome==="__nenhum__")return;
-        const s=jogSelecionados.includes(nome);
-        el.style.background=s?"#15803d":"#fff";el.style.color=s?"#fff":"#1A1A2E";
-        el.style.border="2px solid "+(s?"#15803d":"#e5e7eb");el.style.fontWeight=s?"900":"700";
-      });
-      if(chipEls["__nenhum__"]){
-        const s=jogSelecionados.length===0;
-        chipEls["__nenhum__"].style.background=s?"#6b7280":"#fff";
-        chipEls["__nenhum__"].style.color=s?"#fff":"#6b7280";
-        chipEls["__nenhum__"].style.border="2px solid "+(s?"#6b7280":"#e5e7eb");
-      }
-    }
-    ATACANTES_BR.forEach(j=>{
-      const chip=btn({style:{padding:"7px 12px",borderRadius:20,fontSize:12,border:"2px solid #e5e7eb",background:"#fff",color:"#1A1A2E",fontWeight:700,display:"flex",alignItems:"center",gap:5},onClick:()=>{
-        const i=jogSelecionados.indexOf(j.n);
-        if(i>=0)jogSelecionados.splice(i,1);else jogSelecionados.push(j.n);
-        atualizarChips();
-      }});
-      chip.innerHTML=`<span style="font-size:14px">${j.emoji}</span><span>${j.n.split(" ")[0]}</span>`;
-      chipEls[j.n]=chip;chipsWrap.appendChild(chip);
-    });
-    const chipN=btn({style:{padding:"7px 12px",borderRadius:20,fontSize:12,border:"2px solid #e5e7eb",background:"#fff",color:"#6b7280",fontWeight:700},onClick:()=>{jogSelecionados=[];atualizarChips();}});
-    chipN.textContent="❌ Nenhum";chipEls["__nenhum__"]=chipN;chipsWrap.appendChild(chipN);
-    atualizarChips();
-    formCard.appendChild(chipsWrap);
-
-    // Botão enviar
-    const envBtn=btn({style:{width:"100%",padding:"15px",background:"linear-gradient(135deg,#15803d,#22c55e)",color:"#fff",fontSize:15,fontWeight:900,borderRadius:14},onClick:()=>{
-      const nome=nomeInp.value.trim();
-      const tel=telInp.value.trim();
-      const golM=g1.value.trim();const golV=g2.value.trim();
-      if(!nome){alert("Preencha seu nome completo!");nomeInp.focus();return;}
-      // Exige nome e sobrenome (ao menos 2 palavras)
-      if(nome.split(" ").filter(Boolean).length<2){alert("Use nome e sobrenome completos!");nomeInp.focus();return;}
-      if(!tel){alert("Preencha seu WhatsApp!");telInp.focus();return;}
-      if(golM===""||golV===""){alert("Preencha o placar!");g1.focus();return;}
-      // Gera uid baseado no nome normalizado (evita duplicatas por pessoa)
-      const uid="livre_"+nome.toLowerCase().replace(/\s+/g,"_").replace(/[^a-z_]/g,"");
-      updSilent(d=>{
-        if(!d.bolao)d.bolao={palpites:{},placar:{}};
-        if(!d.bolao.palpites[jogoId])d.bolao.palpites[jogoId]={};
-        d.bolao.palpites[jogoId][uid]={golM,golV,jogadores:jogSelecionados.slice(),jogador:jogSelecionados[0]||"",nome,tel};
-        return d;
-      });
-      DATA=loadData();
-      envBtn.textContent="✅ Aposta enviada!";
-      envBtn.style.background="linear-gradient(135deg,#16a34a,#15803d)";
-      nomeInp.value="";telInp.value="";g1.value="";g2.value="";jogSelecionados=[];atualizarChips();
-      setTimeout(()=>{envBtn.textContent="⚽ Enviar Aposta";envBtn.style.background="linear-gradient(135deg,#15803d,#22c55e)";renderFormulario();},1200);
-    }},"⚽ Enviar Aposta");
-    formCard.appendChild(envBtn);
-    formArea.appendChild(formCard);
-
-    // ── Botões: VER APOSTADORES + VER GANHADORES ─────────────────────────────
-    const real=(bolao.placar||{})[jogoId]||{};
-    const temPlacar=real.golM!=null&&real.golM!=="";
-    const palpitesJogo=((DATA.bolao||{}).palpites||{})[jogoId]||{};
-    const qtd=Object.keys(palpitesJogo).length;
-
-    const botoesGrid=div({style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}});
-
-    // Botão apostadores
-    const btApost=btn({style:{padding:"13px 10px",background:"linear-gradient(135deg,#3B82F6,#60a5fa)",color:"#fff",fontSize:13,fontWeight:800,borderRadius:14,display:"flex",flexDirection:"column",alignItems:"center",gap:4},onClick:()=>abrirModalApostadores(jogoId,palpitesJogo,real)});
-    btApost.innerHTML=`<span style="font-size:22px">📋</span><span>Ver Apostadores</span><span style="font-size:10px;opacity:.85">${qtd} apostas</span>`;
-    botoesGrid.appendChild(btApost);
-
-    // Botão ganhadores
-    const btGanh=btn({style:{padding:"13px 10px",background:temPlacar?"linear-gradient(135deg,#FFD93D,#f59e0b)":"#e5e7eb",color:temPlacar?"#1A1A2E":"#9ca3af",fontSize:13,fontWeight:800,borderRadius:14,display:"flex",flexDirection:"column",alignItems:"center",gap:4},onClick:()=>{if(!temPlacar){alert("Lance o resultado real do jogo primeiro na aba Ranking!");return;}abrirModalGanhadores(jogoId,palpitesJogo,real);}});
-    btGanh.innerHTML=`<span style="font-size:22px">🏆</span><span>${temPlacar?"Ver Ganhadores":"Ganhadores"}</span><span style="font-size:10px;opacity:.85">${temPlacar?"Ver quem ganhou!":"Aguardando resultado"}</span>`;
-    botoesGrid.appendChild(btGanh);
-    formArea.appendChild(botoesGrid);
-  }
-
-  // ── Modal: todos os apostadores ───────────────────────────────────────────
-  function abrirModalApostadores(jogoId,palpitesJogo,real){
-    const jogo=BOLAO_JOGOS.find(j=>j.id===jogoId)||jogoAtual;
-    const lista=Object.entries(palpitesJogo).sort((a,b)=>(a[1].nome||"").localeCompare(b[1].nome||""));
-    const cont=div();
-    if(!lista.length){
-      const av=div({style:{textAlign:"center",padding:"30px",color:"#8B8FA8",fontSize:14}});
-      av.textContent="Nenhuma aposta ainda para este jogo.";
-      cont.appendChild(av);
-    } else {
-      const sub=h("div",{style:{fontSize:12,color:"#8B8FA8",fontWeight:700,marginBottom:12,textAlign:"center"}});
-      sub.textContent=lista.length+" apostas · "+jogo.mandante+" × "+jogo.visitante+" ("+fmtD(jogo.data)+")";
-      cont.appendChild(sub);
-      lista.forEach(([uid,p])=>{
-        const placarStr=(p.golM!==""&&p.golV!=="")?(p.golM+"×"+p.golV):"?";
-        const row=div({style:{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderBottom:"1px solid #f0f0f0",borderRadius:10,marginBottom:4,background:"#fafafa"}});
-        const iniciais=(p.nome||"?").split(" ").filter(Boolean).slice(0,2).map(x=>x[0].toUpperCase()).join("");
-        const av2=div({style:{width:36,height:36,borderRadius:18,background:"linear-gradient(135deg,#15803d,#22c55e)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:900,color:"#fff",flexShrink:0}});
-        av2.textContent=iniciais;
-        const inf=div({style:{flex:1,minWidth:0}});
-        inf.innerHTML='<div style="font-weight:800;font-size:13px;color:#1A1A2E">'+( p.nome||"?")+' <span style="font-size:10px;color:#8B8FA8;font-weight:600">'+( p.tel||"")+' </span></div>'+
-          '<div style="font-size:11px;color:#8B8FA8;margin-top:1px">'+(p.tel?`<a href="https://wa.me/55${p.tel.replace(/\D/g,'')}" target="_blank" style="color:#25D366;text-decoration:none;font-weight:700">💬 ${p.tel}</a>`:"—")+'</div>';
-        const pl=div({style:{textAlign:"right",flexShrink:0}});
-        pl.innerHTML='<span style="background:#dcfce7;color:#15803d;border-radius:8px;padding:3px 10px;font-weight:900;font-size:14px">'+placarStr+'</span>'+
-          (getJogadores(p).length?'<div style="font-size:10px;color:#3B82F6;font-weight:700;margin-top:3px">⚽ '+jogadoresCurto(p)+'</div>':"");
-        // Botão apagar
-        const delB=btn({style:{background:"#fff0f0",color:"#e53e3e",padding:"6px 10px",borderRadius:8,fontSize:12,fontWeight:800,marginLeft:4,flexShrink:0},onClick:()=>{
-          if(confirm("Apagar aposta de "+p.nome+"?")){
-            updSilent(d=>{if(d.bolao&&d.bolao.palpites&&d.bolao.palpites[jogoId])delete d.bolao.palpites[jogoId][uid];return d;});
-            DATA=loadData();row.remove();
-          }
-        }},"🗑");
-        [av2,inf,pl,delB].forEach(el=>row.appendChild(el));
-        cont.appendChild(row);
-      });
-    }
-    openModal("📋 Apostadores — "+lista.length+" aposta(s)",cont,()=>{});
-  }
-
-  // ── Modal: ganhadores do banho grátis ─────────────────────────────────────
-  function abrirModalGanhadores(jogoId,palpitesJogo,real){
-    const jogo=BOLAO_JOGOS.find(j=>j.id===jogoId)||jogoAtual;
-    const vencedores=calcularVencedores(jogoId,real,{[jogoId]:palpitesJogo});
-    const cont=div();
-
-    // Cabeçalho placar real
-    const hdrPlac=div({style:{background:"linear-gradient(135deg,#15803d,#166534)",borderRadius:14,padding:"14px 16px",marginBottom:14,display:"flex",justifyContent:"space-between",alignItems:"center"}});
-    hdrPlac.innerHTML='<div><div style="font-family:\'Fredoka One\',sans-serif;font-size:15px;color:#fff">'+jogo.mandante+' × '+jogo.visitante+'</div><div style="font-size:10px;color:rgba(255,255,255,.7)">'+fmtD(jogo.data)+'</div></div>'+
-      '<div style="text-align:right"><div style="font-family:\'Fredoka One\',sans-serif;font-size:28px;color:#FFD93D">'+real.golM+' × '+real.golV+'</div>'+
-      (goleadoresCurto(real)?'<div style="font-size:10px;color:rgba(255,255,255,.8)">⚽ '+goleadoresCurto(real)+'</div>':"")+
-      '</div>';
-    cont.appendChild(hdrPlac);
-
-    if(!vencedores.length){
-      const av=div({style:{textAlign:"center",padding:"24px",background:"#fff0f0",border:"2px solid #fca5a5",borderRadius:14}});
-      av.innerHTML='<div style="font-size:36px;margin-bottom:8px">😔</div><div style="font-weight:800;font-size:14px;color:#e53e3e">Ninguém ganhou o banho grátis!</div><div style="font-size:12px;color:#8B8FA8;margin-top:6px">Nenhuma aposta acertou o placar exato</div>';
-      cont.appendChild(av);
-    } else {
-      vencedores.forEach((v,i)=>{
-        const tel=v.pal.tel||"";
-        const primeiroNomeV=(v.nome||"").trim().split(" ")[0]||"";
-        const msgGanhador="🏆 "+primeiroNomeV+", você GANHOU o Bolão Planet Dogs! 🐾\n\n⚽ "+jogo.mandante+" "+real.golM+"×"+real.golV+" "+jogo.visitante+(goleadoresCurto(real)?"\nGol: ⚽ "+goleadoresCurto(real):"")+"\n\nSeu palpite: "+v.pal.golM+"×"+v.pal.golV+(getJogadores(v.pal).length?" · ⚽ "+getJogadores(v.pal).join(", "):"")+"\n"+v.motivo+"\n\n🛁 Vem buscar seu banho grátis! Parabéns! 🎉";
-        const gCard=div({style:{background:i===0?"linear-gradient(135deg,#fef9c3,#fef08a)":"#f0fdf4",border:"2.5px solid "+(i===0?"#FFD93D":"#16a34a"),borderRadius:16,padding:"16px",marginBottom:10}});
-        const ini=(v.nome||"?").split(" ").filter(Boolean).slice(0,2).map(x=>x[0].toUpperCase()).join("");
-        gCard.innerHTML='<div style="display:flex;align-items:center;gap:12px">'+
-          '<div style="width:48px;height:48px;border-radius:24px;background:linear-gradient(135deg,#FFD93D,#f59e0b);display:flex;align-items:center;justify-content:center;font-size:'+(i===0?"24":"16")+'px;font-weight:900;color:#fff;flex-shrink:0">'+(i===0?"🏆":ini)+'</div>'+
-          '<div style="flex:1;min-width:0">'+
-            '<div style="font-weight:900;font-size:16px;color:#1A1A2E">'+v.nome+'</div>'+
-            '<div style="font-size:10px;color:#15803d;font-weight:700;margin-top:2px">'+v.motivo+'</div>'+
-            (tel?'<div style="font-size:11px;color:#128C7E;font-weight:800;margin-top:3px">📱 '+tel+'</div>':'')+
-            (tel?'<a href="https://api.whatsapp.com/send?phone=55'+tel.replace(/\D/g,"")+'&text='+encodeURIComponent(msgGanhador)+'" target="_blank" style="display:inline-block;margin-top:5px;background:#25D366;color:#fff;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:800;text-decoration:none">🎉 Avisar '+primeiroNomeV+' no WhatsApp</a>':'<div style="margin-top:5px;font-size:10px;color:#e53e3e;font-weight:700">⚠️ Sem telefone cadastrado</div>')+'</div>'+
-          '<div style="font-size:36px">🛁</div></div>'+
-          '<div style="margin-top:10px;font-size:11px;color:#6b7280">Palpite: <b>'+( v.pal.golM+"×"+v.pal.golV)+'</b>'+(getJogadores(v.pal).length?" · ⚽ "+getJogadores(v.pal).join(", "):"")+'</div>';
-        cont.appendChild(gCard);
-      });
-      // Botão para avisar TODOS os ganhadores de uma vez (abre uma aba por ganhador, já com a msg de parabéns)
-      const ganhadoresComTel=vencedores.filter(v=>v.pal.tel);
-      if(ganhadoresComTel.length>1){
-        const avisarTodosBtn=btn({style:{width:"100%",padding:"12px",background:"linear-gradient(135deg,#15803d,#22c55e)",color:"#fff",fontSize:13,fontWeight:800,borderRadius:13,marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:8},onClick:()=>{
-          ganhadoresComTel.forEach((v,idx)=>{
-            const telV=v.pal.tel.replace(/\D/g,"");
-            const primeiroNomeV2=(v.nome||"").trim().split(" ")[0]||"";
-            const msgV="🏆 "+primeiroNomeV2+", você GANHOU o Bolão Planet Dogs! 🐾\n\n⚽ "+jogo.mandante+" "+real.golM+"×"+real.golV+" "+jogo.visitante+(goleadoresCurto(real)?"\nGol: ⚽ "+goleadoresCurto(real):"")+"\n\nSeu palpite: "+v.pal.golM+"×"+v.pal.golV+(getJogadores(v.pal).length?" · ⚽ "+getJogadores(v.pal).join(", "):"")+"\n"+v.motivo+"\n\n🛁 Vem buscar seu banho grátis! Parabéns! 🎉";
-            setTimeout(()=>{window.open("https://api.whatsapp.com/send?phone=55"+telV+"&text="+encodeURIComponent(msgV),"_blank");},idx*350);
-          });
-        }});
-        avisarTodosBtn.innerHTML="🎉 Avisar TODOS os ganhadores ("+ganhadoresComTel.length+")";
-        cont.appendChild(avisarTodosBtn);
-      }
-      // Botão copiar lista para WA
-      const total=Object.keys(palpitesJogo).length;
-      const txtDivulg="🏆 BOLÃO COPA 2026 — Planet Dogs 🐾\n\n⚽ "+jogo.mandante+" "+real.golM+"×"+real.golV+" "+jogo.visitante+(goleadoresCurto(real)?"\nGol: ⚽ "+goleadoresCurto(real):"")+"\n\n🎉 GANHADOR(ES) DO BANHO GRÁTIS:\n"+vencedores.map((v,i)=>(i===0?"🥇":"🥈")+" "+v.nome+" ("+v.pal.golM+"×"+v.pal.golV+")"+(v.pal.tel?" 📱 "+v.pal.tel:"")+" — "+v.motivo).join("\n")+"\n\nParabéns! Venham buscar o prêmio! 🛁\n📍 Planet Dogs — Porto Alegre\n("+total+" participantes)";
-      const cpBtn=btn({style:{width:"100%",padding:"13px",background:"linear-gradient(135deg,#25D366,#128C7E)",color:"#fff",fontSize:13,fontWeight:800,borderRadius:13,marginTop:6,display:"flex",alignItems:"center",justifyContent:"center",gap:8},onClick:()=>{
-        navigator.clipboard.writeText(txtDivulg).then(()=>{cpBtn.textContent="✅ Copiado! Cole no grupo WA";setTimeout(()=>cpBtn.innerHTML="💬 Copiar e divulgar no WA",2000);});
-        window.open("https://wa.me/?text="+encodeURIComponent(txtDivulg),"_blank");
-      }});
-      cpBtn.innerHTML="💬 Divulgar Resultado no WA";
-      cont.appendChild(cpBtn);
-    }
-    openModal("🏆 Ganhadores — Banho Grátis",cont,()=>{},true);
-  }
-
-  renderFormulario();
-  return wrap;
-}
-
-// ── Tab Ranking ───────────────────────────────────────────────────────────────
-function renderRankingTab(bolao){
-  const wrap=div();
-  const palpites=bolao.palpites||{};
-  const placarReal=bolao.placar||{};
-
-  // ── Botão rápido lançar placar ──────────────────────────────────────────────
-  const btnLancar=btn({style:{width:"100%",padding:"13px",background:"linear-gradient(135deg,#3B82F6,#60a5fa)",color:"#fff",fontSize:13,fontWeight:800,borderRadius:13,marginBottom:14,display:"flex",alignItems:"center",justifyContent:"center",gap:8},onClick:()=>{
-    const cont=div();
-    const jogoSel2=document.createElement("select");
-    jogoSel2.className="fi";jogoSel2.style.marginBottom="14px";jogoSel2.style.width="100%";
-    BOLAO_JOGOS.forEach(j=>{const op=document.createElement("option");op.value=j.id;op.textContent=j.mandante+" x "+j.visitante+" ("+j.data.slice(8,10)+"/"+j.data.slice(5,7)+")";jogoSel2.appendChild(op);});
-    cont.appendChild(jogoSel2);
-    const row2=div({style:{display:"flex",alignItems:"center",gap:8,marginBottom:14,justifyContent:"center"}});
-    const gm2=inp({type:"number",min:"0",max:"20",style:{width:56,padding:"10px 6px",borderRadius:12,border:"2px solid #3B82F6",textAlign:"center",fontSize:22,fontWeight:900,color:"#1A1A2E"},placeholder:"0"});
-    const gv2=inp({type:"number",min:"0",max:"20",style:{width:56,padding:"10px 6px",borderRadius:12,border:"2px solid #3B82F6",textAlign:"center",fontSize:22,fontWeight:900,color:"#1A1A2E"},placeholder:"0"});
-    row2.innerHTML="";
-    row2.appendChild(h("span",{style:{fontSize:13,fontWeight:700,color:"#8B8FA8"}},"Mandante"));
-    row2.appendChild(gm2);
-    row2.appendChild(h("span",{style:{fontSize:22,fontWeight:900,color:"#8B8FA8",margin:"0 8px"}},"x"));
-    row2.appendChild(gv2);
-    row2.appendChild(h("span",{style:{fontSize:13,fontWeight:700,color:"#8B8FA8"}},"Visitante"));
-    cont.appendChild(row2);
-    cont.appendChild(h("div",{style:{fontWeight:800,fontSize:11,color:"#8B8FA8",textTransform:"uppercase",marginBottom:8}},"Goleador(es) (opcional) ⚽ — pode marcar vários"));
-    const chW2=div({style:{display:"flex",flexWrap:"wrap",gap:6,marginBottom:14}});
-    let golsSel2=[];const chips2={};
-    function updC2(){Object.entries(chips2).forEach(([n,el])=>{const s=golsSel2.includes(n);el.style.background=s?"#15803d":"#fff";el.style.color=s?"#fff":"#1A1A2E";el.style.border="2px solid "+(s?"#15803d":"#e5e7eb");});}
-    ATACANTES_BR.forEach(j=>{const c2=btn({style:{padding:"6px 10px",borderRadius:18,fontSize:11,border:"2px solid #e5e7eb",background:"#fff",color:"#1A1A2E",fontWeight:700},onClick:()=>{const i=golsSel2.indexOf(j.n);if(i>=0)golsSel2.splice(i,1);else golsSel2.push(j.n);updC2();}});c2.textContent=j.emoji+" "+j.n.split(" ")[0];chips2[j.n]=c2;chW2.appendChild(c2);});
-    cont.appendChild(chW2);
-    let mv2=null;
-    cont.appendChild(btn({style:{width:"100%",padding:"14px",background:"linear-gradient(135deg,#15803d,#22c55e)",color:"#fff",fontSize:14,fontWeight:800,borderRadius:13},onClick:()=>{
-      const jid=jogoSel2.value;
-      if(gm2.value===""&&gv2.value===""){alert("Preencha o placar!");return;}
-      updSilent(d=>{if(!d.bolao)d.bolao={palpites:{},placar:{}};d.bolao.placar[jid]={golM:gm2.value,golV:gv2.value,goleadores:golsSel2.slice(),goleador:golsSel2[0]||""};return d;});
-      DATA=loadData();if(mv2)mv2.remove();
-      wrap.innerHTML="";wrap.appendChild(renderRankingTab(DATA.bolao||{}));
-    }},"💾 Salvar e Ver Ranking"));
-    mv2=openModal("⚽ Lançar Resultado",cont,()=>{},true);
-  }},"📅 Lançar Placar de um Jogo");
-  wrap.appendChild(btnLancar);
-
-  // Para cada jogo com resultado, mostra bloco de ganhador(es)
-  let temAlgumResultado=false;
-  BOLAO_JOGOS.forEach(jogo=>{
-    const real=placarReal[jogo.id];
-    if(!real||real.golM==null||real.golM==="")return;
-    temAlgumResultado=true;
-    const vencedores=calcularVencedores(jogo.id,real,palpites);
-    const qtPal=Object.keys(palpites[jogo.id]||{}).length;
-    const bloco=div({className:"card",style:{marginBottom:14,overflow:"hidden"}});
-
-    // Cabeçalho do jogo
-    bloco.innerHTML=`<div style="background:linear-gradient(135deg,#15803d,#166534);padding:10px 14px;display:flex;align-items:center;justify-content:space-between">
-      <div>
-        <div style="font-family:'Fredoka One',sans-serif;font-size:14px;color:#fff">${jogo.mandante} x ${jogo.visitante}</div>
-        <div style="font-size:10px;color:rgba(255,255,255,.7)">${fmtD(jogo.data)} · ${jogo.local}</div>
-      </div>
-      <div style="text-align:right">
-        <div style="font-family:'Fredoka One',sans-serif;font-size:22px;color:#FFD93D">${real.golM} x ${real.golV}</div>
-        ${goleadoresCurto(real)?'<div style="font-size:10px;color:rgba(255,255,255,.8)">⚽ '+goleadoresCurto(real)+'</div>':""}
-      </div>
-    </div>`;
-
-    const corpo=div({style:{padding:"12px 14px 14px"}});
-    if(!vencedores.length){
-      corpo.innerHTML='<div style="text-align:center;padding:12px;color:#8B8FA8;font-size:13px">😔 Ninguém ganhou o banho nesse jogo<br><span style="font-size:11px">'+qtPal+' palpite(s) recebidos</span></div>';
-    } else {
-      const tit=h("div",{style:{fontWeight:800,fontSize:12,color:"#15803d",textTransform:"uppercase",letterSpacing:1,marginBottom:8}},"🏆 GANHADOR(ES) DO BANHO GRÁTIS");
-      corpo.appendChild(tit);
-      vencedores.forEach((v,i)=>{
-        const vCard=div({style:{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:i===0?"linear-gradient(135deg,#fef9c3,#fef08a)":"#f9fafb",borderRadius:12,marginBottom:6,border:"1.5px solid "+(i===0?"#FFD93D":"#e5e7eb")}});
-        const iniciais=v.nome.split(" ").filter(Boolean).slice(0,2).map(p=>p[0].toUpperCase()).join("");
-        vCard.innerHTML='<div style="width:40px;height:40px;border-radius:20px;background:linear-gradient(135deg,#FFD93D,#f59e0b);display:flex;align-items:center;justify-content:center;font-family:Fredoka One,sans-serif;font-size:15px;color:#fff;flex-shrink:0">'+( i===0?"🏆":iniciais)+'</div><div style="flex:1"><div style="font-weight:800;font-size:14px;color:#1A1A2E">'+v.nome.split(" ").slice(0,2).join(" ")+'</div><div style="font-size:11px;color:#15803d;font-weight:700">'+v.motivo+'</div><div style="font-size:10px;color:#8B8FA8">Palpite: '+( v.pal.placar||"—")+(getJogadores(v.pal).length?" · ⚽ "+getJogadores(v.pal).join(", "):"")+'</div></div>';
-        // Botão WhatsApp para chamar o ganhador direto no quadro
-        const primeiroNomeV=v.nome.split(" ")[0];
-        const telV=(v.pal.tel||"").replace(/\D/g,"");
-        const msgGanhadorR="🏆 "+primeiroNomeV+", você GANHOU o Bolão Planet Dogs! 🐾\n\n⚽ "+jogo.mandante+" "+real.golM+"×"+real.golV+" "+jogo.visitante+(goleadoresCurto(real)?"\nGol: ⚽ "+goleadoresCurto(real):"")+"\n\nSeu palpite: "+v.pal.golM+"×"+v.pal.golV+(getJogadores(v.pal).length?" · ⚽ "+getJogadores(v.pal).join(", "):"")+"\n"+v.motivo+"\n\n🛁 Vem buscar seu banho grátis! Parabéns! 🎉";
-        const waGanhBtn=btn({style:{width:42,height:42,borderRadius:21,background:telV?"linear-gradient(135deg,#25D366,#128C7E)":"#e5e7eb",color:"#fff",fontSize:20,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,border:"none",cursor:telV?"pointer":"not-allowed",boxShadow:telV?"0 2px 8px rgba(37,211,102,.4)":"none"},onClick:()=>{
-          if(!telV){alert("⚠️ "+primeiroNomeV+" não tem telefone cadastrado no palpite.");return;}
-          window.open("https://api.whatsapp.com/send?phone=55"+telV+"&text="+encodeURIComponent(msgGanhadorR),"_blank");
-        }},"💬");
-        vCard.appendChild(waGanhBtn);
-        corpo.appendChild(vCard);
-      });
-      const obs=h("div",{style:{fontSize:10,color:"#8B8FA8",textAlign:"center",marginTop:6}});
-      obs.textContent=qtPal+" palpite(s) · Prêmio: banho grátis 🛁";
-      corpo.appendChild(obs);
-    }
-
-    // ── Separador: todos os palpites desse jogo ─────────────────────────────
-    const allPalsJogo=Object.entries(palpites[jogo.id]||{});
-    if(allPalsJogo.length>0){
-      const sepDiv=div({style:{padding:"0 14px 10px"}});
-      sepDiv.appendChild(h("div",{style:{fontWeight:800,fontSize:11,color:"#8B8FA8",textTransform:"uppercase",letterSpacing:.8,marginTop:6,marginBottom:6}},"📋 Todos os Palpites"));
-      const rm2=parseInt(real.golM),rv2=parseInt(real.golV);
-      const resReal2=rm2>rv2?"M":rm2<rv2?"V":"E";
-      allPalsJogo.sort((a,b)=>(a[1].nome||"").localeCompare(b[1].nome||"")).forEach(([uid,pal])=>{
-        const pm=parseInt(pal.golM),pv=parseInt(pal.golV);
-        const acGol=getJogadores(pal).length>0&&getGoleadores(real).length>0&&getJogadores(pal).some(j=>getGoleadores(real).includes(j));
-        const acExato=!isNaN(pm)&&!isNaN(pv)&&pm===rm2&&pv===rv2;
-        const acRes=!isNaN(pm)&&!isNaN(pv)&&(pm>pv?"M":pm<pv?"V":"E")===resReal2;
-        const ganhouBg=acGol?"#dcfce7":acExato?"#dbeafe":acRes?"#fef9c3":"#f9fafb";
-        const pr=div({style:{display:"flex",alignItems:"center",gap:8,padding:"7px 10px",background:ganhouBg,borderRadius:10,marginBottom:4,border:"1px solid "+(acGol?"#86efac":acExato?"#bfdbfe":acRes?"#fde68a":"#f0f0f0")}});
-        const nomeP=(pal.nome||"?").split(" ")[0];
-        const placarP=(pal.golM!==""&&pal.golV!=="")?(pal.golM+"x"+pal.golV):"?";
-        const jogP=getJogadores(pal).length?(" ⚽"+jogadoresCurto(pal)):"";
-        const icon=acGol?"🏆":acExato?"🎯":acRes?"✅":"❌";
-        pr.innerHTML='<span style="font-weight:800;font-size:12px;color:#1A1A2E;flex:1">'+nomeP+'</span><span style="font-size:11px;font-weight:700;color:#374151">'+placarP+jogP+'</span><span style="font-size:14px">'+icon+'</span>';
-        sepDiv.appendChild(pr);
-      });
-      bloco.appendChild(corpo);
-      bloco.appendChild(sepDiv);
-    } else {
-      bloco.appendChild(corpo);
-    }
-
-    // ── Card divulgação para redes sociais ──────────────────────────────────
-    const nomeVenc=vencedores.length?vencedores.map(v=>v.nome.split(" ")[0]).join(" e "):"Ninguém";
-    const linhasVenc=vencedores.length?vencedores.map((v,i)=>(i===0?"🥇":"🥈")+" "+v.nome.split(" ").slice(0,2).join(" ")+" — "+v.motivo).join("\n"):"Sem ganhador nesse jogo";
-    const textoDivulg="🐕 Bolão Copa 2026 — Planet Dogs 🏆\n\n⚽ "+jogo.mandante+" x "+jogo.visitante+"\n📊 Resultado: "+real.golM+" x "+real.golV+(goleadoresCurto(real)?" · ⚽ "+goleadoresCurto(real):"")+"\n\n"+(vencedores.length?"🎉 GANHADOR DO BANHO GRÁTIS:\n"+linhasVenc+"\n\n🛁 Parabéns! O banho grátis é seu!":"😔 Ninguém acertou esse jogo.\nA disputa continua! 💪")+"\n\nPlanet Dogs 🐾 Porto Alegre";
-    const divulgDiv=div({style:{margin:"0 0 0",background:"linear-gradient(135deg,#fef9c3,#fef3c7)",border:"2px solid #FFD93D",borderRadius:"0 0 14px 14px",padding:"12px 14px"}});
-    divulgDiv.appendChild(h("div",{style:{fontWeight:800,fontSize:11,color:"#92400e",textTransform:"uppercase",letterSpacing:.8,marginBottom:8}},"📣 Divulgação para Redes Sociais"));
-    const taDiv=h("textarea",{style:{width:"100%",height:130,padding:"10px",borderRadius:10,border:"1.5px solid #FFD93D",fontSize:11,fontFamily:"monospace",resize:"none",background:"#fff",color:"#1A1A2E",lineHeight:1.6,marginBottom:8}});
-    taDiv.value=textoDivulg;
-    divulgDiv.appendChild(taDiv);
-    const btsDiv=div({style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}});
-    const cpBtn=btn({style:{padding:"10px",background:"linear-gradient(135deg,#1A1A2E,#2d2d4e)",color:"#fff",fontSize:12,borderRadius:10,fontWeight:800},onClick:()=>{navigator.clipboard.writeText(textoDivulg).then(()=>{cpBtn.textContent="✅ Copiado!";setTimeout(()=>cpBtn.textContent="📋 Copiar",2000);});}},["📋 Copiar"]);
-    const waBtn2=btn({style:{padding:"10px",background:"linear-gradient(135deg,#25D366,#128C7E)",color:"#fff",fontSize:12,borderRadius:10,fontWeight:800},onClick:()=>{window.open("https://wa.me/?text="+encodeURIComponent(textoDivulg),"_blank");}},["💬 WhatsApp"]);
-    btsDiv.appendChild(cpBtn);btsDiv.appendChild(waBtn2);
-    divulgDiv.appendChild(btsDiv);
-    bloco.appendChild(divulgDiv);
-
-    wrap.appendChild(bloco);
-  });
-
-  if(!temAlgumResultado){
-    const em=div({style:{textAlign:"center",padding:"36px 20px",color:"#8B8FA8"}});
-    em.innerHTML='<div style="font-size:40px;margin-bottom:10px">🏆</div><div style="font-weight:800;font-size:14px;color:#1A1A2E;margin-bottom:4px">Aguardando os jogos!</div><div style="font-size:12px">Use o botão acima para lançar um resultado,<br>ou vá na aba Jogos.</div>';
-    wrap.appendChild(em);
-    const regras=div({style:{background:"#f0fdf4",border:"1.5px solid #16a34a",borderRadius:14,padding:"14px 16px",marginTop:4}});
-    regras.innerHTML='<div style="font-weight:800;color:#15803d;font-size:12px;margin-bottom:8px;text-transform:uppercase;letter-spacing:.8px">🏅 Como funciona o prêmio</div><div style="font-size:12px;line-height:2.2;color:#1A1A2E">🎯 <b>Só ganha quem acertar o placar exato</b> do jogo<br>⚽ Quem também acertar <b>quem fez gol</b> fica mais qualificado<br>🏆 Ordem: placar exato + gol → só placar exato</div>';
-    wrap.appendChild(regras);
-  }
-  return wrap;
-}
-
-// ── Tab Jogos + lançar resultado real ─────────────────────────────────────────
-function renderJogosTab(bolao){
-  const wrap=div();
-  BOLAO_JOGOS.forEach(jogo=>{
-    const real=(bolao.placar||{})[jogo.id]||{};
-    const qtPal=Object.keys((bolao.palpites||{})[jogo.id]||{}).length;
-    const temPlacar=real.golM!=null&&real.golM!=="";
-    const isBR=jogo.mandante==="Brasil"||jogo.visitante==="Brasil";
-    const card=div({className:"card",style:{marginBottom:14,overflow:"hidden"}});
-
-    const fM=jogo.mandante==="Brasil"?"🇧🇷":jogo.mandante==="Escócia"?"🏴󠁧󠁢󠁳󠁣󠁴󠁿":"🌍";
-    const fV=jogo.visitante==="Brasil"?"🇧🇷":jogo.visitante==="Haiti"?"🇭🇹":jogo.visitante==="Marrocos"?"🇲🇦":jogo.visitante==="Noruega"?"🇳🇴":"🌍";
-
-    const hdr=div({style:{background:isBR?"linear-gradient(135deg,#15803d,#166534)":"linear-gradient(135deg,#1A1A2E,#2d2d4e)",padding:"12px 14px",display:"flex",alignItems:"center",justifyContent:"space-between"}});
-    hdr.innerHTML=`
-      <div style="display:flex;align-items:center;gap:8px">
-        <span style="font-size:20px">${fM}</span>
-        <div>
-          <div style="font-family:'Fredoka One',sans-serif;font-size:14px;color:#fff">${jogo.mandante} × ${jogo.visitante} <span style="font-size:14px">${fV}</span></div>
-          <div style="font-size:10px;color:rgba(255,255,255,.65)">${fmtD(jogo.data)} ${jogo.hora}h · ${jogo.local}</div>
-        </div>
-      </div>
-      <div style="text-align:right">
-        ${temPlacar?`<div style="font-family:'Fredoka One',sans-serif;font-size:22px;color:#FFD93D">${real.golM} × ${real.golV}</div>
-          ${goleadoresCurto(real)?`<div style="font-size:10px;color:rgba(255,255,255,.8)">⚽ ${goleadoresCurto(real)}</div>`:""}`:
-          `<div style="font-size:11px;color:rgba(255,255,255,.5)">Aguardando</div>`}
-        <div style="font-size:9px;color:rgba(255,255,255,.4);margin-top:2px">${qtPal} palpite(s)</div>
-      </div>`;
-    card.appendChild(hdr);
-
-    // Form lançar resultado
-    const form=div({style:{padding:"14px 14px 16px"}});
-    form.appendChild(h("div",{style:{fontWeight:800,fontSize:11,color:"#8B8FA8",textTransform:"uppercase",letterSpacing:.8,marginBottom:10}},"⚙️ Lançar resultado real"));
-
-    // Placar row
-    const row=div({style:{display:"flex",alignItems:"center",gap:8,marginBottom:12,justifyContent:"center"}});
-    const gm=inp({type:"number",min:"0",max:"20",style:{width:52,padding:"10px 6px",borderRadius:12,border:"2px solid #e5e7eb",textAlign:"center",fontSize:20,fontWeight:900,color:"#1A1A2E"},value:real.golM||""});
-    const gv=inp({type:"number",min:"0",max:"20",style:{width:52,padding:"10px 6px",borderRadius:12,border:"2px solid #e5e7eb",textAlign:"center",fontSize:20,fontWeight:900,color:"#1A1A2E"},value:real.golV||""});
-    const xS=h("span",{style:{fontSize:22,fontWeight:900,color:"#8B8FA8",margin:"0 6px"}},"×");
-    const mnL=h("div",{style:{fontSize:11,fontWeight:700,textAlign:"center",flex:1}});mnL.innerHTML=`<div style="font-size:20px">${fM}</div>${jogo.mandante}`;
-    const vnL=h("div",{style:{fontSize:11,fontWeight:700,textAlign:"center",flex:1}});vnL.innerHTML=`<div style="font-size:20px">${fV}</div>${jogo.visitante}`;
-    [mnL,gm,xS,gv,vnL].forEach(el=>row.appendChild(el));
-    form.appendChild(row);
-
-    // Goleador(es) real — pode marcar vários
-    form.appendChild(h("div",{style:{fontWeight:800,fontSize:11,color:"#8B8FA8",textTransform:"uppercase",letterSpacing:.8,marginBottom:8}},"Quem fez o gol? ⚽ (pode marcar vários)"));
-    const gChipsWrap=div({style:{display:"flex",flexWrap:"wrap",gap:7,marginBottom:12}});
-    let goleadoresSel=getGoleadores(real);
-    const gChipEls={};
-    function atualizarGChips(){
-      Object.entries(gChipEls).forEach(([nome,el])=>{
-        if(nome==="__nenhum__")return;
-        const s=goleadoresSel.includes(nome);
-        el.style.background=s?"#15803d":"#fff";
-        el.style.color=s?"#fff":"#1A1A2E";
-        el.style.border="2px solid "+(s?"#15803d":"#e5e7eb");
-        el.style.fontWeight=s?"900":"700";
-      });
-      if(gChipEls["__nenhum__"]){
-        const s=goleadoresSel.length===0;
-        gChipEls["__nenhum__"].style.background=s?"#6b7280":"#fff";
-        gChipEls["__nenhum__"].style.color=s?"#fff":"#6b7280";
-        gChipEls["__nenhum__"].style.border="2px solid "+(s?"#6b7280":"#e5e7eb");
-      }
-    }
-    ATACANTES_BR.forEach(j=>{
-      const gc=btn({style:{padding:"7px 12px",borderRadius:20,fontSize:12,border:"2px solid #e5e7eb",background:"#fff",color:"#1A1A2E",fontWeight:700,display:"flex",alignItems:"center",gap:5},onClick:()=>{
-        const i=goleadoresSel.indexOf(j.n);
-        if(i>=0)goleadoresSel.splice(i,1);else goleadoresSel.push(j.n);
-        atualizarGChips();
-      }});
-      gc.innerHTML=`<span style="font-size:14px">${j.emoji}</span><span>${j.n.split(" ")[0]}</span>`;
-      gChipEls[j.n]=gc;gChipsWrap.appendChild(gc);
-    });
-    const gcNenhum=btn({style:{padding:"7px 12px",borderRadius:20,fontSize:12,border:"2px solid #e5e7eb",background:"#fff",color:"#6b7280",fontWeight:700},onClick:()=>{goleadoresSel=[];atualizarGChips();}});
-    gcNenhum.textContent="❌ Sem gol";
-    gChipEls["__nenhum__"]=gcNenhum;gChipsWrap.appendChild(gcNenhum);
-    atualizarGChips();
-    form.appendChild(gChipsWrap);
-
-    const svBtn=btn({style:{width:"100%",padding:"13px",background:"linear-gradient(135deg,#15803d,#22c55e)",color:"#fff",fontSize:14,fontWeight:800,borderRadius:13},onClick:()=>{
-      updSilent(d=>{
-        if(!d.bolao)d.bolao={palpites:{},placar:{}};
-        d.bolao.placar[jogo.id]={golM:gm.value,golV:gv.value,goleadores:goleadoresSel.slice(),goleador:goleadoresSel[0]||""};
-        return d;
-      });
-      DATA=loadData();
-      svBtn.textContent="✅ Resultado salvo! Ranking atualizado.";
-      svBtn.style.background="linear-gradient(135deg,#16a34a,#15803d)";
-      setTimeout(()=>{svBtn.textContent="💾 Salvar Resultado";},2000);
-    }},"💾 Salvar Resultado");
-    form.appendChild(svBtn);
-    card.appendChild(form);
-    wrap.appendChild(card);
-  });
-  return wrap;
 }
 
 render();
