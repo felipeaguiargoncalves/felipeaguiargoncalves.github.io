@@ -91,14 +91,14 @@ const PRODS_DEF=[
   {nome:"Lactobac Multiespecie",cat:"Suplemento",preco:"35,80"},{nome:"Florentero",cat:"Gastrointestinal",preco:""},
 ];
 function emptyData(){
-  return{casas:{},casas2:{},cobrancas:{},cobrancas2:{},modelos:{},agenda:[],saidas:[],enderecos:{},vendas:[],produtos:JSON.parse(JSON.stringify(PRODS_DEF)),lab:{maquina:"",insumos:[],exames:[],valorExame:"60"},gruposWA:{0:"",1:"",2:"",3:"",4:"",5:"",6:""},gruposWAPag:{0:"",1:"",2:"",3:"",4:"",5:"",6:""}};
+  return{casas:{},casas2:{},cobrancas:{},cobrancas2:{},modelos:{},modelos2:{},agenda:[],saidas:[],enderecos:{},vendas:[],produtos:JSON.parse(JSON.stringify(PRODS_DEF)),lab:{maquina:"",insumos:[],exames:[],valorExame:"60"},gruposWA:{0:"",1:"",2:"",3:"",4:"",5:"",6:""},gruposWAPag:{0:"",1:"",2:"",3:"",4:"",5:"",6:""}};
 }
 function loadData(){
   try{const d=localStorage.getItem(KEY);if(d){const p=JSON.parse(d);
     if(!p.produtos||p.produtos.length<3)p.produtos=JSON.parse(JSON.stringify(PRODS_DEF));
     if(!p.lab)p.lab={maquina:"",insumos:[],exames:[],valorExame:"60"};
     if(!p.gruposWA)p.gruposWA={0:"",1:"",2:"",3:"",4:"",5:"",6:""};if(!p.gruposWAPag)p.gruposWAPag={0:"",1:"",2:"",3:"",4:"",5:"",6:""};
-    if(!p.casas2)p.casas2={};if(!p.cobrancas2)p.cobrancas2={};
+    if(!p.casas2)p.casas2={};if(!p.cobrancas2)p.cobrancas2={};if(!p.modelos2)p.modelos2={};
     return sanitizeData(p);}}catch(e){}
   return emptyData();
 }
@@ -108,7 +108,7 @@ function sanitizeData(p){
   // Campos que DEVEM ser array
   ["agenda","saidas","vendas"].forEach(k=>{if(!Array.isArray(p[k]))p[k]=[];});
   // Campos que DEVEM ser objeto
-  ["casas","casas2","cobrancas","cobrancas2","modelos","enderecos","gruposWA","gruposWAPag"].forEach(k=>{
+  ["casas","casas2","cobrancas","cobrancas2","modelos","modelos2","enderecos","gruposWA","gruposWAPag"].forEach(k=>{
     if(!p[k]||typeof p[k]!=="object"||Array.isArray(p[k]))p[k]={};
   });
   // produtos precisa ser array
@@ -119,6 +119,7 @@ function sanitizeData(p){
   if(!Array.isArray(p.lab.exames))p.lab.exames=[];
   // modelos: cada chave deve ser array
   Object.keys(p.modelos).forEach(k=>{if(!Array.isArray(p.modelos[k]))p.modelos[k]=[];});
+  Object.keys(p.modelos2).forEach(k=>{if(!Array.isArray(p.modelos2[k]))p.modelos2[k]=[];});
   // casas/casas2: cada casa.pets deve ser array
   [p.casas,p.casas2].forEach(grp=>{
     Object.values(grp).forEach(c=>{if(c&&typeof c==="object"&&!Array.isArray(c.pets))c.pets=Array.isArray(c.pets)?c.pets:[];});
@@ -242,7 +243,7 @@ if(!(typeof firebase!=='undefined' && firebase.apps && firebase.apps.length)){
     const VD=window._VD||{c2:{},m:{},e:{}};
     const d=DATA;
     if(!d.casas2) d.casas2={};
-    if(!d.modelos) d.modelos={};
+    if(!d.modelos2) d.modelos2={};
     if(!d.enderecos) d.enderecos={};
     let nc=0,np=0;
     Object.keys(VD.c2).forEach(cid=>{
@@ -259,11 +260,11 @@ if(!(typeof firebase!=='undefined' && firebase.apps && firebase.apps.length)){
       }
     });
     Object.keys(VD.m).forEach(cid=>{
-      if(!(cid in d.modelos)){
-        d.modelos[cid]=VD.m[cid];
+      if(!(cid in d.modelos2)){
+        d.modelos2[cid]=VD.m[cid];
       } else {
-        const ex=new Set((d.modelos[cid]||[]).map(p=>p.nome.toLowerCase()));
-        VD.m[cid].forEach(p=>{ if(!ex.has(p.nome.toLowerCase())){ d.modelos[cid].push(p); np++; } });
+        const ex=new Set((d.modelos2[cid]||[]).map(p=>p.nome.toLowerCase()));
+        VD.m[cid].forEach(p=>{ if(!ex.has(p.nome.toLowerCase())){ d.modelos2[cid].push(p); np++; } });
       }
     });
     Object.keys(VD.e).forEach(cid=>{
@@ -1095,8 +1096,8 @@ function abrirCadastroPetModal(casaNum,pref,onDone){
     [...Object.values(DATA.casas||{}),...Object.values(DATA.casas2||{})].forEach(casa=>{
       (casa.pets||[]).forEach(p=>{if(p.raca&&p.raca.trim())racas.add(p.raca.trim());});
     });
-    // dos modelos
-    Object.values(DATA.modelos||{}).forEach(lista=>{
+    // dos modelos (Cad.1 e Cad.2)
+    [...Object.values(DATA.modelos||{}),...Object.values(DATA.modelos2||{})].forEach(lista=>{
       (lista||[]).forEach(p=>{if(p.raca&&p.raca.trim())racas.add(p.raca.trim());});
     });
     return [...racas].sort((a,b)=>a.localeCompare(b));
@@ -1766,7 +1767,7 @@ function abrirModalAt(pref,mes,numero,atEdit,repetir,onDone){
     // Busca pets cadastrados para este cliente
     const casaObj=(pref==="cad1"?DATA.casas:DATA.casas2||{})[numero]||{};
     const petsConhecidos=[];const vistos=new Set();
-    (DATA.modelos?.[numero]||[]).forEach(p=>{if(p.nome&&!vistos.has(p.nome)){vistos.add(p.nome);petsConhecidos.push({nome:p.nome,raca:p.raca||"",valor:getValorPetFromCobs(numero,p.nome)});}});
+    ((pref==="cad1"?DATA.modelos:DATA.modelos2)?.[numero]||[]).forEach(p=>{if(p.nome&&!vistos.has(p.nome)){vistos.add(p.nome);petsConhecidos.push({nome:p.nome,raca:p.raca||"",valor:getValorPetFromCobs(numero,p.nome)});}});
     (casaObj.pets||[]).forEach(p=>{if(p.nome&&!vistos.has(p.nome)){vistos.add(p.nome);petsConhecidos.push({nome:p.nome,raca:p.raca||"",valor:getValorPetFromCobs(numero,p.nome)});}});
     if(petsConhecidos.length>0)caesDefault=petsConhecidos.map(p=>({nome:p.nome,raca:p.raca,servicos:[{nome:"Banho",valor:p.valor>0?String(p.valor):""}]}));
     else caesDefault=[{nome:"",raca:"",servicos:[{nome:"Banho",valor:""}]}];
@@ -2038,33 +2039,37 @@ const ids=new Set(grupo.map(e=>e.id));const grupoAtual=(DATA.agenda||[]).filter(
   }
 
   function getAllPets(){
-    const all={...DATA.casas,...DATA.casas2||{}};const pets=[];const visto=new Set();
-    Object.entries(all).forEach(([num,casa])=>{
-      const endObj=(DATA.enderecos||{})[num]||{};
-      const endStr=endObj.rua?`${endObj.rua}, ${endObj.numero||""}, ${endObj.bairro||""}`:"";
-      const numCasaC1=endObj.numero||"";
-      const isCad1=!!DATA.casas[num];
-      const vis=new Set();
-      // 1) Pets dos atendimentos de cobrança (fonte original)
-      [...Object.values(DATA.cobrancas||{}),...Object.values(DATA.cobrancas2||{})].forEach(cbM=>{
-        const cb=cbM[num];if(!cb)return;
-        (cb.atendimentos||[]).forEach(at=>(at.caes||[]).forEach(c=>{
-          if(c.nome&&!vis.has(c.nome)){vis.add(c.nome);const uid=num+"_"+c.nome;if(!visto.has(uid)){visto.add(uid);pets.push({pet:c.nome,casa:Number(num),morador:casa.morador||"",endereco:endStr,telefone:casa.telefone||"",numCasa:numCasaC1,isCad1:isCad1});}}
-        }));
+    const pets=[];const visto=new Set();
+    function processarCadastro(casasObj,cobrancasObj,isCad1){
+      Object.entries(casasObj||{}).forEach(([num,casa])=>{
+        const endObj=(DATA.enderecos||{})[num]||{};
+        const endStr=endObj.rua?`${endObj.rua}, ${endObj.numero||""}, ${endObj.bairro||""}`:"";
+        const numCasaC1=endObj.numero||"";
+        const vis=new Set();
+        const pref=(isCad1?"c1_":"c2_")+num+"_";
+        // 1) Pets dos atendimentos de cobrança (só do cadastro correspondente)
+        Object.values(cobrancasObj||{}).forEach(cbM=>{
+          const cb=cbM[num];if(!cb)return;
+          (cb.atendimentos||[]).forEach(at=>(at.caes||[]).forEach(c=>{
+            if(c.nome&&!vis.has(c.nome)){vis.add(c.nome);const uid=pref+c.nome;if(!visto.has(uid)){visto.add(uid);pets.push({pet:c.nome,casa:Number(num),morador:casa.morador||"",endereco:endStr,telefone:casa.telefone||"",numCasa:numCasaC1,isCad1:isCad1});}}
+          }));
+        });
+        // 2) Pets do campo modelos (cadastrados via modal de pets) - cada cadastro tem seu próprio namespace
+        const modPets=(isCad1?DATA.modelos:DATA.modelos2)?.[num]||[];
+        modPets.forEach(p=>{
+          if(p.nome&&!vis.has(p.nome)){vis.add(p.nome);const uid=pref+p.nome;if(!visto.has(uid)){visto.add(uid);pets.push({pet:p.nome,casa:Number(num),morador:casa.morador||"",endereco:endStr,telefone:casa.telefone||"",numCasa:numCasaC1,isCad1:isCad1});}}
+        });
+        // 3) Pets do campo pets da casa (campo direto do cadastro)
+        const casaPets=casa.pets||[];
+        casaPets.forEach(p=>{
+          if(p.nome&&!vis.has(p.nome)){vis.add(p.nome);const uid=pref+p.nome;if(!visto.has(uid)){visto.add(uid);pets.push({pet:p.nome,casa:Number(num),morador:casa.morador||"",endereco:endStr,telefone:casa.telefone||"",numCasa:numCasaC1,isCad1:isCad1});}}
+        });
+        // 4) Se ainda não tem nenhum pet, exibe tutor para cadastrar
+        if(vis.size===0){const uid=pref+"__vazio__";if(!visto.has(uid)){visto.add(uid);pets.push({pet:"",casa:Number(num),morador:casa.morador||"",endereco:endStr,telefone:casa.telefone||"",numCasa:numCasaC1,isCad1:isCad1});}}
       });
-      // 2) Pets do campo modelos (cadastrados via modal de pets)
-      const modPets=DATA.modelos?.[num]||[];
-      modPets.forEach(p=>{
-        if(p.nome&&!vis.has(p.nome)){vis.add(p.nome);const uid=num+"_"+p.nome;if(!visto.has(uid)){visto.add(uid);pets.push({pet:p.nome,casa:Number(num),morador:casa.morador||"",endereco:endStr,telefone:casa.telefone||"",numCasa:numCasaC1,isCad1:isCad1});}}
-      });
-      // 3) Pets do campo pets da casa (campo direto do cadastro)
-      const casaPets=casa.pets||[];
-      casaPets.forEach(p=>{
-        if(p.nome&&!vis.has(p.nome)){vis.add(p.nome);const uid=num+"_"+p.nome;if(!visto.has(uid)){visto.add(uid);pets.push({pet:p.nome,casa:Number(num),morador:casa.morador||"",endereco:endStr,telefone:casa.telefone||"",numCasa:numCasaC1,isCad1:isCad1});}}
-      });
-      // 4) Se ainda não tem nenhum pet, exibe tutor para cadastrar
-      if(vis.size===0){const uid=num+"_";if(!visto.has(uid)){visto.add(uid);pets.push({pet:"",casa:Number(num),morador:casa.morador||"",endereco:endStr,telefone:casa.telefone||"",numCasa:numCasaC1,isCad1:isCad1});}}
-    });
+    }
+    processarCadastro(DATA.casas,DATA.cobrancas,true);
+    processarCadastro(DATA.casas2,DATA.cobrancas2,false);
     return pets;
   }
 
@@ -2075,7 +2080,8 @@ const ids=new Set(grupo.map(e=>e.id));const grupoAtual=(DATA.agenda||[]).filter(
 // ── MODAL ADICIONAR PET AO GRUPO ─────────────────────────────────────────────
 function abrirAddPetGrupoModal(rep,grupoAtual,onDone,gerente){
   const casaNum=rep.casa;
-  const casaObj=(DATA.casas||{})[casaNum]||(DATA.casas2||{})[casaNum]||{};
+  const isCad1Grupo=!!(DATA.casas||{})[casaNum];
+  const casaObj=(isCad1Grupo?(DATA.casas||{}):(DATA.casas2||{}))[casaNum]||{};
   const telefone=casaObj.telefone||rep.telefone||"";
   const morador=casaObj.morador||rep.morador||"";
   const endObj=(DATA.enderecos||{})[casaNum]||{};
@@ -2087,8 +2093,8 @@ function abrirAddPetGrupoModal(rep,grupoAtual,onDone,gerente){
   const petsDisponiveis=[];
   const vistos=new Set(grupoAtual.map(e=>e.pet));
 
-  // modelos
-  (DATA.modelos?.[casaNum]||[]).forEach(p=>{if(p.nome&&!vistos.has(p.nome)){vistos.add(p.nome);petsDisponiveis.push({nome:p.nome,valor:getValorPetFromCobs(casaNum,p.nome)});}});
+  // modelos (namespace correto conforme cadastro do tutor)
+  ((isCad1Grupo?DATA.modelos:DATA.modelos2)?.[casaNum]||[]).forEach(p=>{if(p.nome&&!vistos.has(p.nome)){vistos.add(p.nome);petsDisponiveis.push({nome:p.nome,valor:getValorPetFromCobs(casaNum,p.nome)});}});
   // campo pets da casa
   (casaObj.pets||[]).forEach(p=>{if(p.nome&&!vistos.has(p.nome)){vistos.add(p.nome);petsDisponiveis.push({nome:p.nome,valor:getValorPetFromCobs(casaNum,p.nome)});}});
   // cobrancas
@@ -2355,7 +2361,7 @@ function abrirPagamentoModal(grupo,onDone,gwaRota,semWA){
     if(isClienteNovo){
       // Raça dos pets do grupo
       grupo.forEach(ev=>{
-        const pets=(DATA.modelos&&DATA.modelos[rep.casa])||[];
+        const pets=((DATA.casas||{})[rep.casa]?DATA.modelos:DATA.modelos2)?.[rep.casa]||[];
         const petObj=pets.find(p=>p.nome===ev.pet);
         const raca=petObj?.raca||(ev.raca||"");
         if(raca)msg+=`🐾 _${ev.pet}_: ${raca}\n`;
@@ -4037,8 +4043,9 @@ function renderMesclar(){
 
 function getPetsDoTutor(casaNum){
   const pets=new Set();
-  // modelos
-  (DATA.modelos?.[casaNum]||[]).forEach(p=>{if(p.nome)pets.add(p.nome);});
+  const ehCad1=!!(DATA.casas||{})[casaNum];
+  // modelos (namespace correto conforme cadastro)
+  ((ehCad1?DATA.modelos:DATA.modelos2)?.[casaNum]||[]).forEach(p=>{if(p.nome)pets.add(p.nome);});
   // campo pets da casa
   const casa=(DATA.casas||{})[casaNum]||(DATA.casas2||{})[casaNum]||{};
   (casa.pets||[]).forEach(p=>{if(p.nome)pets.add(p.nome);});
