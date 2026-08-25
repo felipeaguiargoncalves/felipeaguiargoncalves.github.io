@@ -864,8 +864,8 @@ function renderHome(){
   });
   w.appendChild(grid);
   // Botão Bolão Copa, compacto, largura total
-  const bolaoGridBtn=div({className:"card btn anim",style:{margin:"0 14px 10px",padding:"10px 14px",display:"flex",alignItems:"center",gap:10,cursor:"pointer",background:"linear-gradient(135deg,#15803d,#16a34a,#22c55e)",border:"none",borderRadius:14},onClick:()=>go("bolao")});
-  bolaoGridBtn.innerHTML=`<span style="font-size:22px">⚽</span><div style="flex:1"><div style="font-family:'Fredoka One',sans-serif;font-size:14px;color:#fff;letter-spacing:.5px">Bolão Copa 2026</div><div style="font-size:10px;color:rgba(255,255,255,.85);font-weight:700;margin-top:1px">🇧🇷 Palpite dos Tutores</div></div><span style="font-size:16px">🏆</span>`;
+  const bolaoGridBtn=div({className:"card btn anim",style:{margin:"0 14px 10px",padding:"10px 14px",display:"flex",alignItems:"center",gap:10,cursor:"pointer",background:"linear-gradient(90deg,#DA1A1A 0%,#DA1A1A 48%,#1A1A1A 48%,#1A1A1A 52%,#0B4EA2 52%,#0B4EA2 100%)",border:"none",borderRadius:14},onClick:()=>go("bolao")});
+  bolaoGridBtn.innerHTML=`<span style="font-size:22px">⚽</span><div style="flex:1"><div style="font-family:'Fredoka One',sans-serif;font-size:14px;color:#fff;letter-spacing:.5px">Bolão Grenal</div><div style="font-size:10px;color:rgba(255,255,255,.85);font-weight:700;margin-top:1px">🔴🔵 Copa do Brasil · Palpite dos Tutores</div></div><span style="font-size:16px">🏆</span>`;
   w.appendChild(bolaoGridBtn);
 
   // ── Agenda embutida na tela inicial ──────────────────────────────────────
@@ -1399,7 +1399,7 @@ function renderCadCasa(titulo,pref){
 
     const limparBtn=btn({style:{display:"none",width:"100%",padding:"9px",background:"#f5f5f5",color:"#8B8FA8",borderRadius:10,fontSize:12,marginBottom:10},onClick:()=>{
       editandoId=null;numInp.value="";morInp.value="";telInp.value="";ruaInp.value="";numEndInp.value="";bairroSel.value="";
-      modoLabel.style.display="none";limparBtn.style.display="none";
+      modoLabel.style.display="none";limparBtn.style.display="none";moverBtn.style.display="none";
       svBtn.textContent="Salvar Tutor";svBtn.style.background="linear-gradient(135deg,#FF6B9D,#FFD93D)";
       filtrarLista(buscaInp.value.trim());
     }},"➕ Limpar para novo cadastro");
@@ -1410,6 +1410,69 @@ function renderCadCasa(titulo,pref){
     ].forEach(el=>card.appendChild(el));
 
     let okT=null;
+    const moverBtn=btn({style:{width:"100%",padding:"13px",background:"linear-gradient(135deg,#3B82F6,#60a5fa)",color:"#fff",fontSize:13,fontWeight:800,borderRadius:12,marginBottom:10,display:"none"}},isCad2?"➡️ Mover para Cadastro 1 (Terra Ville)":"➡️ Mover para Cadastro 2 (Vetus)");
+    moverBtn.onclick=()=>{
+      if(editandoId===null)return;
+      const origId=editandoId;
+      const origCasas=isCad2?(DATA.casas2||{}):DATA.casas;
+      const destCasasKey=isCad2?"casas":"casas2";
+      const destCasas=isCad2?DATA.casas:(DATA.casas2||{});
+      const c=origCasas[origId];
+      if(!c){alert("Cliente não encontrado.");return;}
+      let destId=origId;
+      if(destCasas[destId]!==undefined){
+        const digitado=prompt(`Já existe um cliente com o ID ${destId} no cadastro de destino.\nDigite um novo ID para "${c.morador}":`,"");
+        if(digitado===null)return;
+        destId=Number(digitado.trim());
+        if(!destId||destCasas[destId]!==undefined){alert("ID inválido ou já em uso no destino.");return;}
+      }
+      if(!confirm(`Mover "${c.morador}" (ID ${origId}) para ${isCad2?"Cadastro 1":"Cadastro 2"} como ID ${destId}?\n\nPets, cobranças e endereço vão junto.`))return;
+      updSilent(d=>{
+        const nd={...d};
+        const origKey=isCad2?"casas2":"casas";
+        const destKey=isCad2?"casas":"casas2";
+        const origModKey=isCad2?"modelos2":"modelos";
+        const destModKey=isCad2?"modelos":"modelos2";
+        const origCobKey=isCad2?"cobrancas2":"cobrancas";
+        const destCobKey=isCad2?"cobrancas":"cobrancas2";
+        // move o cadastro do tutor
+        nd[origKey]={...nd[origKey]};
+        const cData={...nd[origKey][origId],numero:destId};
+        delete nd[origKey][origId];
+        nd[destKey]={...(nd[destKey]||{}),[destId]:cData};
+        // move modelos (pets) entre os namespaces certos
+        if(nd[origModKey]&&nd[origModKey][origId]){
+          nd[origModKey]={...nd[origModKey]};
+          const modData=nd[origModKey][origId];
+          delete nd[origModKey][origId];
+          nd[destModKey]={...(nd[destModKey]||{}),[destId]:modData};
+        }
+        // endereço é compartilhado entre cadastros — só remaneja se o ID mudou
+        if(origId!==destId&&nd.enderecos&&nd.enderecos[origId]){
+          nd.enderecos={...nd.enderecos};
+          nd.enderecos[destId]=nd.enderecos[origId];
+          delete nd.enderecos[origId];
+        }
+        // move cobranças de todos os meses
+        if(nd[origCobKey]){
+          nd[origCobKey]={...nd[origCobKey]};nd[destCobKey]={...(nd[destCobKey]||{})};
+          MESES.forEach(m=>{
+            if(nd[origCobKey][m]&&nd[origCobKey][m][origId]){
+              nd[origCobKey][m]={...nd[origCobKey][m]};
+              nd[destCobKey][m]={...(nd[destCobKey][m]||{}),[destId]:nd[origCobKey][m][origId]};
+              delete nd[origCobKey][m][origId];
+            }
+          });
+        }
+        // agenda
+        if(nd.agenda)nd.agenda=nd.agenda.map(a=>Number(a.casa)===Number(origId)?{...a,casa:destId}:a);
+        return nd;
+      });
+      editandoId=null;
+      alert(`✅ "${c.morador}" movido para ${isCad2?"Cadastro 1":"Cadastro 2"}.`);
+      DATA=loadData();
+      limparBtn.click();
+    };
     const svBtn=btn({style:{width:"100%",padding:"16px",background:"linear-gradient(135deg,#FF6B9D,#FFD93D)",color:"#fff",fontSize:16,borderRadius:16},onClick:()=>{
       if(!morInp.value.trim()){alert("Preencha o nome do tutor!");return;}
       let novoN;
@@ -1474,6 +1537,7 @@ function renderCadCasa(titulo,pref){
         renderPage();
       },600);
     }},"Salvar Tutor");
+    card.appendChild(moverBtn);
     card.appendChild(svBtn);
     body.appendChild(card);
 
@@ -1492,6 +1556,7 @@ function renderCadCasa(titulo,pref){
       modoLabel.style.background="#EFF6FF";modoLabel.style.color="#3B82F6";modoLabel.style.border="1.5px solid #3B82F6";
       modoLabel.textContent="✏️ Modo edição — ID e dados editáveis";
       limparBtn.style.display="block";
+      moverBtn.style.display="block";
       svBtn.textContent="Salvar Alterações";
       svBtn.style.background="linear-gradient(135deg,#3B82F6,#60a5fa)";
       filtrarLista(buscaInp.value.trim());
@@ -4172,29 +4237,93 @@ function renderRestaurar(){
 
 
 
-// ── BOLÃO COPA 2026 ───────────────────────────────────────────────────────────
+// ── BOLÃO GRENAL ─────────────────────────────────────────────────────────────
 const BOLAO_JOGOS=[
-  {id:"g1",fase:"Grupo C",data:"2026-06-13",hora:"19:00",mandante:"Brasil",visitante:"Marrocos",local:"Nova Jersey"},
-  {id:"g2",fase:"Grupo C",data:"2026-06-19",hora:"21:30",mandante:"Brasil",visitante:"Haiti",local:"Filadélfia"},
-  {id:"g3",fase:"Grupo C",data:"2026-06-24",hora:"19:00",mandante:"Escócia",visitante:"Brasil",local:"Miami"},
-  {id:"o1",fase:"Oitavas",data:"2026-06-29",hora:"?",mandante:"Brasil",visitante:"Grupo F",local:"Houston/Monterrey"},
-  {id:"arg1",fase:"Argentina",data:"2026-06-27",hora:"?",mandante:"Argentina",visitante:"Jordânia",local:"—"},
-  {id:"jap1",fase:"Oitavas",data:"2026-07-02",hora:"?",mandante:"Brasil",visitante:"Japão",local:"—"},
-  {id:"nor1",fase:"Mata-mata",data:"2026-07-05",hora:"16:00",mandante:"Brasil",visitante:"Noruega",local:"—"},
+  {id:"gn1",fase:"Copa do Brasil · Quartas (Jogo 1 de 2)",data:"2026-08-27",hora:"20:00",mandante:"Internacional",visitante:"Grêmio",local:"Beira-Rio"},
+  {id:"gn2",fase:"Copa do Brasil · Quartas (Jogo 2 de 2)",data:"2026-09-03",hora:"20:00",mandante:"Grêmio",visitante:"Internacional",local:"Arena do Grêmio"},
 ];
 
-// Só atacantes — quem pode fazer gol no bolão
+// Cores e escudo de cada time do Grenal
+const TIME_INFO={
+  "Internacional":{cor:"#DA1A1A",corEscura:"#A11212",sigla:"SC"},
+  "Grêmio":{cor:"#0B4EA2",corEscura:"#083A79",sigla:"G"}
+};
+function crestHTML(time,size){
+  size=size||32;
+  const fs=Math.round(size*0.4);
+  if(time==="Internacional")return `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${TIME_INFO["Internacional"].cor};color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:900;font-size:${fs}px;border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.35);flex-shrink:0">SC</div>`;
+  if(time==="Grêmio")return `<div style="width:${size}px;height:${size}px;border-radius:50%;background:repeating-linear-gradient(180deg,${TIME_INFO["Grêmio"].cor} 0 ${Math.round(size*.16)}px,#000 ${Math.round(size*.16)}px ${Math.round(size*.32)}px,#fff ${Math.round(size*.32)}px ${Math.round(size*.48)}px);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:900;font-size:${fs}px;border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.35);text-shadow:0 1px 3px rgba(0,0,0,.85);flex-shrink:0">G</div>`;
+  return `<div style="font-size:${Math.round(size*0.7)}px">⚽</div>`;
+}
+
+// Artilheiros dos dois times — lista única (mantém formato {n,emoji} usado pelo resto do código),
+// cada jogador carrega seu time p/ permitir agrupar/colorir por clube.
 const ATACANTES_BR=[
-  {n:"Vinicius Junior", clube:"Real Madrid",   num:7,  emoji:"⚡"},
-  {n:"Neymar",          clube:"Santos",         num:10, emoji:"🎩"},
-  {n:"Raphinha",        clube:"Barcelona",      num:11, emoji:"🔥"},
-  {n:"Endrick",         clube:"Lyon",           num:9,  emoji:"💥"},
-  {n:"Gabriel Martinelli",clube:"Arsenal",      num:11, emoji:"🚀"},
-  {n:"Matheus Cunha",   clube:"Man. United",    num:9,  emoji:"🎯"},
-  {n:"Luiz Henrique",   clube:"Zenit",          num:17, emoji:"💨"},
-  {n:"Igor Thiago",     clube:"Brentford",      num:19, emoji:"🦁"},
-  {n:"Rayan",           clube:"Bournemouth",    num:18, emoji:"⭐"},
+  {n:"Alan Patrick",     time:"Internacional", emoji:"⭐"},
+  {n:"Alerrandro",       time:"Internacional", emoji:"🎯"},
+  {n:"Johan Carbonero",  time:"Internacional", emoji:"🚀"},
+  {n:"Bruno Henrique",   time:"Internacional", emoji:"🔥"},
+  {n:"Kayky",            time:"Internacional", emoji:"⚡"},
+  {n:"Thiago Maia",      time:"Internacional", emoji:"🛡️"},
+  {n:"Vitor Hugo",       time:"Internacional", emoji:"🎩"},
+  {n:"Braithwaite",      time:"Grêmio",        emoji:"👑"},
+  {n:"Cristian Pavón",   time:"Grêmio",        emoji:"💨"},
+  {n:"Tetê",             time:"Grêmio",        emoji:"🔥"},
+  {n:"Willian",          time:"Grêmio",        emoji:"🎨"},
+  {n:"Villasanti",       time:"Grêmio",        emoji:"🛡️"},
+  {n:"Francis Amuzu",    time:"Grêmio",        emoji:"⚡"},
+  {n:"Carlos Vinícius",  time:"Grêmio",        emoji:"🚀"},
 ];
+// Renderiza os chips de goleador agrupados por time (cabeçalho + cor do clube)
+function montarChipsGoleador(container,selecionados,onToggle,comBotaoNenhum,onNenhum){
+  let timeAtual=null;
+  const elMap={};
+  ATACANTES_BR.forEach(j=>{
+    if(j.time!==timeAtual){
+      timeAtual=j.time;
+      const info=TIME_INFO[timeAtual];
+      const tit=document.createElement("div");
+      tit.style.cssText=`width:100%;font-size:10px;font-weight:800;color:${info.corEscura};text-transform:uppercase;letter-spacing:.5px;margin:${timeAtual===ATACANTES_BR[0].time?"0":"8px"} 0 3px`;
+      tit.textContent=(timeAtual==="Internacional"?"🔴 ":"🔵 ")+timeAtual;
+      container.appendChild(tit);
+    }
+    const info=TIME_INFO[j.time];
+    const chip=document.createElement("button");
+    chip.type="button";
+    chip.innerHTML=`<span style="font-size:14px">${j.emoji}</span><span>${j.n.split(" ")[0]}</span>`;
+    chip.style.cssText="padding:7px 12px;border-radius:20px;font-size:12px;border:2px solid #e5e7eb;background:#fff;color:#1A1A2E;font-weight:700;display:inline-flex;align-items:center;gap:5px;cursor:pointer;margin:0 6px 6px 0";
+    chip.onclick=()=>{onToggle(j.n);atualizar();};
+    elMap[j.n]=chip;
+    container.appendChild(chip);
+  });
+  let chipNenhum=null;
+  if(comBotaoNenhum){
+    chipNenhum=document.createElement("button");
+    chipNenhum.type="button";chipNenhum.textContent="❌ Nenhum";
+    chipNenhum.style.cssText="padding:7px 12px;border-radius:20px;font-size:12px;border:2px solid #e5e7eb;background:#fff;color:#6b7280;font-weight:700;cursor:pointer;margin:0 6px 6px 0";
+    chipNenhum.onclick=()=>{onNenhum();atualizar();};
+    container.appendChild(chipNenhum);
+  }
+  function atualizar(){
+    Object.entries(elMap).forEach(([nome,el])=>{
+      const j=ATACANTES_BR.find(x=>x.n===nome);
+      const info=TIME_INFO[j.time];
+      const s=selecionados().includes(nome);
+      el.style.background=s?info.cor:"#fff";
+      el.style.color=s?"#fff":"#1A1A2E";
+      el.style.borderColor=s?info.corEscura:"#e5e7eb";
+      el.style.fontWeight=s?"900":"700";
+    });
+    if(chipNenhum){
+      const s=selecionados().length===0;
+      chipNenhum.style.background=s?"#6b7280":"#fff";
+      chipNenhum.style.color=s?"#fff":"#6b7280";
+      chipNenhum.style.borderColor=s?"#6b7280":"#e5e7eb";
+    }
+  }
+  atualizar();
+  return atualizar;
+}
 
 function getBolao(){
   if(!DATA.bolao)DATA.bolao={palpites:{},placar:{}};
@@ -4266,13 +4395,8 @@ function renderBolao(){
   const mm=String(d.getMonth()+1).padStart(2,"0");
   const real=(bolao.placar||{})[jogo.id]||{};
   const temPlacar=real.golM!==""&&real.golV!==""&&real.golM!=null;
-  const flagVisit=jogo.visitante==="Brasil"?"🇧🇷":
-    jogo.visitante==="Marrocos"?"🇲🇦":
-    jogo.visitante==="Haiti"?"🇭🇹":
-    jogo.visitante==="Noruega"?"🇳🇴":
-    jogo.visitante==="Escócia"?"🏴󠁧󠁢󠁳󠁣󠁴󠁿":"🌍";
-  const flagMand=jogo.mandante==="Brasil"?"🇧🇷":
-    jogo.mandante==="Escócia"?"🏴󠁧󠁢󠁳󠁣󠁴󠁿":"🌍";
+  const flagVisit=crestHTML(jogo.visitante,32);
+  const flagMand=crestHTML(jogo.mandante,32);
 
   // Monta lista de palpites do próximo jogo
   const palpitesJogo=bolao.palpites?.[jogo.id]||{};
@@ -4280,7 +4404,7 @@ function renderBolao(){
     .filter(([,p])=>p.golM!==""||getJogadores(p).length>0)
     .sort((a,b)=>a[1].nome.localeCompare(b[1].nome));
 
-  const topo=div({style:{background:"linear-gradient(160deg,#064e26 0%,#15803d 60%,#166534 100%)",padding:"20px 18px 22px"}});
+  const topo=div({style:{background:"linear-gradient(160deg,#A11212 0%,#7a1a5c 50%,#083A79 100%)",padding:"20px 18px 22px"}});
 
   // ── Monta o topo inteiramente em DOM (sem innerHTML + injeção) ────────────
   const topoHeader=div({style:{display:"flex",alignItems:"center",gap:8,marginBottom:12}});
@@ -4316,7 +4440,7 @@ function renderBolao(){
       const inf=div({style:{display:"flex",alignItems:"center",gap:5}});
       if(p.golM!==""&&p.golV!==""){const pl=document.createElement("span");pl.style.cssText='background:rgba(255,255,255,.2);border-radius:6px;padding:1px 7px;font-weight:900;font-size:12px;color:#FFD93D';pl.textContent=p.golM+"×"+p.golV;inf.appendChild(pl);}
       const gl=document.createElement("span");
-      if(getJogadores(p).length){gl.style.cssText='background:rgba(0,0,0,.25);border-radius:6px;padding:1px 7px;font-size:11px;color:#86efac';gl.textContent="⚽ "+jogadoresCurto(p);}
+      if(getJogadores(p).length){gl.style.cssText='background:rgba(0,0,0,.25);border-radius:6px;padding:1px 7px;font-size:11px;color:#fca5a5';gl.textContent="⚽ "+jogadoresCurto(p);}
       else{gl.style.cssText='font-size:11px;color:rgba(255,255,255,.35)';gl.textContent="sem goleador";}
       inf.appendChild(gl);
       const delBtn=document.createElement("button");
@@ -4342,7 +4466,7 @@ function renderBolao(){
 
 
   // ── Header com voltar ────────────────────────────────────────────────────
-  w.appendChild(mkHdr("⚽ Bolão Copa 2026",()=>go("home")));
+  w.appendChild(mkHdr("⚽ Bolão Grenal",()=>go("home")));
 
   const body=div({style:{padding:"14px 16px 60px",display:"flex",flexDirection:"column",gap:14}});
 
@@ -4350,7 +4474,7 @@ function renderBolao(){
   let tabAtiva="palpites";
   const tabWrap=div({style:{display:"flex",gap:6,background:"#f3f4f6",borderRadius:14,padding:"4px"}});
   function mkTab(id,label){
-    const t=btn({style:{flex:1,padding:"9px 4px",background:id==="palpites"?"#15803d":"transparent",color:id==="palpites"?"#fff":"#6b7280",borderRadius:10,fontSize:12,fontWeight:800,transition:"all .2s"},onClick:()=>{tabAtiva=id;atualizarTabs();renderConteudo();}},label);
+    const t=btn({style:{flex:1,padding:"9px 4px",background:id==="palpites"?"#DA1A1A":"transparent",color:id==="palpites"?"#fff":"#6b7280",borderRadius:10,fontSize:12,fontWeight:800,transition:"all .2s"},onClick:()=>{tabAtiva=id;atualizarTabs();renderConteudo();}},label);
     return t;
   }
   const tabPal=mkTab("palpites","🎯 Palpites");
@@ -4361,7 +4485,7 @@ function renderBolao(){
 
   function atualizarTabs(){
     [[tabPal,"palpites"],[tabRank,"ranking"],[tabJogos,"jogos"]].forEach(([t,id])=>{
-      t.style.background=tabAtiva===id?"#15803d":"transparent";
+      t.style.background=tabAtiva===id?"#DA1A1A":"transparent";
       t.style.color=tabAtiva===id?"#fff":"#6b7280";
     });
   }
@@ -4399,68 +4523,44 @@ function renderPalpitesTab(bolao,jogoAtual){
   function renderFormulario(){
     formArea.innerHTML="";
     const jAtual=BOLAO_JOGOS.find(j=>j.id===jogoId)||jogoAtual;
-    const fM2=jAtual.mandante==="Brasil"?"🇧🇷":jAtual.mandante==="Escócia"?"🏴󠁧󠁢󠁳󠁣󠁴󠁿":"🌍";
-    const fV2=jAtual.visitante==="Brasil"?"🇧🇷":jAtual.visitante==="Haiti"?"🇭🇹":jAtual.visitante==="Marrocos"?"🇲🇦":jAtual.visitante==="Noruega"?"🇳🇴":"🌍";
+    const fM2=crestHTML(jAtual.mandante,24);
+    const fV2=crestHTML(jAtual.visitante,24);
 
     // ── Card formulário de aposta ────────────────────────────────────────────
-    const formCard=div({style:{background:"linear-gradient(135deg,#f0fdf4,#dcfce7)",border:"2px solid #16a34a",borderRadius:18,padding:"16px",marginBottom:14}});
-    formCard.appendChild(h("div",{style:{fontFamily:"'Fredoka One',sans-serif",fontSize:16,color:"#15803d",marginBottom:12}},
+    const formCard=div({style:{background:"linear-gradient(135deg,#eff6ff,#fef2f2)",border:"2px solid #0B4EA2",borderRadius:18,padding:"16px",marginBottom:14}});
+    formCard.appendChild(h("div",{style:{fontFamily:"'Fredoka One',sans-serif",fontSize:16,color:"#0B4EA2",marginBottom:12}},
       "🎯 Fazer minha aposta"));
 
     // Nome + Telefone
     const dupla=div({style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}});
-    const nomeInp=inp({className:"fi",placeholder:"Nome completo *",style:{border:"2px solid #16a34a"}});
-    const telInp=inp({className:"fi",placeholder:"WhatsApp *",type:"tel",style:{border:"2px solid #16a34a"}});
+    const nomeInp=inp({className:"fi",placeholder:"Nome completo *",style:{border:"2px solid #0B4EA2"}});
+    const telInp=inp({className:"fi",placeholder:"WhatsApp *",type:"tel",style:{border:"2px solid #0B4EA2"}});
     dupla.appendChild(nomeInp);dupla.appendChild(telInp);
     formCard.appendChild(dupla);
 
     // Placar
-    formCard.appendChild(h("div",{style:{fontWeight:800,fontSize:11,color:"#166534",textTransform:"uppercase",letterSpacing:1,marginBottom:8}},"Placar que você aposta"));
+    formCard.appendChild(h("div",{style:{fontWeight:800,fontSize:11,color:"#083A79",textTransform:"uppercase",letterSpacing:1,marginBottom:8}},"Placar que você aposta"));
     const palRow=div({style:{display:"flex",alignItems:"center",gap:8,marginBottom:14,justifyContent:"center"}});
-    const g1=inp({type:"number",min:"0",max:"20",style:{width:60,padding:"12px 6px",borderRadius:14,border:"2px solid #16a34a",textAlign:"center",fontSize:24,fontWeight:900,color:"#1A1A2E"},placeholder:"0"});
-    const g2=inp({type:"number",min:"0",max:"20",style:{width:60,padding:"12px 6px",borderRadius:14,border:"2px solid #16a34a",textAlign:"center",fontSize:24,fontWeight:900,color:"#1A1A2E"},placeholder:"0"});
-    const xSpan=h("span",{style:{fontSize:26,fontWeight:900,color:"#166534",margin:"0 6px"}},"×");
-    const mn=h("div",{style:{fontSize:12,fontWeight:800,color:"#1A1A2E",textAlign:"center",flex:1}});mn.innerHTML=`<div style="font-size:24px">${fM2}</div>${jAtual.mandante}`;
-    const vn=h("div",{style:{fontSize:12,fontWeight:800,color:"#1A1A2E",textAlign:"center",flex:1}});vn.innerHTML=`<div style="font-size:24px">${fV2}</div>${jAtual.visitante}`;
+    const g1=inp({type:"number",min:"0",max:"20",style:{width:60,padding:"12px 6px",borderRadius:14,border:"2px solid #0B4EA2",textAlign:"center",fontSize:24,fontWeight:900,color:"#1A1A2E"},placeholder:"0"});
+    const g2=inp({type:"number",min:"0",max:"20",style:{width:60,padding:"12px 6px",borderRadius:14,border:"2px solid #0B4EA2",textAlign:"center",fontSize:24,fontWeight:900,color:"#1A1A2E"},placeholder:"0"});
+    const xSpan=h("span",{style:{fontSize:26,fontWeight:900,color:"#083A79",margin:"0 6px"}},"×");
+    const mn=h("div",{style:{fontSize:12,fontWeight:800,color:"#1A1A2E",textAlign:"center",flex:1}});mn.innerHTML=`<div style="display:flex;justify-content:center;margin-bottom:4px">${fM2}</div>${jAtual.mandante}`;
+    const vn=h("div",{style:{fontSize:12,fontWeight:800,color:"#1A1A2E",textAlign:"center",flex:1}});vn.innerHTML=`<div style="display:flex;justify-content:center;margin-bottom:4px">${fV2}</div>${jAtual.visitante}`;
     [mn,g1,xSpan,g2,vn].forEach(el=>palRow.appendChild(el));
     formCard.appendChild(palRow);
 
     // Goleador(es) — pode escolher MAIS DE UM
-    formCard.appendChild(h("div",{style:{fontWeight:800,fontSize:11,color:"#166534",textTransform:"uppercase",letterSpacing:1,marginBottom:8}},"Quem vai fazer o gol? ⚽ (pode marcar vários)"));
-    const chipsWrap=div({style:{display:"flex",flexWrap:"wrap",gap:7,marginBottom:14}});
+    formCard.appendChild(h("div",{style:{fontWeight:800,fontSize:11,color:"#083A79",textTransform:"uppercase",letterSpacing:1,marginBottom:8}},"Quem vai fazer o gol? ⚽ (pode marcar vários)"));
+    const chipsWrap=div({style:{display:"flex",flexWrap:"wrap",marginBottom:14}});
     let jogSelecionados=[];
-    const chipEls={};
-
-    function atualizarChips(){
-      Object.entries(chipEls).forEach(([nome,el])=>{
-        if(nome==="__nenhum__")return;
-        const s=jogSelecionados.includes(nome);
-        el.style.background=s?"#15803d":"#fff";el.style.color=s?"#fff":"#1A1A2E";
-        el.style.border="2px solid "+(s?"#15803d":"#e5e7eb");el.style.fontWeight=s?"900":"700";
-      });
-      if(chipEls["__nenhum__"]){
-        const s=jogSelecionados.length===0;
-        chipEls["__nenhum__"].style.background=s?"#6b7280":"#fff";
-        chipEls["__nenhum__"].style.color=s?"#fff":"#6b7280";
-        chipEls["__nenhum__"].style.border="2px solid "+(s?"#6b7280":"#e5e7eb");
-      }
-    }
-    ATACANTES_BR.forEach(j=>{
-      const chip=btn({style:{padding:"7px 12px",borderRadius:20,fontSize:12,border:"2px solid #e5e7eb",background:"#fff",color:"#1A1A2E",fontWeight:700,display:"flex",alignItems:"center",gap:5},onClick:()=>{
-        const i=jogSelecionados.indexOf(j.n);
-        if(i>=0)jogSelecionados.splice(i,1);else jogSelecionados.push(j.n);
-        atualizarChips();
-      }});
-      chip.innerHTML=`<span style="font-size:14px">${j.emoji}</span><span>${j.n.split(" ")[0]}</span>`;
-      chipEls[j.n]=chip;chipsWrap.appendChild(chip);
-    });
-    const chipN=btn({style:{padding:"7px 12px",borderRadius:20,fontSize:12,border:"2px solid #e5e7eb",background:"#fff",color:"#6b7280",fontWeight:700},onClick:()=>{jogSelecionados=[];atualizarChips();}});
-    chipN.textContent="❌ Nenhum";chipEls["__nenhum__"]=chipN;chipsWrap.appendChild(chipN);
-    atualizarChips();
+    const atualizarChips=montarChipsGoleador(chipsWrap,()=>jogSelecionados,(nome)=>{
+      const i=jogSelecionados.indexOf(nome);
+      if(i>=0)jogSelecionados.splice(i,1);else jogSelecionados.push(nome);
+    },true,()=>{jogSelecionados=[];});
     formCard.appendChild(chipsWrap);
 
     // Botão enviar
-    const envBtn=btn({style:{width:"100%",padding:"15px",background:"linear-gradient(135deg,#15803d,#22c55e)",color:"#fff",fontSize:15,fontWeight:900,borderRadius:14},onClick:()=>{
+    const envBtn=btn({style:{width:"100%",padding:"15px",background:"linear-gradient(90deg,#DA1A1A,#0B4EA2)",color:"#fff",fontSize:15,fontWeight:900,borderRadius:14},onClick:()=>{
       const nome=nomeInp.value.trim();
       const tel=telInp.value.trim();
       const golM=g1.value.trim();const golV=g2.value.trim();
@@ -4479,9 +4579,9 @@ function renderPalpitesTab(bolao,jogoAtual){
       });
       DATA=loadData();
       envBtn.textContent="✅ Aposta enviada!";
-      envBtn.style.background="linear-gradient(135deg,#16a34a,#15803d)";
+      envBtn.style.background="linear-gradient(90deg,#083A79,#DA1A1A)";
       nomeInp.value="";telInp.value="";g1.value="";g2.value="";jogSelecionados=[];atualizarChips();
-      setTimeout(()=>{envBtn.textContent="⚽ Enviar Aposta";envBtn.style.background="linear-gradient(135deg,#15803d,#22c55e)";renderFormulario();},1200);
+      setTimeout(()=>{envBtn.textContent="⚽ Enviar Aposta";envBtn.style.background="linear-gradient(90deg,#DA1A1A,#0B4EA2)";renderFormulario();},1200);
     }},"⚽ Enviar Aposta");
     formCard.appendChild(envBtn);
     formArea.appendChild(formCard);
@@ -4523,13 +4623,13 @@ function renderPalpitesTab(bolao,jogoAtual){
         const placarStr=(p.golM!==""&&p.golV!=="")?(p.golM+"×"+p.golV):"?";
         const row=div({style:{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderBottom:"1px solid #f0f0f0",borderRadius:10,marginBottom:4,background:"#fafafa"}});
         const iniciais=(p.nome||"?").split(" ").filter(Boolean).slice(0,2).map(x=>x[0].toUpperCase()).join("");
-        const av2=div({style:{width:36,height:36,borderRadius:18,background:"linear-gradient(135deg,#15803d,#22c55e)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:900,color:"#fff",flexShrink:0}});
+        const av2=div({style:{width:36,height:36,borderRadius:18,background:"linear-gradient(135deg,#0B4EA2,#DA1A1A)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:900,color:"#fff",flexShrink:0}});
         av2.textContent=iniciais;
         const inf=div({style:{flex:1,minWidth:0}});
         inf.innerHTML='<div style="font-weight:800;font-size:13px;color:#1A1A2E">'+( p.nome||"?")+' <span style="font-size:10px;color:#8B8FA8;font-weight:600">'+( p.tel||"")+' </span></div>'+
           '<div style="font-size:11px;color:#8B8FA8;margin-top:1px">'+(p.tel?`<a href="https://wa.me/55${p.tel.replace(/\D/g,'')}" target="_blank" style="color:#25D366;text-decoration:none;font-weight:700">💬 ${p.tel}</a>`:"—")+'</div>';
         const pl=div({style:{textAlign:"right",flexShrink:0}});
-        pl.innerHTML='<span style="background:#dcfce7;color:#15803d;border-radius:8px;padding:3px 10px;font-weight:900;font-size:14px">'+placarStr+'</span>'+
+        pl.innerHTML='<span style="background:#dbeafe;color:#0B4EA2;border-radius:8px;padding:3px 10px;font-weight:900;font-size:14px">'+placarStr+'</span>'+
           (getJogadores(p).length?'<div style="font-size:10px;color:#3B82F6;font-weight:700;margin-top:3px">⚽ '+jogadoresCurto(p)+'</div>':"");
         // Botão apagar
         const delB=btn({style:{background:"#fff0f0",color:"#e53e3e",padding:"6px 10px",borderRadius:8,fontSize:12,fontWeight:800,marginLeft:4,flexShrink:0},onClick:()=>{
@@ -4552,7 +4652,7 @@ function renderPalpitesTab(bolao,jogoAtual){
     const cont=div();
 
     // Cabeçalho placar real
-    const hdrPlac=div({style:{background:"linear-gradient(135deg,#15803d,#166534)",borderRadius:14,padding:"14px 16px",marginBottom:14,display:"flex",justifyContent:"space-between",alignItems:"center"}});
+    const hdrPlac=div({style:{background:"linear-gradient(135deg,#0B4EA2,#083A79)",borderRadius:14,padding:"14px 16px",marginBottom:14,display:"flex",justifyContent:"space-between",alignItems:"center"}});
     hdrPlac.innerHTML='<div><div style="font-family:\'Fredoka One\',sans-serif;font-size:15px;color:#fff">'+jogo.mandante+' × '+jogo.visitante+'</div><div style="font-size:10px;color:rgba(255,255,255,.7)">'+fmtD(jogo.data)+'</div></div>'+
       '<div style="text-align:right"><div style="font-family:\'Fredoka One\',sans-serif;font-size:28px;color:#FFD93D">'+real.golM+' × '+real.golV+'</div>'+
       (goleadoresCurto(real)?'<div style="font-size:10px;color:rgba(255,255,255,.8)">⚽ '+goleadoresCurto(real)+'</div>':"")+
@@ -4568,13 +4668,13 @@ function renderPalpitesTab(bolao,jogoAtual){
         const tel=v.pal.tel||"";
         const primeiroNomeV=(v.nome||"").trim().split(" ")[0]||"";
         const msgGanhador="🏆 "+primeiroNomeV+", você GANHOU o Bolão Planet Dogs! 🐾\n\n⚽ "+jogo.mandante+" "+real.golM+"×"+real.golV+" "+jogo.visitante+(goleadoresCurto(real)?"\nGol: ⚽ "+goleadoresCurto(real):"")+"\n\nSeu palpite: "+v.pal.golM+"×"+v.pal.golV+(getJogadores(v.pal).length?" · ⚽ "+getJogadores(v.pal).join(", "):"")+"\n"+v.motivo+"\n\n🛁 Vem buscar seu banho grátis! Parabéns! 🎉";
-        const gCard=div({style:{background:i===0?"linear-gradient(135deg,#fef9c3,#fef08a)":"#f0fdf4",border:"2.5px solid "+(i===0?"#FFD93D":"#16a34a"),borderRadius:16,padding:"16px",marginBottom:10}});
+        const gCard=div({style:{background:i===0?"linear-gradient(135deg,#fef9c3,#fef08a)":"#eff6ff",border:"2.5px solid "+(i===0?"#FFD93D":"#0B4EA2"),borderRadius:16,padding:"16px",marginBottom:10}});
         const ini=(v.nome||"?").split(" ").filter(Boolean).slice(0,2).map(x=>x[0].toUpperCase()).join("");
         gCard.innerHTML='<div style="display:flex;align-items:center;gap:12px">'+
           '<div style="width:48px;height:48px;border-radius:24px;background:linear-gradient(135deg,#FFD93D,#f59e0b);display:flex;align-items:center;justify-content:center;font-size:'+(i===0?"24":"16")+'px;font-weight:900;color:#fff;flex-shrink:0">'+(i===0?"🏆":ini)+'</div>'+
           '<div style="flex:1;min-width:0">'+
             '<div style="font-weight:900;font-size:16px;color:#1A1A2E">'+v.nome+'</div>'+
-            '<div style="font-size:10px;color:#15803d;font-weight:700;margin-top:2px">'+v.motivo+'</div>'+
+            '<div style="font-size:10px;color:#0B4EA2;font-weight:700;margin-top:2px">'+v.motivo+'</div>'+
             (tel?'<div style="font-size:11px;color:#128C7E;font-weight:800;margin-top:3px">📱 '+tel+'</div>':'')+
             (tel?'<a href="https://api.whatsapp.com/send?phone=55'+tel.replace(/\D/g,"")+'&text='+encodeURIComponent(msgGanhador)+'" target="_blank" style="display:inline-block;margin-top:5px;background:#25D366;color:#fff;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:800;text-decoration:none">🎉 Avisar '+primeiroNomeV+' no WhatsApp</a>':'<div style="margin-top:5px;font-size:10px;color:#e53e3e;font-weight:700">⚠️ Sem telefone cadastrado</div>')+'</div>'+
           '<div style="font-size:36px">🛁</div></div>'+
@@ -4584,7 +4684,7 @@ function renderPalpitesTab(bolao,jogoAtual){
       // Botão para avisar TODOS os ganhadores de uma vez (abre uma aba por ganhador, já com a msg de parabéns)
       const ganhadoresComTel=vencedores.filter(v=>v.pal.tel);
       if(ganhadoresComTel.length>1){
-        const avisarTodosBtn=btn({style:{width:"100%",padding:"12px",background:"linear-gradient(135deg,#15803d,#22c55e)",color:"#fff",fontSize:13,fontWeight:800,borderRadius:13,marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:8},onClick:()=>{
+        const avisarTodosBtn=btn({style:{width:"100%",padding:"12px",background:"linear-gradient(135deg,#0B4EA2,#DA1A1A)",color:"#fff",fontSize:13,fontWeight:800,borderRadius:13,marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:8},onClick:()=>{
           ganhadoresComTel.forEach((v,idx)=>{
             const telV=v.pal.tel.replace(/\D/g,"");
             const primeiroNomeV2=(v.nome||"").trim().split(" ")[0]||"";
@@ -4597,7 +4697,7 @@ function renderPalpitesTab(bolao,jogoAtual){
       }
       // Botão copiar lista para WA
       const total=Object.keys(palpitesJogo).length;
-      const txtDivulg="🏆 BOLÃO COPA 2026 — Planet Dogs 🐾\n\n⚽ "+jogo.mandante+" "+real.golM+"×"+real.golV+" "+jogo.visitante+(goleadoresCurto(real)?"\nGol: ⚽ "+goleadoresCurto(real):"")+"\n\n🎉 GANHADOR(ES) DO BANHO GRÁTIS:\n"+vencedores.map((v,i)=>(i===0?"🥇":"🥈")+" "+v.nome+" ("+v.pal.golM+"×"+v.pal.golV+")"+(v.pal.tel?" 📱 "+v.pal.tel:"")+" — "+v.motivo).join("\n")+"\n\nParabéns! Venham buscar o prêmio! 🛁\n📍 Planet Dogs — Porto Alegre\n("+total+" participantes)";
+      const txtDivulg="🔴🔵 BOLÃO GRENAL — Planet Dogs 🐾\n\n⚽ "+jogo.mandante+" "+real.golM+"×"+real.golV+" "+jogo.visitante+(goleadoresCurto(real)?"\nGol: ⚽ "+goleadoresCurto(real):"")+"\n\n🎉 GANHADOR(ES) DO BANHO GRÁTIS:\n"+vencedores.map((v,i)=>(i===0?"🥇":"🥈")+" "+v.nome+" ("+v.pal.golM+"×"+v.pal.golV+")"+(v.pal.tel?" 📱 "+v.pal.tel:"")+" — "+v.motivo).join("\n")+"\n\nParabéns! Venham buscar o prêmio! 🛁\n📍 Planet Dogs — Porto Alegre\n("+total+" participantes)";
       const cpBtn=btn({style:{width:"100%",padding:"13px",background:"linear-gradient(135deg,#25D366,#128C7E)",color:"#fff",fontSize:13,fontWeight:800,borderRadius:13,marginTop:6,display:"flex",alignItems:"center",justifyContent:"center",gap:8},onClick:()=>{
         navigator.clipboard.writeText(txtDivulg).then(()=>{cpBtn.textContent="✅ Copiado! Cole no grupo WA";setTimeout(()=>cpBtn.innerHTML="💬 Copiar e divulgar no WA",2000);});
         window.open("https://wa.me/?text="+encodeURIComponent(txtDivulg),"_blank");
@@ -4636,13 +4736,15 @@ function renderRankingTab(bolao){
     row2.appendChild(h("span",{style:{fontSize:13,fontWeight:700,color:"#8B8FA8"}},"Visitante"));
     cont.appendChild(row2);
     cont.appendChild(h("div",{style:{fontWeight:800,fontSize:11,color:"#8B8FA8",textTransform:"uppercase",marginBottom:8}},"Goleador(es) (opcional) ⚽ — pode marcar vários"));
-    const chW2=div({style:{display:"flex",flexWrap:"wrap",gap:6,marginBottom:14}});
-    let golsSel2=[];const chips2={};
-    function updC2(){Object.entries(chips2).forEach(([n,el])=>{const s=golsSel2.includes(n);el.style.background=s?"#15803d":"#fff";el.style.color=s?"#fff":"#1A1A2E";el.style.border="2px solid "+(s?"#15803d":"#e5e7eb");});}
-    ATACANTES_BR.forEach(j=>{const c2=btn({style:{padding:"6px 10px",borderRadius:18,fontSize:11,border:"2px solid #e5e7eb",background:"#fff",color:"#1A1A2E",fontWeight:700},onClick:()=>{const i=golsSel2.indexOf(j.n);if(i>=0)golsSel2.splice(i,1);else golsSel2.push(j.n);updC2();}});c2.textContent=j.emoji+" "+j.n.split(" ")[0];chips2[j.n]=c2;chW2.appendChild(c2);});
+    const chW2=div({style:{display:"flex",flexWrap:"wrap",marginBottom:14}});
+    let golsSel2=[];
+    montarChipsGoleador(chW2,()=>golsSel2,(nome)=>{
+      const i=golsSel2.indexOf(nome);
+      if(i>=0)golsSel2.splice(i,1);else golsSel2.push(nome);
+    },false);
     cont.appendChild(chW2);
     let mv2=null;
-    cont.appendChild(btn({style:{width:"100%",padding:"14px",background:"linear-gradient(135deg,#15803d,#22c55e)",color:"#fff",fontSize:14,fontWeight:800,borderRadius:13},onClick:()=>{
+    cont.appendChild(btn({style:{width:"100%",padding:"14px",background:"linear-gradient(135deg,#0B4EA2,#DA1A1A)",color:"#fff",fontSize:14,fontWeight:800,borderRadius:13},onClick:()=>{
       const jid=jogoSel2.value;
       if(gm2.value===""&&gv2.value===""){alert("Preencha o placar!");return;}
       updSilent(d=>{if(!d.bolao)d.bolao={palpites:{},placar:{}};d.bolao.placar[jid]={golM:gm2.value,golV:gv2.value,goleadores:golsSel2.slice(),goleador:golsSel2[0]||""};return d;});
@@ -4664,7 +4766,7 @@ function renderRankingTab(bolao){
     const bloco=div({className:"card",style:{marginBottom:14,overflow:"hidden"}});
 
     // Cabeçalho do jogo
-    bloco.innerHTML=`<div style="background:linear-gradient(135deg,#15803d,#166534);padding:10px 14px;display:flex;align-items:center;justify-content:space-between">
+    bloco.innerHTML=`<div style="background:linear-gradient(135deg,#0B4EA2,#083A79);padding:10px 14px;display:flex;align-items:center;justify-content:space-between">
       <div>
         <div style="font-family:'Fredoka One',sans-serif;font-size:14px;color:#fff">${jogo.mandante} x ${jogo.visitante}</div>
         <div style="font-size:10px;color:rgba(255,255,255,.7)">${fmtD(jogo.data)} · ${jogo.local}</div>
@@ -4679,12 +4781,12 @@ function renderRankingTab(bolao){
     if(!vencedores.length){
       corpo.innerHTML='<div style="text-align:center;padding:12px;color:#8B8FA8;font-size:13px">😔 Ninguém ganhou o banho nesse jogo<br><span style="font-size:11px">'+qtPal+' palpite(s) recebidos</span></div>';
     } else {
-      const tit=h("div",{style:{fontWeight:800,fontSize:12,color:"#15803d",textTransform:"uppercase",letterSpacing:1,marginBottom:8}},"🏆 GANHADOR(ES) DO BANHO GRÁTIS");
+      const tit=h("div",{style:{fontWeight:800,fontSize:12,color:"#0B4EA2",textTransform:"uppercase",letterSpacing:1,marginBottom:8}},"🏆 GANHADOR(ES) DO BANHO GRÁTIS");
       corpo.appendChild(tit);
       vencedores.forEach((v,i)=>{
         const vCard=div({style:{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:i===0?"linear-gradient(135deg,#fef9c3,#fef08a)":"#f9fafb",borderRadius:12,marginBottom:6,border:"1.5px solid "+(i===0?"#FFD93D":"#e5e7eb")}});
         const iniciais=v.nome.split(" ").filter(Boolean).slice(0,2).map(p=>p[0].toUpperCase()).join("");
-        vCard.innerHTML='<div style="width:40px;height:40px;border-radius:20px;background:linear-gradient(135deg,#FFD93D,#f59e0b);display:flex;align-items:center;justify-content:center;font-family:Fredoka One,sans-serif;font-size:15px;color:#fff;flex-shrink:0">'+( i===0?"🏆":iniciais)+'</div><div style="flex:1"><div style="font-weight:800;font-size:14px;color:#1A1A2E">'+v.nome.split(" ").slice(0,2).join(" ")+'</div><div style="font-size:11px;color:#15803d;font-weight:700">'+v.motivo+'</div><div style="font-size:10px;color:#8B8FA8">Palpite: '+( v.pal.placar||"—")+(getJogadores(v.pal).length?" · ⚽ "+getJogadores(v.pal).join(", "):"")+'</div></div>';
+        vCard.innerHTML='<div style="width:40px;height:40px;border-radius:20px;background:linear-gradient(135deg,#FFD93D,#f59e0b);display:flex;align-items:center;justify-content:center;font-family:Fredoka One,sans-serif;font-size:15px;color:#fff;flex-shrink:0">'+( i===0?"🏆":iniciais)+'</div><div style="flex:1"><div style="font-weight:800;font-size:14px;color:#1A1A2E">'+v.nome.split(" ").slice(0,2).join(" ")+'</div><div style="font-size:11px;color:#0B4EA2;font-weight:700">'+v.motivo+'</div><div style="font-size:10px;color:#8B8FA8">Palpite: '+( v.pal.placar||"—")+(getJogadores(v.pal).length?" · ⚽ "+getJogadores(v.pal).join(", "):"")+'</div></div>';
         // Botão WhatsApp para chamar o ganhador direto no quadro
         const primeiroNomeV=v.nome.split(" ")[0];
         const telV=(v.pal.tel||"").replace(/\D/g,"");
@@ -4713,8 +4815,8 @@ function renderRankingTab(bolao){
         const acGol=getJogadores(pal).length>0&&getGoleadores(real).length>0&&getJogadores(pal).some(j=>getGoleadores(real).includes(j));
         const acExato=!isNaN(pm)&&!isNaN(pv)&&pm===rm2&&pv===rv2;
         const acRes=!isNaN(pm)&&!isNaN(pv)&&(pm>pv?"M":pm<pv?"V":"E")===resReal2;
-        const ganhouBg=acGol?"#dcfce7":acExato?"#dbeafe":acRes?"#fef9c3":"#f9fafb";
-        const pr=div({style:{display:"flex",alignItems:"center",gap:8,padding:"7px 10px",background:ganhouBg,borderRadius:10,marginBottom:4,border:"1px solid "+(acGol?"#86efac":acExato?"#bfdbfe":acRes?"#fde68a":"#f0f0f0")}});
+        const ganhouBg=acGol?"#fee2e2":acExato?"#dbeafe":acRes?"#fef9c3":"#f9fafb";
+        const pr=div({style:{display:"flex",alignItems:"center",gap:8,padding:"7px 10px",background:ganhouBg,borderRadius:10,marginBottom:4,border:"1px solid "+(acGol?"#fca5a5":acExato?"#bfdbfe":acRes?"#fde68a":"#f0f0f0")}});
         const nomeP=(pal.nome||"?").split(" ")[0];
         const placarP=(pal.golM!==""&&pal.golV!=="")?(pal.golM+"x"+pal.golV):"?";
         const jogP=getJogadores(pal).length?(" ⚽"+jogadoresCurto(pal)):"";
@@ -4731,7 +4833,7 @@ function renderRankingTab(bolao){
     // ── Card divulgação para redes sociais ──────────────────────────────────
     const nomeVenc=vencedores.length?vencedores.map(v=>v.nome.split(" ")[0]).join(" e "):"Ninguém";
     const linhasVenc=vencedores.length?vencedores.map((v,i)=>(i===0?"🥇":"🥈")+" "+v.nome.split(" ").slice(0,2).join(" ")+" — "+v.motivo).join("\n"):"Sem ganhador nesse jogo";
-    const textoDivulg="🐕 Bolão Copa 2026 — Planet Dogs 🏆\n\n⚽ "+jogo.mandante+" x "+jogo.visitante+"\n📊 Resultado: "+real.golM+" x "+real.golV+(goleadoresCurto(real)?" · ⚽ "+goleadoresCurto(real):"")+"\n\n"+(vencedores.length?"🎉 GANHADOR DO BANHO GRÁTIS:\n"+linhasVenc+"\n\n🛁 Parabéns! O banho grátis é seu!":"😔 Ninguém acertou esse jogo.\nA disputa continua! 💪")+"\n\nPlanet Dogs 🐾 Porto Alegre";
+    const textoDivulg="🐕 Bolão Grenal — Planet Dogs 🔴🔵\n\n⚽ "+jogo.mandante+" x "+jogo.visitante+"\n📊 Resultado: "+real.golM+" x "+real.golV+(goleadoresCurto(real)?" · ⚽ "+goleadoresCurto(real):"")+"\n\n"+(vencedores.length?"🎉 GANHADOR DO BANHO GRÁTIS:\n"+linhasVenc+"\n\n🛁 Parabéns! O banho grátis é seu!":"😔 Ninguém acertou esse jogo.\nA disputa continua! 💪")+"\n\nPlanet Dogs 🐾 Porto Alegre";
     const divulgDiv=div({style:{margin:"0 0 0",background:"linear-gradient(135deg,#fef9c3,#fef3c7)",border:"2px solid #FFD93D",borderRadius:"0 0 14px 14px",padding:"12px 14px"}});
     divulgDiv.appendChild(h("div",{style:{fontWeight:800,fontSize:11,color:"#92400e",textTransform:"uppercase",letterSpacing:.8,marginBottom:8}},"📣 Divulgação para Redes Sociais"));
     const taDiv=h("textarea",{style:{width:"100%",height:130,padding:"10px",borderRadius:10,border:"1.5px solid #FFD93D",fontSize:11,fontFamily:"monospace",resize:"none",background:"#fff",color:"#1A1A2E",lineHeight:1.6,marginBottom:8}});
@@ -4751,8 +4853,8 @@ function renderRankingTab(bolao){
     const em=div({style:{textAlign:"center",padding:"36px 20px",color:"#8B8FA8"}});
     em.innerHTML='<div style="font-size:40px;margin-bottom:10px">🏆</div><div style="font-weight:800;font-size:14px;color:#1A1A2E;margin-bottom:4px">Aguardando os jogos!</div><div style="font-size:12px">Use o botão acima para lançar um resultado,<br>ou vá na aba Jogos.</div>';
     wrap.appendChild(em);
-    const regras=div({style:{background:"#f0fdf4",border:"1.5px solid #16a34a",borderRadius:14,padding:"14px 16px",marginTop:4}});
-    regras.innerHTML='<div style="font-weight:800;color:#15803d;font-size:12px;margin-bottom:8px;text-transform:uppercase;letter-spacing:.8px">🏅 Como funciona o prêmio</div><div style="font-size:12px;line-height:2.2;color:#1A1A2E">🎯 <b>Só ganha quem acertar o placar exato</b> do jogo<br>⚽ Quem também acertar <b>quem fez gol</b> fica mais qualificado<br>🏆 Ordem: placar exato + gol → só placar exato</div>';
+    const regras=div({style:{background:"#eff6ff",border:"1.5px solid #0B4EA2",borderRadius:14,padding:"14px 16px",marginTop:4}});
+    regras.innerHTML='<div style="font-weight:800;color:#0B4EA2;font-size:12px;margin-bottom:8px;text-transform:uppercase;letter-spacing:.8px">🏅 Como funciona o prêmio</div><div style="font-size:12px;line-height:2.2;color:#1A1A2E">🎯 <b>Só ganha quem acertar o placar exato</b> do jogo<br>⚽ Quem também acertar <b>quem fez gol</b> fica mais qualificado<br>🏆 Ordem: placar exato + gol → só placar exato</div>';
     wrap.appendChild(regras);
   }
   return wrap;
@@ -4765,13 +4867,12 @@ function renderJogosTab(bolao){
     const real=(bolao.placar||{})[jogo.id]||{};
     const qtPal=Object.keys((bolao.palpites||{})[jogo.id]||{}).length;
     const temPlacar=real.golM!=null&&real.golM!=="";
-    const isBR=jogo.mandante==="Brasil"||jogo.visitante==="Brasil";
     const card=div({className:"card",style:{marginBottom:14,overflow:"hidden"}});
 
-    const fM=jogo.mandante==="Brasil"?"🇧🇷":jogo.mandante==="Escócia"?"🏴󠁧󠁢󠁳󠁣󠁴󠁿":"🌍";
-    const fV=jogo.visitante==="Brasil"?"🇧🇷":jogo.visitante==="Haiti"?"🇭🇹":jogo.visitante==="Marrocos"?"🇲🇦":jogo.visitante==="Noruega"?"🇳🇴":"🌍";
+    const fM=crestHTML(jogo.mandante,20);
+    const fV=crestHTML(jogo.visitante,20);
 
-    const hdr=div({style:{background:isBR?"linear-gradient(135deg,#15803d,#166534)":"linear-gradient(135deg,#1A1A2E,#2d2d4e)",padding:"12px 14px",display:"flex",alignItems:"center",justifyContent:"space-between"}});
+    const hdr=div({style:{background:"linear-gradient(135deg,#0B4EA2,#083A79)",padding:"12px 14px",display:"flex",alignItems:"center",justifyContent:"space-between"}});
     hdr.innerHTML=`
       <div style="display:flex;align-items:center;gap:8px">
         <span style="font-size:20px">${fM}</span>
@@ -4797,48 +4898,22 @@ function renderJogosTab(bolao){
     const gm=inp({type:"number",min:"0",max:"20",style:{width:52,padding:"10px 6px",borderRadius:12,border:"2px solid #e5e7eb",textAlign:"center",fontSize:20,fontWeight:900,color:"#1A1A2E"},value:real.golM||""});
     const gv=inp({type:"number",min:"0",max:"20",style:{width:52,padding:"10px 6px",borderRadius:12,border:"2px solid #e5e7eb",textAlign:"center",fontSize:20,fontWeight:900,color:"#1A1A2E"},value:real.golV||""});
     const xS=h("span",{style:{fontSize:22,fontWeight:900,color:"#8B8FA8",margin:"0 6px"}},"×");
-    const mnL=h("div",{style:{fontSize:11,fontWeight:700,textAlign:"center",flex:1}});mnL.innerHTML=`<div style="font-size:20px">${fM}</div>${jogo.mandante}`;
-    const vnL=h("div",{style:{fontSize:11,fontWeight:700,textAlign:"center",flex:1}});vnL.innerHTML=`<div style="font-size:20px">${fV}</div>${jogo.visitante}`;
+    const mnL=h("div",{style:{fontSize:11,fontWeight:700,textAlign:"center",flex:1}});mnL.innerHTML=`<div style="display:flex;justify-content:center;margin-bottom:3px">${fM}</div>${jogo.mandante}`;
+    const vnL=h("div",{style:{fontSize:11,fontWeight:700,textAlign:"center",flex:1}});vnL.innerHTML=`<div style="display:flex;justify-content:center;margin-bottom:3px">${fV}</div>${jogo.visitante}`;
     [mnL,gm,xS,gv,vnL].forEach(el=>row.appendChild(el));
     form.appendChild(row);
 
     // Goleador(es) real — pode marcar vários
     form.appendChild(h("div",{style:{fontWeight:800,fontSize:11,color:"#8B8FA8",textTransform:"uppercase",letterSpacing:.8,marginBottom:8}},"Quem fez o gol? ⚽ (pode marcar vários)"));
-    const gChipsWrap=div({style:{display:"flex",flexWrap:"wrap",gap:7,marginBottom:12}});
+    const gChipsWrap=div({style:{display:"flex",flexWrap:"wrap",marginBottom:12}});
     let goleadoresSel=getGoleadores(real);
-    const gChipEls={};
-    function atualizarGChips(){
-      Object.entries(gChipEls).forEach(([nome,el])=>{
-        if(nome==="__nenhum__")return;
-        const s=goleadoresSel.includes(nome);
-        el.style.background=s?"#15803d":"#fff";
-        el.style.color=s?"#fff":"#1A1A2E";
-        el.style.border="2px solid "+(s?"#15803d":"#e5e7eb");
-        el.style.fontWeight=s?"900":"700";
-      });
-      if(gChipEls["__nenhum__"]){
-        const s=goleadoresSel.length===0;
-        gChipEls["__nenhum__"].style.background=s?"#6b7280":"#fff";
-        gChipEls["__nenhum__"].style.color=s?"#fff":"#6b7280";
-        gChipEls["__nenhum__"].style.border="2px solid "+(s?"#6b7280":"#e5e7eb");
-      }
-    }
-    ATACANTES_BR.forEach(j=>{
-      const gc=btn({style:{padding:"7px 12px",borderRadius:20,fontSize:12,border:"2px solid #e5e7eb",background:"#fff",color:"#1A1A2E",fontWeight:700,display:"flex",alignItems:"center",gap:5},onClick:()=>{
-        const i=goleadoresSel.indexOf(j.n);
-        if(i>=0)goleadoresSel.splice(i,1);else goleadoresSel.push(j.n);
-        atualizarGChips();
-      }});
-      gc.innerHTML=`<span style="font-size:14px">${j.emoji}</span><span>${j.n.split(" ")[0]}</span>`;
-      gChipEls[j.n]=gc;gChipsWrap.appendChild(gc);
-    });
-    const gcNenhum=btn({style:{padding:"7px 12px",borderRadius:20,fontSize:12,border:"2px solid #e5e7eb",background:"#fff",color:"#6b7280",fontWeight:700},onClick:()=>{goleadoresSel=[];atualizarGChips();}});
-    gcNenhum.textContent="❌ Sem gol";
-    gChipEls["__nenhum__"]=gcNenhum;gChipsWrap.appendChild(gcNenhum);
-    atualizarGChips();
+    const atualizarGChips=montarChipsGoleador(gChipsWrap,()=>goleadoresSel,(nome)=>{
+      const i=goleadoresSel.indexOf(nome);
+      if(i>=0)goleadoresSel.splice(i,1);else goleadoresSel.push(nome);
+    },true,()=>{goleadoresSel=[];});
     form.appendChild(gChipsWrap);
 
-    const svBtn=btn({style:{width:"100%",padding:"13px",background:"linear-gradient(135deg,#15803d,#22c55e)",color:"#fff",fontSize:14,fontWeight:800,borderRadius:13},onClick:()=>{
+    const svBtn=btn({style:{width:"100%",padding:"13px",background:"linear-gradient(135deg,#0B4EA2,#DA1A1A)",color:"#fff",fontSize:14,fontWeight:800,borderRadius:13},onClick:()=>{
       updSilent(d=>{
         if(!d.bolao)d.bolao={palpites:{},placar:{}};
         d.bolao.placar[jogo.id]={golM:gm.value,golV:gv.value,goleadores:goleadoresSel.slice(),goleador:goleadoresSel[0]||""};
@@ -4846,7 +4921,7 @@ function renderJogosTab(bolao){
       });
       DATA=loadData();
       svBtn.textContent="✅ Resultado salvo! Ranking atualizado.";
-      svBtn.style.background="linear-gradient(135deg,#16a34a,#15803d)";
+      svBtn.style.background="linear-gradient(135deg,#0B4EA2,#0B4EA2)";
       setTimeout(()=>{svBtn.textContent="💾 Salvar Resultado";},2000);
     }},"💾 Salvar Resultado");
     form.appendChild(svBtn);
