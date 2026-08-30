@@ -386,6 +386,64 @@ function openModal(title,content,onClose,center){
   return ov;
 }
 
+// ── GEMINI IA (leitura de fotos) ────────────────────────────────────────────
+const GEMINI_API_KEY="AQ.Ab8RN6LHokjt2I8nEonLE7BiQmFQ32izrkVUTuVt4XeDghKaUQ"; // pegue em aistudio.google.com/apikey
+const GEMINI_MODEL="gemini-2.0-flash";
+
+function fileParaBase64(file){
+  return new Promise((res,rej)=>{
+    const r=new FileReader();
+    r.onload=()=>res(r.result.split(",")[1]);
+    r.onerror=()=>rej(new Error("Falha ao ler imagem"));
+    r.readAsDataURL(file);
+  });
+}
+
+async function chamarGeminiVisao(base64Img,mimeType,promptTexto){
+  if(!GEMINI_API_KEY||GEMINI_API_KEY==="COLE_SUA_CHAVE_AQUI"){
+    throw new Error("Chave da API Gemini não configurada. Peça pro Claude/edite GEMINI_API_KEY no código.");
+  }
+  const url=`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+  const body={
+    contents:[{parts:[
+      {text:promptTexto},
+      {inline_data:{mime_type:mimeType,data:base64Img}}
+    ]}],
+    generationConfig:{responseMimeType:"application/json"}
+  };
+  const resp=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+  if(!resp.ok){const t=await resp.text();throw new Error("Erro Gemini: "+t.slice(0,200));}
+  const data=await resp.json();
+  const texto=data?.candidates?.[0]?.content?.parts?.[0]?.text;
+  if(!texto)throw new Error("Gemini não retornou conteúdo.");
+  try{return JSON.parse(texto);}catch(e){throw new Error("Resposta da IA não veio em JSON válido.");}
+}
+
+// Abre modal genérico de captura/upload de foto; ao escolher, chama onFoto(base64,mimeType)
+function abrirModalFoto(titulo,onFoto){
+  const cont=div();
+  cont.appendChild(h("p",{style:{fontSize:13,color:"#8B8FA8",marginBottom:14,lineHeight:1.5}},"Tire uma foto ou escolha da galeria."));
+  const status=div({style:{textAlign:"center",padding:"10px 0",fontWeight:700,color:"#FF6B9D",display:"none"}});
+  status.textContent="🔎 Lendo a foto com IA...";
+  const fi=document.createElement("input");
+  fi.type="file";fi.accept="image/*";fi.capture="environment";
+  fi.style.cssText="width:100%;padding:14px;border:2px dashed #FFB6D9;border-radius:14px;margin-bottom:12px";
+  fi.addEventListener("change",async()=>{
+    const file=fi.files[0];if(!file)return;
+    status.style.display="block";fi.disabled=true;
+    try{
+      const b64=await fileParaBase64(file);
+      await onFoto(b64,file.type||"image/jpeg");
+    }catch(e){
+      alert("Erro: "+e.message);
+    }finally{
+      status.style.display="none";fi.disabled=false;
+    }
+  });
+  cont.appendChild(fi);cont.appendChild(status);
+  return openModal(titulo,cont,null,true);
+}
+
 // ── NAVEGAÇÃO ─────────────────────────────────────────────────────────────────
 let NAV={s:IS_GERENTE?"agenda_gerente":"home"};
 function go(s,extra){
@@ -432,7 +490,7 @@ function render(){
     home:renderHome,
     agenda:()=>renderAgenda(false),agenda_gerente:()=>renderAgenda(true),
     saidas:renderSaidas,vendas:renderVendas,farmacia:renderFarmacia,bolao:renderBolao,
-    stats:renderStats,exportar:renderExportar,restaurar:renderRestaurar,notas:renderNotas,mesclar:renderMesclar,
+    stats:renderStats,exportar:renderExportar,restaurar:renderRestaurar,lab:renderLab,mesclar:renderMesclar,
     cad1:()=>renderMenuCad("Cadastro 1","cad1"),cad2:()=>renderMenuCad("Cadastro 2","cad2"),
     cad1_casa:()=>renderCadCasa("Cadastro 1","cad1"),cad2_casa:()=>renderCadCasa("Cadastro 2","cad2"),
     cad1_meses:()=>renderMeses("cad1"),cad2_meses:()=>renderMeses("cad2"),
@@ -856,7 +914,7 @@ function renderHome(){
   [{k:"cad1",l:"Cad 1",i:"📁",c:"#FF6B9D"},{k:"cad2",l:"Cad 2",i:"📂",c:"#9B59B6"},
    {k:"agenda",l:"Agenda",i:"📅",c:"#E8A000"},{k:"saidas",l:"Saidas",i:"💸",c:"#E8A000"},
    {k:"vendas",l:"Vendas",i:"🛍",c:"#FF6B9D"},{k:"farmacia",l:"Farmacia",i:"💊",c:"#2DC653"},
-   {k:"stats",l:"Relatorio",i:"📊",c:"#8B8FA8"},{k:"notas",l:"Notas",i:"📝",c:"#3B82F6"}
+   {k:"stats",l:"Relatorio",i:"📊",c:"#8B8FA8"},{k:"lab",l:"Lab",i:"🧪",c:"#3ecfb2"}
   ].forEach((it,i)=>{
     const c=div({className:"card btn anim",style:{padding:"8px 4px",display:"flex",flexDirection:"column",alignItems:"center",gap:3,animationDelay:i*18+"ms",cursor:"pointer",borderRadius:12},onClick:()=>go(it.k)});
     c.innerHTML=`<span style="font-size:18px">${it.i}</span><span style="font-family:'Fredoka One',sans-serif;font-size:10px;color:${it.c};text-align:center">${it.l}</span>`;
@@ -879,9 +937,7 @@ function renderHome(){
 
   [
    [()=>go("exportar"),"📋","Exportar Dados","linear-gradient(135deg,#1A1A2E,#2d2d4e)",""],
-   [()=>go("restaurar"),"📂","Restaurar Backup","linear-gradient(135deg,#2DC653,#52e87b)",""],
-   [()=>virgulaC1Click(),"↩️","Desfazer vírgula (Casas C1)","linear-gradient(135deg,#4285F4,#6fa8ff)",""],
-   [()=>abrirModalZerarApp(),"🗑️","Zerar App (apagar tudo)","linear-gradient(135deg,#e53e3e,#ff8080)","btn-zerar-app"]
+   [()=>go("restaurar"),"📂","Restaurar Backup","linear-gradient(135deg,#2DC653,#52e87b)",""]
   ].forEach(([fn,ico,lab,bg,bid])=>{
     const bEl=btn({style:{width:"100%",padding:"15px",background:bg,color:"#fff",fontSize:14,borderRadius:16,display:"flex",alignItems:"center",justifyContent:"center",gap:10},onClick:fn},[h("span",{},ico)," "+lab]);
     if(bid)bEl.id=bid;
@@ -1907,13 +1963,43 @@ function renderFin(titulo,casas,cobs,pref){
 }
 
 // ── AGENDA ────────────────────────────────────────────────────────────────────
+function abrirAgendaPorFotoModal(ano,mes){
+  abrirModalFoto("Buscar por Foto (Agenda Vetus)",async(b64,mimeType)=>{
+    const prompt='Esta imagem é um print de tela de um sistema de agenda veterinária, mostrando uma lista de clientes/pets agendados. Extraia cada linha da lista. Responda APENAS um JSON no formato: {"itens":[{"tutor":"NOME DO TUTOR","horario":"HH:MM ou vazio"}]}. Use o nome do tutor/cliente exatamente como aparece na imagem.';
+    const resposta=await chamarGeminiVisao(b64,mimeType,prompt);
+    const itens=resposta.itens||[];
+    if(!itens.length){alert("Nenhum nome identificado na foto.");return;}
+    mostrarResultadoAgendaFoto(itens,ano,mes);
+  });
+}
+function mostrarResultadoAgendaFoto(itens,ano,mes){
+  const cont=div();
+  cont.appendChild(h("p",{style:{fontSize:13,color:"#8B8FA8",marginBottom:12}},"Toque em um nome pra abrir o cadastro dele e lançar o banho."));
+  itens.forEach(it=>{
+    const nomeQ=(it.tutor||"").toLowerCase().trim();
+    let achado=null,pref=null;
+    if(nomeQ){
+      for(const[n,c]of Object.entries(DATA.casas||{})){if(c.morador&&c.morador.toLowerCase().includes(nomeQ)){achado=Number(n);pref="cad1";break;}}
+      if(!achado)for(const[n,c]of Object.entries(DATA.casas2||{})){if(c.morador&&c.morador.toLowerCase().includes(nomeQ)){achado=Number(n);pref="cad2";break;}}
+    }
+    const row=div({className:"card anim",style:{padding:"12px 14px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center",cursor:achado?"pointer":"default",opacity:achado?1:.6}});
+    row.innerHTML=`<div><div style="font-weight:800;color:#1A1A2E;font-size:14px">${it.tutor||"?"}</div><div style="font-size:11px;color:#8B8FA8">${it.horario||""}${achado?" · encontrado":" · não encontrado no cadastro"}</div></div>`;
+    if(achado){
+      row.onclick=()=>{mvR.remove();abrirModalAt(pref,mes,achado,null,false,()=>go(NAV.s));};
+    }
+    cont.appendChild(row);
+  });
+  const mvR=openModal("Resultado da Foto",cont,null,true);
+}
 function renderAgenda(gerente,embutido){
   const w=div({className:embutido?"":"screen"});
   const gwa=DATA.gruposWA||{};
   const grpBtn=btn({style:{background:"rgba(255,255,255,.35)",color:"#1A1A2E",padding:"8px 12px",fontSize:12,borderRadius:10},onClick:()=>abrirGruposModal()},"📲 Grupos");
+  const fotoAgBtn=btn({style:{background:"linear-gradient(135deg,#9B59B6,#FF6B9D)",color:"#fff",padding:"8px 12px",fontSize:12,borderRadius:10,fontWeight:700},onClick:()=>abrirAgendaPorFotoModal(ano,mes)},"📸 Buscar");
+  const hdrBtns=h("div",{style:{display:"flex",gap:6}},[fotoAgBtn,grpBtn]);
   if(!embutido){
-    if(gerente)w.appendChild(mkHdr("Agenda — Banho e Tosa",null,grpBtn));
-    else w.appendChild(mkHdr("Agenda",()=>go("home"),grpBtn));
+    if(gerente)w.appendChild(mkHdr("Agenda — Banho e Tosa",null,hdrBtns));
+    else w.appendChild(mkHdr("Agenda",()=>go("home"),hdrBtns));
   }
 
   let ano=new Date().getFullYear(),mes=new Date().getMonth();
@@ -3151,7 +3237,10 @@ function abrirSaidaModal(cat,onDone){
 // ── VENDAS ────────────────────────────────────────────────────────────────────
 function renderVendas(){
   const w=div({className:"screen"});
-  w.appendChild(mkHdr("Vendas",()=>go("home"),btn({style:{background:"rgba(255,255,255,.35)",color:"#1A1A2E",padding:"9px 13px",fontSize:13,borderRadius:12},onClick:()=>abrirVendaModal(null,build)},"+Nova")));
+  w.appendChild(mkHdr("Vendas",()=>go("home"),h("div",{style:{display:"flex",gap:6}},[
+    btn({style:{background:"linear-gradient(135deg,#9B59B6,#FF6B9D)",color:"#fff",padding:"9px 12px",fontSize:13,borderRadius:12,fontWeight:700},onClick:()=>abrirVendaPorFotoModal(build)},"📸 Foto"),
+    btn({style:{background:"rgba(255,255,255,.35)",color:"#1A1A2E",padding:"9px 13px",fontSize:13,borderRadius:12},onClick:()=>abrirVendaModal(null,build)},"+Nova")
+  ])));
   const body=div({style:{padding:"12px 18px 80px"}});w.appendChild(body);
   function getMeses(){
     const ms=new Set();
@@ -3286,6 +3375,96 @@ function abrirVendaModal(vEdit,onDone,casaNumFixado,prefFixado){
     DATA=loadData();if(mv)mv.remove();onDone();
   }},vEdit?"Salvar":"Registrar"));
   mv=openModal(vEdit?"Editar Venda":"Nova Venda",cont,()=>{});
+}
+
+function abrirVendaPorFotoModal(onDone){
+  const all={...DATA.casas,...DATA.casas2||{}};
+  const cl2=Object.entries(all).map(([n,c])=>({num:Number(n),morador:c.morador})).sort((a,b)=>a.num-b.num);
+  let selectedCasaNum=null;
+  const cont=div();
+  cont.appendChild(h("p",{style:{fontSize:12,color:"#8B8FA8",marginBottom:10}},"1. Escolha o tutor da venda"));
+  const tutorWrap=div({style:{position:"relative",marginBottom:14}});
+  const tutorInp=inp({className:"fi",placeholder:"🔍 Buscar tutor...",style:{marginBottom:0}});
+  const tutorDrop=div({style:{position:"absolute",top:"100%",left:0,right:0,background:"#fff",border:"2px solid #FF6B9D",borderRadius:12,maxHeight:200,overflowY:"auto",zIndex:999,display:"none",boxShadow:"0 4px 16px rgba(0,0,0,.15)"}});
+  tutorWrap.appendChild(tutorInp);tutorWrap.appendChild(tutorDrop);
+  function renderTutorDrop(q){
+    tutorDrop.innerHTML="";
+    const filtered=q.length<1?cl2.slice(0,30):cl2.filter(c=>c.morador&&c.morador.toLowerCase().includes(q.toLowerCase())).slice(0,30);
+    if(!filtered.length){const em=div({style:{padding:"10px 14px",color:"#8B8FA8",fontSize:13}});em.textContent="Nenhum tutor encontrado";tutorDrop.appendChild(em);tutorDrop.style.display="block";return;}
+    filtered.forEach(c=>{
+      const it=div({style:{padding:"10px 14px",cursor:"pointer",borderBottom:"1px solid #f5f5f5",fontSize:13}});
+      it.innerHTML=`<span style="font-weight:700;color:#1A1A2E">${c.morador}</span> <span style="color:#8B8FA8;font-size:11px">Casa ${c.num}</span>`;
+      it.onmousedown=()=>{selectedCasaNum=c.num;tutorInp.value=`${c.morador} (Casa ${c.num})`;tutorDrop.style.display="none";fotoSecao.style.display="block";};
+      it.onmouseover=()=>{it.style.background="#FFF5F9";};it.onmouseout=()=>{it.style.background="";};
+      tutorDrop.appendChild(it);
+    });
+    tutorDrop.style.display="block";
+  }
+  tutorInp.addEventListener("focus",()=>renderTutorDrop(tutorInp.value));
+  tutorInp.addEventListener("input",()=>{selectedCasaNum=null;fotoSecao.style.display="none";renderTutorDrop(tutorInp.value);});
+  tutorInp.addEventListener("blur",()=>{setTimeout(()=>{tutorDrop.style.display="none";},150);});
+  cont.appendChild(tutorWrap);
+
+  const fotoSecao=div({style:{display:"none"}});
+  fotoSecao.appendChild(h("p",{style:{fontSize:12,color:"#8B8FA8",margin:"10px 0"}},"2. Foto da nota/recibo com os produtos"));
+  const status=div({style:{textAlign:"center",padding:"10px 0",fontWeight:700,color:"#FF6B9D",display:"none"}});
+  status.textContent="🔎 Lendo produtos com IA...";
+  const fi=document.createElement("input");
+  fi.type="file";fi.accept="image/*";fi.capture="environment";
+  fi.style.cssText="width:100%;padding:14px;border:2px dashed #FFB6D9;border-radius:14px;margin-bottom:12px";
+  fotoSecao.appendChild(fi);fotoSecao.appendChild(status);
+  cont.appendChild(fotoSecao);
+  let mv=openModal("Venda por Foto",cont,null,true);
+
+  fi.addEventListener("change",async()=>{
+    const file=fi.files[0];if(!file||!selectedCasaNum)return;
+    status.style.display="block";fi.disabled=true;
+    try{
+      const b64=await fileParaBase64(file);
+      const prompt='Esta imagem é uma nota/recibo de venda de uma loja de produtos pet. Extraia TODOS os produtos listados. Responda APENAS um JSON no formato: {"itens":[{"nome":"NOME DO PRODUTO","qtd":1,"preco":00.00}]}. "preco" é o valor UNITÁRIO de cada produto (não o total da linha). Não invente produtos que não estejam na imagem.';
+      const resposta=await chamarGeminiVisao(b64,file.type||"image/jpeg",prompt);
+      const itens=(resposta.itens||[]).map(it=>({nome:it.nome||"Produto",qtd:it.qtd||1,preco:it.preco||0}));
+      if(!itens.length){alert("Nenhum produto identificado na foto.");status.style.display="none";fi.disabled=false;return;}
+      if(mv)mv.remove();
+      abrirRevisaoVendaFotoModal(itens,selectedCasaNum,all,onDone);
+    }catch(e){
+      alert("Erro: "+e.message);status.style.display="none";fi.disabled=false;
+    }
+  });
+}
+function abrirRevisaoVendaFotoModal(itens,casaNum,all,onDone){
+  const cont=div();
+  const casa=all[casaNum]||{};
+  cont.appendChild(h("p",{style:{fontSize:13,color:"#8B8FA8",marginBottom:12}},`Confira os produtos lidos para ${casa.morador||"Casa "+casaNum}. Pode editar antes de salvar.`));
+  const linhas=itens.map(it=>({nome:it.nome,qtd:it.qtd,preco:it.preco}));
+  const listaDiv=div();cont.appendChild(listaDiv);
+  function build(){
+    listaDiv.innerHTML="";
+    linhas.forEach((it,i)=>{
+      const row=div({className:"card",style:{padding:"10px 12px",marginBottom:8,display:"flex",gap:6,alignItems:"center"}});
+      const nI=inp({className:"fi",value:it.nome,style:{marginBottom:0,flex:2,fontSize:12,padding:"8px 10px"}});
+      nI.addEventListener("input",()=>{it.nome=nI.value;});
+      const qI=inp({className:"fi",type:"number",value:it.qtd,style:{marginBottom:0,flex:1,fontSize:12,padding:"8px 10px"}});
+      qI.addEventListener("input",()=>{it.qtd=qI.value;});
+      const pI=inp({className:"fi",type:"number",value:it.preco,style:{marginBottom:0,flex:1,fontSize:12,padding:"8px 10px"}});
+      pI.addEventListener("input",()=>{it.preco=pI.value;});
+      const bDel=btn({style:{padding:"8px 10px",borderRadius:10,fontSize:13,background:"#fff0f0",color:"#e53e3e"}},"🗑");
+      bDel.onclick=()=>{linhas.splice(i,1);build();};
+      row.appendChild(nI);row.appendChild(qI);row.appendChild(pI);row.appendChild(bDel);
+      listaDiv.appendChild(row);
+    });
+  }
+  build();
+  const dI=inp({className:"fi",type:"date",value:hoje(),style:{marginBottom:16}});
+  cont.appendChild(lbl("Data da venda"));cont.appendChild(dI);
+  let mv=null;
+  cont.appendChild(btn({style:{width:"100%",padding:"17px",background:"linear-gradient(135deg,#FF6B9D,#FFD93D)",color:"#fff",fontSize:16,borderRadius:16},onClick:()=>{
+    if(!linhas.length){alert("Nenhum item pra salvar.");return;}
+    const novas=linhas.map(it=>({id:Date.now()+Math.random(),casaNum:Number(casaNum),morador:(all[casaNum]||{}).morador||"",nome:it.nome,preco:it.preco,qtd:it.qtd||"1",data:dI.value,pago:false}));
+    updSilent(d=>({...d,vendas:[...(d.vendas||[]),...novas]}));
+    DATA=loadData();if(mv)mv.remove();onDone();
+  }},`Salvar ${linhas.length} produto(s)`));
+  mv=openModal("Revisar Venda",cont,null,true);
 }
 
 // ── FARMÁCIA ──────────────────────────────────────────────────────────────────
@@ -3954,41 +4133,28 @@ function renderStats(){
   return w;
 }
 
-// ── NOTAS ─────────────────────────────────────────────────────────────────────
-function renderNotas(){
-  const NKEY="pd_notas_v1";let notas=[];try{notas=JSON.parse(localStorage.getItem(NKEY)||"[]");}catch(e){}
-  const saveNotas=n=>{try{localStorage.setItem(NKEY,JSON.stringify(n));}catch(e){}};
+// ── PLANET LAB (embutido via iframe) ────────────────────────────────────────
+const LAB_HTML="<!DOCTYPE html>\n<html lang=\"pt-BR\">\n<head>\n<meta charset=\"UTF-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, maximum-scale=1.0\">\n<title>Planet Lab</title>\n<style>\n  :root{\n    --bg:#0f1b1c;\n    --panel:#15282a;\n    --panel-2:#1c3436;\n    --line:#274446;\n    --teal:#3ecfb2;\n    --teal-dim:#1f5f52;\n    --coral:#ff8a65;\n    --text:#eaf3f1;\n    --text-dim:#93aeac;\n    --danger:#ff6b6b;\n    --ok:#7ee08a;\n    --radius:14px;\n  }\n  *{box-sizing:border-box;}\n  body{\n    margin:0; background:var(--bg); color:var(--text);\n    font-family:'Segoe UI', -apple-system, Roboto, Helvetica, Arial, sans-serif;\n    padding-bottom:40px;\n  }\n  header{\n    padding:18px 16px 14px; position:sticky; top:0; z-index:20;\n    background:linear-gradient(180deg, var(--bg) 70%, transparent);\n  }\n  header h1{ margin:0; font-size:20px; letter-spacing:.3px; }\n  header h1 span{ color:var(--teal); }\n  header p{ margin:2px 0 0; color:var(--text-dim); font-size:12.5px; }\n\n  nav.tabs{\n    display:flex; gap:6px; padding:0 16px 12px; overflow-x:auto;\n  }\n  nav.tabs button{\n    flex:0 0 auto; background:var(--panel); color:var(--text-dim);\n    border:1px solid var(--line); border-radius:999px; padding:8px 14px;\n    font-size:13px; font-weight:600;\n  }\n  nav.tabs button.active{ background:var(--teal); color:#04211d; border-color:var(--teal); }\n\n  main{ padding:0 16px; }\n  section{ display:none; }\n  section.active{ display:block; }\n\n  .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }\n  .card{\n    background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);\n    padding:14px;\n  }\n  .card h3{ margin:0 0 4px; font-size:13.5px; color:var(--text); }\n  .card small{ color:var(--text-dim); font-size:11.5px; display:block; margin-bottom:10px; }\n\n  .dropzone{\n    border:1.5px dashed var(--line); border-radius:10px; min-height:110px;\n    display:flex; flex-direction:column; align-items:center; justify-content:center;\n    gap:6px; color:var(--text-dim); font-size:12px; text-align:center; padding:8px;\n    position:relative; overflow:hidden;\n  }\n  .dropzone img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; opacity:.9; }\n  .dropzone .overlay{ position:relative; z-index:2; background:rgba(15,27,28,.55); border-radius:8px; padding:4px 8px; }\n\n  .btnrow{ display:flex; gap:8px; margin-top:10px; }\n  .btn{\n    flex:1; border:none; border-radius:10px; padding:10px 8px; font-size:12.5px;\n    font-weight:700; display:flex; align-items:center; justify-content:center; gap:6px;\n  }\n  .btn.primary{ background:var(--teal); color:#04211d; }\n  .btn.ghost{ background:var(--panel-2); color:var(--text); border:1px solid var(--line); }\n  .btn.coral{ background:var(--coral); color:#331d10; }\n  .btn:disabled{ opacity:.45; }\n  .btn.full{ width:100%; margin-top:12px; }\n\n  input[type=file]{ display:none; }\n\n  .status-line{ display:flex; align-items:center; gap:6px; font-size:11.5px; color:var(--text-dim); margin-top:8px; min-height:16px; }\n  .spinner{ width:12px; height:12px; border-radius:50%; border:2px solid var(--line); border-top-color:var(--teal); animation:spin .7s linear infinite; }\n  @keyframes spin{ to{ transform:rotate(360deg); } }\n\n  .vetuslist{ margin-top:10px; max-height:230px; overflow-y:auto; display:flex; flex-direction:column; gap:6px; }\n  .vetusitem{\n    background:var(--panel-2); border:1px solid var(--line); border-radius:10px;\n    padding:8px 10px; font-size:12.5px; display:flex; justify-content:space-between; align-items:center;\n    cursor:pointer;\n  }\n  .vetusitem b{ font-size:13px; }\n  .vetusitem .t{ color:var(--text-dim); font-size:11px; }\n  .vetusitem.selected{ border-color:var(--teal); background:rgba(62,207,178,.12); }\n\n  .valuesgrid{ display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-top:10px; }\n  .valuecell{ background:var(--panel-2); border:1px solid var(--line); border-radius:8px; padding:6px; text-align:center; }\n  .valuecell .lbl{ font-size:10px; color:var(--text-dim); }\n  .valuecell .val{ font-size:13px; font-weight:700; margin-top:2px; }\n  .valuecell.high .val{ color:var(--coral); }\n  .valuecell.low .val{ color:#7ecbff; }\n\n  .formcard{ margin-top:12px; }\n  .field{ margin-bottom:12px; }\n  .field label{ display:block; font-size:12px; color:var(--text-dim); margin-bottom:5px; }\n  .field select, .field input[type=text], .field input[type=number]{\n    width:100%; background:var(--panel-2); border:1px solid var(--line); border-radius:8px;\n    padding:10px; color:var(--text); font-size:14px;\n  }\n  .paybtns{ display:flex; gap:6px; }\n  .paybtns button{\n    flex:1; background:var(--panel-2); border:1px solid var(--line); color:var(--text-dim);\n    border-radius:8px; padding:9px; font-size:12.5px; font-weight:600;\n  }\n  .paybtns button.active{ background:var(--teal); color:#04211d; border-color:var(--teal); }\n\n  .kpis{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px; }\n  .kpi{ background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:14px; }\n  .kpi .n{ font-size:22px; font-weight:800; color:var(--teal); }\n  .kpi .l{ font-size:11px; color:var(--text-dim); margin-top:2px; }\n\n  .metabar{ height:8px; background:var(--panel-2); border-radius:99px; overflow:hidden; margin-top:8px; }\n  .metabar i{ display:block; height:100%; background:var(--teal); }\n\n  table.hist{ width:100%; border-collapse:collapse; font-size:12px; margin-top:6px; }\n  table.hist th{ text-align:left; color:var(--text-dim); font-weight:600; padding:6px 4px; border-bottom:1px solid var(--line); }\n  table.hist td{ padding:7px 4px; border-bottom:1px solid var(--line); }\n  table.hist tr:last-child td{ border-bottom:none; }\n  .tag{ font-size:10px; padding:2px 6px; border-radius:6px; background:var(--panel-2); color:var(--text-dim); }\n  .tag.pre{ background:rgba(62,207,178,.18); color:var(--teal); }\n\n  .empty{ color:var(--text-dim); font-size:12.5px; text-align:center; padding:20px 10px; }\n  .toast{\n    position:fixed; bottom:18px; left:50%; transform:translateX(-50%);\n    background:var(--teal); color:#04211d; padding:10px 18px; border-radius:99px;\n    font-size:13px; font-weight:700; opacity:0; pointer-events:none; transition:opacity .25s, transform .25s;\n    z-index:99;\n  }\n  .toast.show{ opacity:1; transform:translateX(-50%) translateY(-6px); }\n</style>\n</head>\n<body>\n\n<header>\n  <h1>Planet <span>Lab</span></h1>\n  <p>Leitura de exames \u00b7 agenda \u00b7 financeiro</p>\n</header>\n\n<nav class=\"tabs\">\n  <button data-tab=\"novo\" class=\"active\">Novo exame</button>\n  <button data-tab=\"hoje\">Financeiro</button>\n  <button data-tab=\"metas\">Metas</button>\n  <button data-tab=\"hist\">Hist\u00f3rico</button>\n</nav>\n\n<main>\n\n  <!-- TAB: NOVO EXAME -->\n  <section id=\"tab-novo\" class=\"active\">\n    <div class=\"grid2\">\n      <div class=\"card\">\n        <h3>Agenda (Vetus)</h3>\n        <small>Print da tela com os pets do dia</small>\n        <label class=\"dropzone\" id=\"dz-vetus\">\n          <span class=\"overlay\" id=\"dz-vetus-txt\">Toque pra escolher arquivo</span>\n          <input type=\"file\" id=\"file-vetus\" accept=\"image/*\">\n        </label>\n        <div class=\"btnrow\">\n          <button class=\"btn ghost\" id=\"btn-vetus-clear\">Limpar</button>\n        </div>\n        <div class=\"status-line\" id=\"status-vetus\"></div>\n      </div>\n\n      <div class=\"card\">\n        <h3>M\u00e1quina de hemograma</h3>\n        <small>Foto do recibo/tela do exame</small>\n        <div class=\"dropzone\" id=\"dz-maquina\">\n          <img id=\"dz-maquina-img\" style=\"display:none; position:absolute; inset:0; width:100%; height:100%; object-fit:cover;\">\n          <span class=\"overlay\" id=\"dz-maquina-txt\">Toque num bot\u00e3o abaixo</span>\n        </div>\n        <input type=\"file\" id=\"file-maquina\" accept=\"image/*\" capture=\"environment\" style=\"display:none\">\n        <input type=\"file\" id=\"file-maquina-galeria\" accept=\"image/*\" style=\"display:none\">\n        <div class=\"btnrow\">\n          <button class=\"btn primary\" type=\"button\" id=\"btn-maquina-camera\">\ud83d\udcf7 C\u00e2mera</button>\n          <button class=\"btn ghost\" type=\"button\" id=\"btn-maquina-galeria\">\ud83d\uddbc\ufe0f Galeria</button>\n        </div>\n        <div class=\"btnrow\">\n          <button class=\"btn ghost\" id=\"btn-maquina-clear\">Limpar</button>\n        </div>\n        <div class=\"status-line\" id=\"status-maquina\"></div>\n      </div>\n    </div>\n\n    <div class=\"card\" style=\"margin-top:10px;\" id=\"card-vetuslist\" hidden>\n      <h3>Quem veio na agenda</h3>\n      <small>Toque no pet que corresponde a este exame</small>\n      <div class=\"vetuslist\" id=\"vetuslist\"></div>\n    </div>\n\n    <div class=\"card\" style=\"margin-top:10px;\" id=\"card-valores\" hidden>\n      <h3>Valores lidos <span id=\"idpoli-badge\" style=\"color:var(--text-dim); font-weight:400;\"></span></h3>\n      <div class=\"valuesgrid\" id=\"valuesgrid\"></div>\n    </div>\n\n    <div class=\"card formcard\" id=\"card-form\" hidden>\n      <h3>Fechar registro</h3>\n\n      <div class=\"field\">\n        <label>Pet selecionado</label>\n        <input type=\"text\" id=\"f-pet\" readonly>\n      </div>\n\n      <div class=\"field\">\n        <label>Tipo de exame</label>\n        <select id=\"f-tipo\">\n          <option value=\"pre\">Pr\u00e9-cir\u00fargico (conta pra meta)</option>\n          <option value=\"auto\">Autom\u00e1tico da manh\u00e3 (cirurgia)</option>\n          <option value=\"outro\">Outro / avulso</option>\n        </select>\n      </div>\n\n      <div class=\"field\">\n        <label>Valor cobrado (R$)</label>\n        <input type=\"number\" id=\"f-valor\" value=\"60\">\n      </div>\n\n      <div class=\"field\">\n        <label>Forma de pagamento</label>\n        <div class=\"paybtns\">\n          <button data-pay=\"pix\" class=\"active\">Pix</button>\n          <button data-pay=\"dinheiro\">Dinheiro</button>\n          <button data-pay=\"cartao\">Cart\u00e3o</button>\n        </div>\n      </div>\n\n      <div class=\"field\" id=\"field-cartao\" hidden>\n        <label>\u00daltimos 4 n\u00fameros do cart\u00e3o</label>\n        <input type=\"text\" id=\"f-cartao\" maxlength=\"4\" placeholder=\"0000\">\n      </div>\n\n      <button class=\"btn primary full\" id=\"btn-salvar\">Salvar exame</button>\n    </div>\n  </section>\n\n  <!-- TAB: FINANCEIRO -->\n  <section id=\"tab-hoje\">\n    <div class=\"kpis\">\n      <div class=\"kpi\"><div class=\"n\" id=\"kpi-hoje-qtd\">0</div><div class=\"l\">Exames hoje</div></div>\n      <div class=\"kpi\"><div class=\"n\" id=\"kpi-hoje-val\">R$ 0</div><div class=\"l\">Faturado hoje</div></div>\n      <div class=\"kpi\"><div class=\"n\" id=\"kpi-mes-qtd\">0</div><div class=\"l\">Exames no m\u00eas</div></div>\n      <div class=\"kpi\"><div class=\"n\" id=\"kpi-mes-val\">R$ 0</div><div class=\"l\">Faturado no m\u00eas</div></div>\n    </div>\n    <div class=\"card\">\n      <h3>Hoje por forma de pagamento</h3>\n      <div id=\"pagamentos-hoje\" style=\"margin-top:8px; font-size:13px; display:flex; flex-direction:column; gap:6px;\"></div>\n    </div>\n  </section>\n\n  <!-- TAB: METAS -->\n  <section id=\"tab-metas\">\n    <div class=\"card\">\n      <h3>Meta do m\u00eas</h3>\n      <small>Pr\u00e9-cir\u00fargico \u2260 exame autom\u00e1tico da manh\u00e3. Meta batida no dia = 2 ou mais exames pr\u00e9-cir\u00fargicos.</small>\n      <div style=\"font-size:13px; margin-top:6px;\">\n        <b id=\"metadias-atingidos\">0</b> de <b id=\"metadias-total\">0</b> dias com meta batida este m\u00eas\n      </div>\n      <div class=\"metabar\"><i id=\"metabar-fill\" style=\"width:0%\"></i></div>\n    </div>\n    <div class=\"card\" style=\"margin-top:10px;\">\n      <h3>Dias deste m\u00eas</h3>\n      <div id=\"metadias-lista\" style=\"margin-top:8px; display:flex; flex-direction:column; gap:6px;\"></div>\n    </div>\n  </section>\n\n  <!-- TAB: HISTORICO -->\n  <section id=\"tab-hist\">\n    <div class=\"card\">\n      <h3>Todos os exames</h3>\n      <div style=\"overflow-x:auto;\">\n        <table class=\"hist\" id=\"hist-table\">\n          <thead><tr><th>Data</th><th>Pet</th><th>Tipo</th><th>R$</th><th>Pag.</th><th></th></tr></thead>\n          <tbody id=\"hist-body\"></tbody>\n        </table>\n      </div>\n      <div class=\"empty\" id=\"hist-empty\" hidden>Nenhum exame registrado ainda.</div>\n    </div>\n  </section>\n\n</main>\n\n<div class=\"toast\" id=\"toast\"></div>\n\n<script>\n// ---------- STATE ----------\nlet DATA = { exames: [] };\nlet vetusList = [];\nlet maquinaResult = null;\nlet selectedPet = null;\nlet selectedPayment = 'pix';\n\nconst $ = (sel) => document.querySelector(sel);\nconst $$ = (sel) => document.querySelectorAll(sel);\n\nfunction toast(msg){\n  const t = $('#toast');\n  t.textContent = msg;\n  t.classList.add('show');\n  setTimeout(()=>t.classList.remove('show'), 2200);\n}\n\n// ---------- STORAGE ----------\nconst LAB_KEY = 'pd_lab_exames_v1';\nasync function loadData(){\n  try{\n    const raw = localStorage.getItem(LAB_KEY);\n    if(raw){ DATA = JSON.parse(raw); }\n  }catch(e){ /* nothing saved yet */ }\n  renderAll();\n}\nasync function saveData(){\n  try{\n    localStorage.setItem(LAB_KEY, JSON.stringify(DATA));\n    if(window.parent) window.parent.postMessage({type:'pd-lab-save', exames: DATA.exames}, '*');\n  }catch(e){ console.error('Falha ao salvar', e); toast('Falha ao salvar \u2014 tente de novo'); }\n}\nwindow.addEventListener('message', (ev)=>{\n  if(ev.data && ev.data.type==='pd-lab-sync' && Array.isArray(ev.data.exames)){\n    DATA.exames = ev.data.exames;\n    renderAll();\n  }\n});\n\n// ---------- TABS ----------\n$$('.tabs button').forEach(btn=>{\n  btn.addEventListener('click', ()=>{\n    $$('.tabs button').forEach(b=>b.classList.remove('active'));\n    btn.classList.add('active');\n    $$('main section').forEach(s=>s.classList.remove('active'));\n    $('#tab-'+btn.dataset.tab).classList.add('active');\n    if(btn.dataset.tab==='hoje') renderFinanceiro();\n    if(btn.dataset.tab==='metas') renderMetas();\n    if(btn.dataset.tab==='hist') renderHistorico();\n  });\n});\n\n// ---------- IMAGE -> BASE64 ----------\nfunction fileToBase64(file){\n  return new Promise((res, rej)=>{\n    const r = new FileReader();\n    r.onload = ()=> res(r.result.split(',')[1]);\n    r.onerror = rej;\n    r.readAsDataURL(file);\n  });\n}\n\nconst GEMINI_API_KEY = \"AQ.Ab8RN6LHokjt2I8nEonLE7BiQmFQ32izrkVUTuVt4XeDghKaUQ\";\nconst GEMINI_MODEL = \"gemini-2.0-flash\";\nasync function callVision(base64, mediaType, promptText){\n  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;\n  const response = await fetch(url, {\n    method: 'POST',\n    headers: { 'Content-Type': 'application/json' },\n    body: JSON.stringify({\n      contents: [{ parts: [\n        { text: promptText },\n        { inline_data: { mime_type: mediaType, data: base64 } }\n      ]}],\n      generationConfig: { responseMimeType: \"application/json\" }\n    })\n  });\n  if(!response.ok){ const t = await response.text(); throw new Error('Erro Gemini: '+t.slice(0,200)); }\n  const data = await response.json();\n  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;\n  if(!text) throw new Error('Gemini n\u00e3o retornou conte\u00fado.');\n  const clean = text.replace(/```json|```/g, '').trim();\n  return JSON.parse(clean);\n}\n\n// ---------- VETUS UPLOAD ----------\n$('#file-vetus').addEventListener('change', async (e)=>{\n  const file = e.target.files[0];\n  if(!file) return;\n  const preview = URL.createObjectURL(file);\n  $('#dz-vetus').style.backgroundImage = '';\n  $('#dz-vetus').innerHTML = `<img src=\"${preview}\"><span class=\"overlay\">Foto carregada</span><input type=\"file\" id=\"file-vetus\" accept=\"image/*\">`;\n  document.getElementById('file-vetus').addEventListener('change', arguments.callee);\n\n  $('#status-vetus').innerHTML = '<div class=\"spinner\"></div> Lendo agenda...';\n  try{\n    const b64 = await fileToBase64(file);\n    const prompt = `Esta \u00e9 uma captura de tela de um sistema de agenda veterin\u00e1ria (Vetus), mostrando uma lista de hor\u00e1rios com nome do pet e nome do tutor, algumas vezes em duas colunas lado a lado. Extraia TODOS os agendamentos vis\u00edveis. Responda SOMENTE com um JSON v\u00e1lido, sem markdown, no formato:\n[{\"hora\":\"14:00\",\"pet\":\"Tom\",\"tutor\":\"Edson Ferreira\"}, ...]\nSe n\u00e3o conseguir ler o tutor, deixe \"tutor\":\"\". N\u00e3o invente dados que n\u00e3o estejam vis\u00edveis.`;\n    const result = await callVision(b64, file.type || 'image/jpeg', prompt);\n    vetusList = Array.isArray(result) ? result : [];\n    $('#status-vetus').textContent = vetusList.length + ' pets encontrados';\n    renderVetusList();\n  }catch(err){\n    console.error(err);\n    $('#status-vetus').textContent = 'N\u00e3o consegui ler \u2014 tente outra foto';\n  }\n});\n\n$('#btn-vetus-clear').addEventListener('click', ()=>{\n  vetusList = [];\n  selectedPet = null;\n  $('#dz-vetus').innerHTML = `<span class=\"overlay\">Toque pra escolher arquivo</span><input type=\"file\" id=\"file-vetus\" accept=\"image/*\">`;\n  $('#status-vetus').textContent = '';\n  $('#card-vetuslist').hidden = true;\n  updateFormVisibility();\n});\n\nfunction renderVetusList(){\n  const wrap = $('#vetuslist');\n  wrap.innerHTML = '';\n  if(vetusList.length === 0){ $('#card-vetuslist').hidden = true; return; }\n  $('#card-vetuslist').hidden = false;\n  vetusList.forEach((item, idx)=>{\n    const div = document.createElement('div');\n    div.className = 'vetusitem';\n    div.innerHTML = `<div><b>${item.pet||'?'}</b><div class=\"t\">${item.tutor||''}</div></div><div class=\"t\">${item.hora||''}</div>`;\n    div.addEventListener('click', ()=>{\n      $$('.vetusitem').forEach(x=>x.classList.remove('selected'));\n      div.classList.add('selected');\n      selectedPet = item;\n      updateFormVisibility();\n    });\n    wrap.appendChild(div);\n  });\n}\n\n// ---------- MAQUINA UPLOAD ----------\n$('#btn-maquina-camera').addEventListener('click', ()=> $('#file-maquina').click());\n$('#btn-maquina-galeria').addEventListener('click', ()=> $('#file-maquina-galeria').click());\n\nasync function handleMaquinaFile(file){\n  if(!file) return;\n  const preview = URL.createObjectURL(file);\n  const img = $('#dz-maquina-img');\n  img.src = preview;\n  img.style.display = 'block';\n  $('#dz-maquina-txt').textContent = 'Foto carregada';\n\n  $('#status-maquina').innerHTML = '<div class=\"spinner\"></div> Lendo resultado...';\n  try{\n    const b64 = await fileToBase64(file);\n    const prompt = `Esta \u00e9 uma foto de um recibo/tela impressa por uma m\u00e1quina de hemograma veterin\u00e1rio. Extraia: o ID do exame (campo \"ID POLI\" ou similar), o tipo de animal, data/hora se vis\u00edvel, e TODOS os par\u00e2metros com seus valores e unidades (ex: WBC, RBC, HGB, HCT, MCV, MCH, MCHC, PLT, LY, MO, EO, GR etc). Marque \"flag\":\"H\" se o valor tiver a letra H ao lado (alto), \"flag\":\"L\" se tiver L (baixo), sen\u00e3o \"flag\":\"\".\nResponda SOMENTE com JSON v\u00e1lido, sem markdown, formato:\n{\"idPoli\":\"0002\",\"animal\":\"Dog\",\"dataHora\":\"24 AUG 26 14:19\",\"valores\":[{\"label\":\"WBC\",\"valor\":\"19.2\",\"unidade\":\"10^3/uL\",\"flag\":\"H\"}, ...]}\nN\u00e3o invente valores que n\u00e3o estejam vis\u00edveis na foto.`;\n    const result = await callVision(b64, file.type || 'image/jpeg', prompt);\n    maquinaResult = result;\n    $('#status-maquina').textContent = 'ID POLI ' + (result.idPoli || '?') + ' lido';\n    renderValores();\n    updateFormVisibility();\n  }catch(err){\n    console.error(err);\n    $('#status-maquina').textContent = 'N\u00e3o consegui ler \u2014 tente outra foto';\n  }\n}\n\n$('#file-maquina').addEventListener('change', (e)=> handleMaquinaFile(e.target.files[0]));\n$('#file-maquina-galeria').addEventListener('change', (e)=> handleMaquinaFile(e.target.files[0]));\n\n$('#btn-maquina-clear').addEventListener('click', ()=>{\n  maquinaResult = null;\n  $('#dz-maquina-img').style.display = 'none';\n  $('#dz-maquina-txt').textContent = 'Toque num bot\u00e3o abaixo';\n  $('#file-maquina').value = '';\n  $('#file-maquina-galeria').value = '';\n  $('#status-maquina').textContent = '';\n  $('#card-valores').hidden = true;\n  updateFormVisibility();\n});\n\nfunction renderValores(){\n  if(!maquinaResult){ $('#card-valores').hidden = true; return; }\n  $('#card-valores').hidden = false;\n  $('#idpoli-badge').textContent = '\u00b7 ID ' + (maquinaResult.idPoli || '?');\n  const grid = $('#valuesgrid');\n  grid.innerHTML = '';\n  (maquinaResult.valores || []).forEach(v=>{\n    const cell = document.createElement('div');\n    cell.className = 'valuecell ' + (v.flag==='H' ? 'high' : v.flag==='L' ? 'low' : '');\n    cell.innerHTML = `<div class=\"lbl\">${v.label}</div><div class=\"val\">${v.valor}</div>`;\n    grid.appendChild(cell);\n  });\n}\n\n// ---------- FORM ----------\nfunction updateFormVisibility(){\n  if(selectedPet && maquinaResult){\n    $('#card-form').hidden = false;\n    $('#f-pet').value = selectedPet.pet + (selectedPet.tutor ? ' \u2014 ' + selectedPet.tutor : '');\n  } else {\n    $('#card-form').hidden = true;\n  }\n}\n\n$$('.paybtns button').forEach(btn=>{\n  btn.addEventListener('click', ()=>{\n    $$('.paybtns button').forEach(b=>b.classList.remove('active'));\n    btn.classList.add('active');\n    selectedPayment = btn.dataset.pay;\n    $('#field-cartao').hidden = selectedPayment !== 'cartao';\n  });\n});\n\n$('#btn-salvar').addEventListener('click', async ()=>{\n  if(!selectedPet || !maquinaResult) return;\n  const now = new Date();\n  const exame = {\n    id: 'ex_' + Date.now(),\n    dataHora: now.toISOString(),\n    pet: selectedPet.pet,\n    horaAgenda: selectedPet.hora || '',\n    idPoli: maquinaResult.idPoli || '',\n    valores: maquinaResult.valores || [],\n    tipo: $('#f-tipo').value,\n    valor: parseFloat($('#f-valor').value) || 0,\n    pagamento: selectedPayment,\n    cartaoFinal: selectedPayment==='cartao' ? $('#f-cartao').value : ''\n  };\n  DATA.exames.push(exame);\n  await saveData();\n  toast('Exame salvo \u2014 ' + exame.pet);\n\n  // reset for next entry, keep vetus list loaded\n  maquinaResult = null;\n  selectedPet = null;\n  $$('.vetusitem').forEach(x=>x.classList.remove('selected'));\n  $('#dz-maquina').innerHTML = `<span class=\"overlay\">Toque pra bater foto</span><input type=\"file\" id=\"file-maquina\" accept=\"image/*\" capture=\"environment\">`;\n  $('#status-maquina').textContent = '';\n  $('#card-valores').hidden = true;\n  $('#card-form').hidden = true;\n  $('#f-valor').value = 60;\n  $$('.paybtns button').forEach(b=>b.classList.remove('active'));\n  $('.paybtns button[data-pay=\"pix\"]').classList.add('active');\n  selectedPayment = 'pix';\n  $('#field-cartao').hidden = true;\n  $('#f-cartao').value = '';\n\n  renderAll();\n});\n\n// ---------- FINANCEIRO ----------\nfunction sameDay(d1, d2){\n  return d1.getFullYear()===d2.getFullYear() && d1.getMonth()===d2.getMonth() && d1.getDate()===d2.getDate();\n}\nfunction sameMonth(d1, d2){\n  return d1.getFullYear()===d2.getFullYear() && d1.getMonth()===d2.getMonth();\n}\n\nfunction renderFinanceiro(){\n  const now = new Date();\n  const hoje = DATA.exames.filter(e => sameDay(new Date(e.dataHora), now));\n  const mes = DATA.exames.filter(e => sameMonth(new Date(e.dataHora), now));\n\n  $('#kpi-hoje-qtd').textContent = hoje.length;\n  $('#kpi-hoje-val').textContent = 'R$ ' + hoje.reduce((s,e)=>s+e.valor,0).toFixed(0);\n  $('#kpi-mes-qtd').textContent = mes.length;\n  $('#kpi-mes-val').textContent = 'R$ ' + mes.reduce((s,e)=>s+e.valor,0).toFixed(0);\n\n  const porPag = {};\n  hoje.forEach(e=>{\n    const key = e.pagamento + (e.cartaoFinal ? ' (final '+e.cartaoFinal+')' : '');\n    porPag[key] = (porPag[key]||0) + e.valor;\n  });\n  const wrap = $('#pagamentos-hoje');\n  wrap.innerHTML = '';\n  if(Object.keys(porPag).length===0){ wrap.innerHTML = '<div class=\"empty\">Nenhum exame hoje ainda.</div>'; return; }\n  Object.entries(porPag).forEach(([k,v])=>{\n    const row = document.createElement('div');\n    row.style.display = 'flex'; row.style.justifyContent = 'space-between';\n    row.innerHTML = `<span style=\"color:var(--text-dim)\">${k}</span><b>R$ ${v.toFixed(0)}</b>`;\n    wrap.appendChild(row);\n  });\n}\n\n// ---------- METAS ----------\nfunction renderMetas(){\n  const now = new Date();\n  const daysInMonth = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();\n  const porDia = {};\n  DATA.exames.filter(e => e.tipo==='pre' && sameMonth(new Date(e.dataHora), now)).forEach(e=>{\n    const d = new Date(e.dataHora).getDate();\n    porDia[d] = (porDia[d]||0) + 1;\n  });\n\n  let atingidos = 0;\n  const lista = $('#metadias-lista');\n  lista.innerHTML = '';\n  const todayDate = now.getDate();\n  for(let d=1; d<=todayDate; d++){\n    const qtd = porDia[d] || 0;\n    const bateu = qtd >= 2;\n    if(bateu) atingidos++;\n    const row = document.createElement('div');\n    row.style.display='flex'; row.style.justifyContent='space-between'; row.style.alignItems='center';\n    row.innerHTML = `<span>Dia ${d}</span><span class=\"tag ${bateu?'pre':''}\">${qtd} pr\u00e9-cir\u00fargico${qtd===1?'':'s'} ${bateu?'\u2713 meta':''}</span>`;\n    lista.appendChild(row);\n  }\n\n  $('#metadias-atingidos').textContent = atingidos;\n  $('#metadias-total').textContent = todayDate;\n  $('#metabar-fill').style.width = todayDate>0 ? (atingidos/todayDate*100)+'%' : '0%';\n}\n\n// ---------- HISTORICO ----------\nfunction renderHistorico(){\n  const body = $('#hist-body');\n  body.innerHTML = '';\n  const ordenado = [...DATA.exames].sort((a,b)=> new Date(b.dataHora) - new Date(a.dataHora));\n  $('#hist-empty').hidden = ordenado.length > 0;\n\n  ordenado.forEach(e=>{\n    const d = new Date(e.dataHora);\n    const dataStr = d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});\n    const tr = document.createElement('tr');\n    tr.innerHTML = `\n      <td>${dataStr}</td>\n      <td>${e.pet}</td>\n      <td><span class=\"tag ${e.tipo==='pre'?'pre':''}\">${e.tipo==='pre'?'Pr\u00e9-cir.':e.tipo==='auto'?'Autom\u00e1tico':'Outro'}</span></td>\n      <td>R$ ${e.valor.toFixed(0)}</td>\n      <td>${e.pagamento}${e.cartaoFinal? ' *'+e.cartaoFinal : ''}</td>\n      <td><button class=\"btn ghost\" style=\"padding:4px 8px; font-size:11px;\" data-del=\"${e.id}\">Excluir</button></td>\n    `;\n    body.appendChild(tr);\n  });\n\n  body.querySelectorAll('[data-del]').forEach(btn=>{\n    btn.addEventListener('click', async ()=>{\n      DATA.exames = DATA.exames.filter(e => e.id !== btn.dataset.del);\n      await saveData();\n      renderAll();\n    });\n  });\n}\n\nfunction renderAll(){\n  renderFinanceiro();\n  renderMetas();\n  renderHistorico();\n}\n\nloadData();\n<\/script>\n</body>\n</html>\n";
+function renderLab(){
   const w=div({className:"screen"});
-  w.appendChild(mkHdr("Bloco de Notas",()=>go("home"),btn({style:{background:"rgba(255,255,255,.35)",color:"#1A1A2E",padding:"9px 13px",fontSize:13,borderRadius:12},onClick:()=>abrirNotaModal(null,build)},"+Nova")));
-  const body=div({style:{padding:"16px 18px 40px"}});w.appendChild(body);
-  function build(){
-    body.innerHTML="";
-    if(notas.length===0){const e=div({style:{textAlign:"center",padding:"60px 0",color:"#8B8FA8"}});e.innerHTML='<div style="font-size:52px">📝</div><p style="font-weight:700;margin-top:14px;font-size:15px">Nenhuma nota ainda</p>';body.appendChild(e);return;}
-    notas.forEach((nota,i)=>{
-      const c=div({className:"btn card anim",style:{width:"100%",padding:"16px",marginBottom:12,textAlign:"left",display:"flex",gap:12,alignItems:"flex-start",animationDelay:i*20+"ms",borderLeft:"5px solid #3B82F6",cursor:"pointer"},onClick:()=>abrirNotaModal(i,build)});
-      c.innerHTML=`<span style="font-size:28px">📄</span><div style="flex:1;min-width:0"><div style="font-weight:800;color:#1A1A2E;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${nota.titulo}</div><div style="font-size:12px;color:#8B8FA8;margin-top:3px">${fmtD(nota.criado)}</div></div>`;
-      body.appendChild(c);
-    });
-  }
-  function abrirNotaModal(idx,onDone2){
-    const nota=idx!=null?notas[idx]:null;const cont=div();
-    const tI=inp({className:"fi",placeholder:"Titulo...",value:nota?.titulo||"",style:{marginBottom:12}});
-    const ta=h("textarea",{style:{width:"100%",minHeight:240,padding:"12px",borderRadius:12,border:"2px solid #3B82F6",fontSize:11,fontFamily:"monospace",resize:"vertical",color:"#1A1A2E",background:"#FAFAFA",marginBottom:8}});
-    ta.placeholder="Cole codigo, JSON, anotacoes...";ta.value=nota?.corpo||"";
-    [lbl("Titulo"),tI,lbl("Conteudo"),ta].forEach(el=>cont.appendChild(el));
-    if(nota){const cpB2=btn({style:{width:"100%",padding:"12px",background:"linear-gradient(135deg,#1A1A2E,#2d2d4e)",color:"#fff",fontSize:13,borderRadius:12,marginBottom:10},onClick:()=>navigator.clipboard.writeText(ta.value).then(()=>{cpB2.textContent="Copiado! ✅";setTimeout(()=>cpB2.textContent="📋 Copiar",2000);})},"📋 Copiar");cont.appendChild(cpB2);}
-    let mv=null;
-    cont.appendChild(btn({style:{width:"100%",padding:"16px",background:"linear-gradient(135deg,#3B82F6,#60a5fa)",color:"#fff",fontSize:16,borderRadius:16,marginBottom:nota?10:0},onClick:()=>{
-      if(!tI.value.trim()){alert("Informe o titulo!");return;}
-      if(idx!=null)notas[idx]={...notas[idx],titulo:tI.value,corpo:ta.value};
-      else notas.push({id:Date.now(),titulo:tI.value,corpo:ta.value,criado:hoje()});
-      saveNotas(notas);if(mv)mv.remove();onDone2();
-    }},nota?"Salvar Nota":"Criar Nota"));
-    if(nota)cont.appendChild(btn({style:{width:"100%",padding:"13px",background:"#fff0f0",color:"#e53e3e",borderRadius:12,border:"2px solid #ffcdd2"},onClick:()=>{if(confirm("Apagar?")){notas.splice(idx,1);saveNotas(notas);if(mv)mv.remove();onDone2();}}},"🗑️ Apagar nota"));
-    mv=openModal(nota?"Editar Nota":"Nova Nota",cont,()=>{});
-  }
-  build();return w;
+  w.appendChild(mkHdr("Planet Lab",()=>go("home")));
+  const wrap=div({style:{padding:0,height:"calc(100vh - 130px)"}});
+  const ifr=document.createElement("iframe");
+  ifr.style.cssText="width:100%;height:100%;border:none;display:block;";
+  ifr.addEventListener("load",()=>{
+    try{ifr.contentWindow.postMessage({type:"pd-lab-sync",exames:(DATA.examesLab||[])},"*");}catch(e){}
+  });
+  ifr.srcdoc=LAB_HTML;
+  wrap.appendChild(ifr);
+  w.appendChild(wrap);
+  return w;
 }
+window.addEventListener("message",(ev)=>{
+  if(ev.data&&ev.data.type==="pd-lab-save"&&Array.isArray(ev.data.exames)){
+    updSilent(d=>({...d,examesLab:ev.data.exames}));
+    DATA=loadData();
+  }
+});
 
 // ── MESCLAR DUPLICADOS ────────────────────────────────────────────────────────
 function renderMesclar(){
