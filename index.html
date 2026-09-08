@@ -242,7 +242,11 @@ if (typeof firebase !== 'undefined' && !firebase.apps.length) {
     };
 }
 let DATA=loadData();
-saveData(DATA); // persiste o backfill de isCad1 (corrige colisões de número entre Cad.1 e Cad.2)
+// (Removido o saveData(DATA) automático daqui: ele guardava o snapshot local antigo em
+// pendenteEnvio e, assim que o Firebase confirmava a sincronização, mandava esse snapshot
+// como diff — sobrescrevendo a agenda recém-sincronizada da nuvem com a versão local antiga.
+// O backfill de isCad1 já é reaplicado pelo sanitizeData() tanto aqui quanto sobre os dados
+// que chegam da nuvem, então esse save extra era redundante e perigoso.)
 
 // ── AUTO-IMPORT VETUS ────────────────────────────────────────────────────────
 // Desativado quando o Firebase está ativo: essa importação é de uma época em
@@ -4576,6 +4580,32 @@ function calcularVencedores(jogoId,real,palpites){
   return ganhadores;
 }
 
+// ── Calcula quem chegou mais perto do placar (quando ninguém acerta em cheio) ──
+// Distância = |diferença nos gols do mandante| + |diferença nos gols do visitante|.
+// Empate na distância = todos entram (mais de um "mais perto" possível).
+// ── Fallback quando ninguém acerta o placar exato: vitória simples ────────────
+// Considera "acertou" quem cravou só o RESULTADO (quem venceu, ou o empate),
+// sem precisar do placar exato.
+function resultadoDirecao(golM,golV){
+  const m=parseInt(golM),v=parseInt(golV);
+  if(isNaN(m)||isNaN(v))return null;
+  if(m>v)return"mandante";
+  if(v>m)return"visitante";
+  return"empate";
+}
+function calcularVitoriaSimples(jogoId,real,palpites){
+  if(!real||real.golM===""||real.golV==="")return[];
+  const dirReal=resultadoDirecao(real.golM,real.golV);
+  if(!dirReal)return[];
+  const candidatos=Object.entries(palpites[jogoId]||{}).map(([uid,pal])=>{
+    const dirPal=resultadoDirecao(pal.golM,pal.golV);
+    if(dirPal===null||dirPal!==dirReal)return null;
+    return{uid,nome:pal.nome,pal};
+  }).filter(Boolean);
+  return candidatos.sort((a,b)=>(a.nome||"").localeCompare(b.nome||""));
+}
+
+
 function renderBolao(){
   const w=div({className:"screen"});
   const bolao=getBolao();
@@ -4854,9 +4884,29 @@ function renderPalpitesTab(bolao,jogoAtual){
     cont.appendChild(hdrPlac);
 
     if(!vencedores.length){
-      const av=div({style:{textAlign:"center",padding:"24px",background:"#fff0f0",border:"2px solid #fca5a5",borderRadius:14}});
+      const av=div({style:{textAlign:"center",padding:"20px",background:"#fff0f0",border:"2px solid #fca5a5",borderRadius:14,marginBottom:12}});
       av.innerHTML='<div style="font-size:36px;margin-bottom:8px">😔</div><div style="font-weight:800;font-size:14px;color:#e53e3e">Ninguém ganhou o banho grátis!</div><div style="font-size:12px;color:#8B8FA8;margin-top:6px">Nenhuma aposta acertou o placar exato</div>';
       cont.appendChild(av);
+
+      const vitoriaSimples=calcularVitoriaSimples(jogoId,real,{[jogoId]:palpitesJogo});
+      if(vitoriaSimples.length){
+        cont.appendChild(h("div",{style:{fontSize:11,fontWeight:800,color:"#8B8FA8",textTransform:"uppercase",letterSpacing:.5,margin:"4px 0 8px",textAlign:"center"}},"✅ Acertou quem venceu"));
+        vitoriaSimples.forEach(v=>{
+          const tel=v.pal.tel||"";
+          const primeiroNomeV=(v.nome||"").trim().split(" ")[0]||"";
+          const msgProximo="✅ "+primeiroNomeV+", ninguém acertou o placar exato dessa vez, mas você acertou quem venceu! 🐾\n\n⚽ "+jogo.mandante+" "+real.golM+"×"+real.golV+" "+jogo.visitante+(goleadoresCurto(real)?"\nGol: ⚽ "+goleadoresCurto(real):"")+"\n\nSeu palpite: "+v.pal.golM+"×"+v.pal.golV+"\n\nContinua valendo pro próximo jogo! 🛁";
+          const pCard=div({style:{background:"#eff6ff",border:"2px solid #93c5fd",borderRadius:16,padding:"14px",marginBottom:10}});
+          const ini=(v.nome||"?").split(" ").filter(Boolean).slice(0,2).map(x=>x[0].toUpperCase()).join("");
+          pCard.innerHTML='<div style="display:flex;align-items:center;gap:12px">'+
+            '<div style="width:42px;height:42px;border-radius:21px;background:linear-gradient(135deg,#60a5fa,#3B82F6);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:900;color:#fff;flex-shrink:0">'+ini+'</div>'+
+            '<div style="flex:1;min-width:0">'+
+              '<div style="font-weight:900;font-size:15px;color:#1A1A2E">'+v.nome+'</div>'+
+              '<div style="font-size:10px;color:#0B4EA2;font-weight:700;margin-top:2px">Palpite: '+v.pal.golM+'×'+v.pal.golV+'</div>'+
+              (tel?'<a href="https://api.whatsapp.com/send?phone=55'+tel.replace(/\D/g,"")+'&text='+encodeURIComponent(msgProximo)+'" target="_blank" style="display:inline-block;margin-top:5px;background:#25D366;color:#fff;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:800;text-decoration:none">💬 Mandar mensagem no WhatsApp</a>':'<div style="margin-top:5px;font-size:10px;color:#e53e3e;font-weight:700">⚠️ Sem telefone cadastrado</div>')+
+            '</div></div>';
+          cont.appendChild(pCard);
+        });
+      }
     } else {
       vencedores.forEach((v,i)=>{
         const tel=v.pal.tel||"";
