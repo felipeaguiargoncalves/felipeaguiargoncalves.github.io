@@ -466,6 +466,7 @@ function abrirModalFoto(titulo,onFoto){
 
 // ── NAVEGAÇÃO ─────────────────────────────────────────────────────────────────
 let NAV={s:IS_GERENTE?"agenda_gerente":"home"};
+let AGENDA_DIA_GLOBAL=null; // dia selecionado na Agenda — persiste entre navegações (não volta pra hoje sozinho)
 function go(s,extra){
   // Gerente só pode ir para agenda_gerente
   if(IS_GERENTE&&s!=="agenda_gerente")return;
@@ -1835,7 +1836,27 @@ function renderDet(pref,mes,numero){
       r.appendChild(btn({style:{background:"#fff0f0",color:"#e53e3e",padding:"7px 11px",borderRadius:10,fontSize:12},onClick:()=>{if(confirm("Apagar?")){const c2=getCob();saveCob(mes,numero,{...c2,atendimentos:(c2.atendimentos||[]).filter(a=>a.id!==at.id)});build();}}},"Del"));
       top2.appendChild(inf);top2.appendChild(r);card.appendChild(top2);
       const bot=div({style:{padding:"10px 16px"}});
-      at.caes.forEach((c,ci)=>{const cd=div({style:{marginBottom:ci<at.caes.length-1?8:0}});cd.innerHTML=`<span style="font-weight:800;color:#1A1A2E;font-size:13px">🐶 ${c.nome||"?"}${c.raca?" - "+c.raca:""}</span><span style="color:#8B8FA8;font-size:12px;margin-left:8px">${(c.servicos||[]).map(sv=>sv.nome+" R$"+parseFloat(sv.valor||0).toFixed(2)).join(" | ")}</span>`;bot.appendChild(cd);});
+      at.caes.forEach((c,ci)=>{
+        const cd=div({style:{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,marginBottom:ci<at.caes.length-1?8:0}});
+        const txt=div();txt.innerHTML=`<span style="font-weight:800;color:#1A1A2E;font-size:13px">🐶 ${c.nome||"?"}${c.raca?" - "+c.raca:""}</span><span style="color:#8B8FA8;font-size:12px;margin-left:8px">${(c.servicos||[]).map(sv=>sv.nome+" R$"+parseFloat(sv.valor||0).toFixed(2)).join(" | ")}</span>`;
+        cd.appendChild(txt);
+        cd.appendChild(btn({style:{background:"#EFF6FF",color:"#3B82F6",padding:"5px 9px",borderRadius:9,fontSize:11,fontWeight:800,flexShrink:0},onClick:()=>{
+          const svAtual=(c.servicos||[])[0]||{nome:"Banho",valor:"0"};
+          abrirCorrigirValorModal(c.nome,svAtual.nome,svAtual.valor,(novoValor)=>{
+            const c2=getCob();
+            const novosAts2=(c2.atendimentos||[]).map(a=>{
+              if(a.id!==at.id)return a;
+              const novosCaes=(a.caes||[]).map(cc=>cc.nome===c.nome?{...cc,servicos:(cc.servicos&&cc.servicos.length===1)?[{...cc.servicos[0],valor:String(novoValor)}]:[{nome:svAtual.nome,valor:String(novoValor)}]}:cc);
+              return{...a,caes:novosCaes};
+            });
+            saveCob(mes,numero,{...c2,atendimentos:novosAts2});
+            // Reflete também no evento da agenda correspondente, se existir
+            updSilent(d=>({...d,agenda:d.agenda.map(ev=>(ev.casa===Number(numero)&&ev.pet===c.nome&&ev.data===at.data)?{...ev,valorCustom:String(novoValor)}:ev)}));
+            DATA=loadData();build();
+          });
+        }},"✏️"));
+        bot.appendChild(cd);
+      });
       card.appendChild(bot);body.appendChild(card);
     });
     // ── SEÇÃO DE VENDAS (dentro do build, sobrevive ao body.innerHTML="") ──
@@ -2026,7 +2047,7 @@ function renderAgenda(gerente,embutido){
   }
 
   let ano=new Date().getFullYear(),mes=new Date().getMonth();
-  let diaSel=hoje();
+  let diaSel=AGENDA_DIA_GLOBAL||hoje();
   let filtroStatus="todos";
   let calAberto=true;
 
@@ -2074,7 +2095,7 @@ function renderAgenda(gerente,embutido){
       const nb=evs.some(e=>!e.buscado);
       const c=btn({style:{padding:"8px 4px",borderRadius:12,display:"flex",flexDirection:"column",alignItems:"center",gap:3,background:isS?"#FF6B9D":(isH?"#FFF5F9":"#fff"),border:"2px solid "+(isS?"#FF6B9D":(isH?"#FFD93D":"#FFE4EF")),color:isS?"#fff":"#1A1A2E"},onClick:()=>{
         diaSel=ds;
-        // Se o mês clicado é diferente do exibido, ajusta
+        AGENDA_DIA_GLOBAL=ds;
         const dObj=new Date(ds+"T12:00:00");
         ano=dObj.getFullYear();mes=dObj.getMonth();
         buildCal();
@@ -2091,7 +2112,7 @@ function renderAgenda(gerente,embutido){
 
     // Botão Hoje
     calSection.appendChild(btn({style:{width:"100%",padding:"11px",background:"linear-gradient(135deg,#FF6B9D,#FFD93D)",color:"#fff",fontSize:13,borderRadius:12,marginBottom:4},onClick:()=>{
-      diaSel=hoje();ano=new Date().getFullYear();mes=new Date().getMonth();
+      diaSel=hoje();AGENDA_DIA_GLOBAL=diaSel;ano=new Date().getFullYear();mes=new Date().getMonth();
       buildCal();
       setTimeout(()=>{evSection.scrollIntoView({behavior:"smooth",block:"start"});},80);
     }},"Hoje — "+fmtD(hoje())));
@@ -2466,6 +2487,61 @@ function darBaixaGrupo(grupo,onDone){
   DATA=loadData();onDone&&onDone();
 }
 
+// Quando o valor de um agendamento já baixado (buscado=true) é retificado,
+// o atendimento já foi criado em cobrancas/cobrancas2 com o valor antigo —
+// sem isso, a correção fica só no evento da agenda e a conta do cliente
+// continua mostrando o valor errado.
+function sincronizarValorCobranca(ev,novoValor,novoServico){
+  if(!ev.buscado)return; // ainda não foi baixado, nada a corrigir na conta do cliente
+  const mesNome=MESES[new Date(ev.data+"T12:00:00").getMonth()];
+  const isCad1=ev.isCad1!==undefined?ev.isCad1:!!DATA.casas[ev.casa];
+  const atualizaAts=(ats)=>(ats||[]).map(at=>{
+    if(at.data!==ev.data)return at;
+    const caesAt=(at.caes||[]).map(c=>{
+      if(c.nome!==ev.pet)return c;
+      const servicos=(c.servicos&&c.servicos.length===1)
+        ?[{...c.servicos[0],nome:novoServico,valor:String(novoValor)}]
+        :[{nome:novoServico,valor:String(novoValor)}];
+      return{...c,servicos};
+    });
+    return{...at,caes:caesAt};
+  });
+  if(isCad1){
+    updSilent(d=>{
+      const cb=d.cobrancas||{};const cbMes=cb[mesNome]||{};const cbCasa=cbMes[ev.casa];
+      if(!cbCasa)return d;
+      return{...d,cobrancas:{...cb,[mesNome]:{...cbMes,[ev.casa]:{...cbCasa,atendimentos:atualizaAts(cbCasa.atendimentos)}}}};
+    });
+  } else {
+    updSilent(d=>{
+      const cb=d.cobrancas2||{};const cbMes=cb[mesNome]||{};const cbCasa=cbMes[ev.casa];
+      if(!cbCasa)return d;
+      return{...d,cobrancas2:{...cb,[mesNome]:{...cbMes,[ev.casa]:{...cbCasa,atendimentos:atualizaAts(cbCasa.atendimentos)}}}};
+    });
+  }
+}
+
+// ── MODAL CORRIGIR VALOR (usado na conta do cliente, pra retificar um lançamento já baixado) ──
+function abrirCorrigirValorModal(nomePet,servicoAtual,valorAtual,onSalvar){
+  const cont=div();
+  cont.appendChild(h("div",{style:{textAlign:"center",marginBottom:14}},[
+    h("span",{style:{fontSize:32}},"🐶"),
+    h("div",{style:{fontWeight:800,fontSize:15,color:"#1A1A2E",marginTop:4}},nomePet||"Pet"),
+    h("div",{style:{fontSize:12,color:"#8B8FA8",fontWeight:700}},servicoAtual||"Banho")
+  ]));
+  cont.appendChild(lbl("Valor correto (R$)"));
+  const vInp=inp({className:"fi",type:"number",placeholder:"0,00",value:String(valorAtual||"0"),style:{fontSize:22,fontWeight:800,textAlign:"center",marginBottom:20}});
+  cont.appendChild(vInp);
+  let mv=null;
+  cont.appendChild(btn({style:{width:"100%",padding:"16px",background:"linear-gradient(135deg,#FF6B9D,#FFD93D)",color:"#fff",fontSize:15,borderRadius:14,fontWeight:800},onClick:()=>{
+    const novoValor=parseFloat(String(vInp.value).replace(",","."));
+    if(isNaN(novoValor)||novoValor<0){alert("Valor inválido!");return;}
+    if(mv)mv.remove();
+    onSalvar(novoValor);
+  }},"✓ Salvar Correção"));
+  mv=openModal("Corrigir Valor",cont,null,true);
+}
+
 // ── MODAL VALOR ───────────────────────────────────────────────────────────────
 function abrirValorModal(ev,onDone){
   const valAtual=getValorEvento(ev);const cont=div();
@@ -2492,6 +2568,7 @@ function abrirValorModal(ev,onDone){
   cont.appendChild(btn({style:{width:"100%",padding:"16px",background:"linear-gradient(135deg,#FF6B9D,#FFD93D)",color:"#fff",fontSize:15,borderRadius:14,fontWeight:800},onClick:()=>{
     if(!vInp.value){alert("Informe o valor!");return;}
     updSilent(d=>({...d,agenda:d.agenda.map(a=>a.id===ev.id?{...a,valorCustom:vInp.value,servico:servicoSel}:a)}));
+    sincronizarValorCobranca(ev,vInp.value,servicoSel);
     DATA=loadData();if(mv)mv.remove();onDone&&onDone();
   }},"Salvar Valor"));
   mv=openModal("Valor — "+(ev.pet||"Pet"),cont,null,true);
