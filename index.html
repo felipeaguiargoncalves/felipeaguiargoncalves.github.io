@@ -680,6 +680,19 @@ function detectarBairro(rua){
   return"";
 }
 
+// ── BUSCA INTELIGENTE (sem acento + tolera palavras fora de ordem) ───────────
+// Ex: buscar "Ana Andrade" encontra "Ana Paula Andrade"; "Av 777" encontra "Av Lami 777".
+// Match exato (substring, como digitado) sempre tem prioridade sobre o fallback por palavras.
+function normTxt(s){return String(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");}
+function matchScore(alvo,query){
+  const a=normTxt(alvo),q=normTxt(query).trim();
+  if(!q)return 0;
+  if(a.includes(q))return 0; // bateu exatamente como foi digitado
+  const palavras=q.split(/\s+/).filter(Boolean);
+  if(palavras.length&&palavras.every(p=>a.includes(p)))return 1; // todas as palavras aparecem, fora de ordem
+  return -1; // não bate
+}
+
 function abrirModalDedupAgenda(){
   const agenda=DATA.agenda||[];
   if(agenda.length===0){alert("Nenhum agendamento na agenda.");return;}
@@ -2798,22 +2811,34 @@ function abrirAgModal(dataInicial,onDone,getAllPets,gerente){
   function filtrarPets(){
     const qNum=buscaNum.value.toLowerCase().trim();
     const qCasaC1=buscaCasaC1.value.toLowerCase().trim();
-    const qCao=buscaCao.value.toLowerCase().trim();
-    const qTutor=buscaTutor.value.toLowerCase().trim();
+    const qCao=buscaCao.value.trim();
+    const qTutor=buscaTutor.value.trim();
     const qTutorDig=qTutor.replace(/\D/g,"");
-    const qEnd=buscaEnd.value.toLowerCase().trim();
-    return pets.filter(p=>{
-      if(qNum&&!String(p.casa).includes(qNum))return false;
-      if(qCasaC1&&!(p.isCad1&&String(p.numCasa).toLowerCase().includes(qCasaC1)))return false;
-      if(qCao&&!p.pet.toLowerCase().includes(qCao))return false;
-      if(qTutor){
-        const tutorOk=p.morador.toLowerCase().includes(qTutor);
-        const telOk=qTutorDig&&p.telefone&&String(p.telefone).replace(/\D/g,"").includes(qTutorDig);
-        if(!tutorOk&&!telOk)return false;
+    const qEnd=buscaEnd.value.trim();
+    const resultados=pets.map(p=>{
+      if(qNum&&!String(p.casa).includes(qNum))return null;
+      if(qCasaC1&&!(p.isCad1&&String(p.numCasa).toLowerCase().includes(qCasaC1)))return null;
+      let score=0;
+      if(qCao){
+        const s=matchScore(p.pet,qCao);
+        if(s<0)return null;
+        score+=s;
       }
-      if(qEnd&&!p.endereco.toLowerCase().includes(qEnd))return false;
-      return true;
-    });
+      if(qTutor){
+        const sT=matchScore(p.morador,qTutor);
+        const telOk=qTutorDig&&p.telefone&&String(p.telefone).replace(/\D/g,"").includes(qTutorDig);
+        if(sT<0&&!telOk)return null;
+        score+=sT<0?0:sT;
+      }
+      if(qEnd){
+        const sE=matchScore(p.endereco,qEnd);
+        if(sE<0)return null;
+        score+=sE;
+      }
+      return{p,score};
+    }).filter(Boolean);
+    resultados.sort((a,b)=>a.score-b.score); // match exato (score 0) primeiro, fuzzy depois
+    return resultados.map(r=>r.p);
   }
   // painel resumo dos pets selecionados (aparece abaixo da lista)
   const resumoDiv=div({style:{marginBottom:10}});
