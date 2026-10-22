@@ -2223,7 +2223,18 @@ function renderAgenda(gerente,embutido){
       const stRow=div({style:{display:"flex",gap:5,marginTop:8}});
       Object.entries(STATUS_CORES).forEach(([k,v])=>{
         const isA=statusAtual===k;
-        stRow.appendChild(btn({style:{flex:1,padding:"6px 4px",fontSize:10,fontWeight:800,background:isA?v.faixa:"#f5f5f5",color:isA?"#fff":"#8B8FA8",borderRadius:8,border:"2px solid "+(isA?v.faixa:"#eee")},onClick:()=>{const ids=new Set(grupo.map(e=>e.id));updSilent(d=>({...d,agenda:d.agenda.map(a=>ids.has(a.id)?{...a,statusCor:k}:a)}));buildEvs();}},v.emoji+" "+v.label));
+        stRow.appendChild(btn({style:{flex:1,padding:"6px 4px",fontSize:10,fontWeight:800,background:isA?v.faixa:"#f5f5f5",color:isA?"#fff":"#8B8FA8",borderRadius:8,border:"2px solid "+(isA?v.faixa:"#eee")},onClick:()=>{
+          const ids=new Set(grupo.map(e=>e.id));
+          if(k==="finalizado"){
+            // "Finalizado" precisa SEMPRE lançar na cobrança — senão o serviço some sem virar cobrança pro cliente.
+            // Reaproveita a mesma rotina do "Dar Baixa" (cria o atendimento com pago:false se ainda não existir).
+            const grupoAtual=(DATA.agenda||[]).filter(a=>ids.has(a.id));
+            darBaixaGrupo(grupoAtual.length>0?grupoAtual:grupo,buildEvs);
+          } else {
+            updSilent(d=>({...d,agenda:d.agenda.map(a=>ids.has(a.id)?{...a,statusCor:k}:a)}));
+            buildEvs();
+          }
+        }},v.emoji+" "+v.label));
       });
       inner.appendChild(stRow);
       const mapRow=div({style:{marginTop:8,paddingTop:8,borderTop:"1px solid #FFE4EF",display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}});
