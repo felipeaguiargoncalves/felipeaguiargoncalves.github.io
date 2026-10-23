@@ -184,6 +184,8 @@ if (typeof firebase !== 'undefined' && !firebase.apps.length) {
     let fbSeeded=false;
     let ultimoRemoto=null;
     let pendenteEnvio=null;
+    let pendenteDebounce=null; // última versão local completa ainda não confirmada na nuvem
+    let timerDebounce=null;
     function temDadosReais(p){
         if(!p||typeof p!=='object')return false;
         if(Array.isArray(p.agenda)&&p.agenda.length>0)return true;
@@ -212,7 +214,18 @@ if (typeof firebase !== 'undefined' && !firebase.apps.length) {
     }
     fb.on('value', snap => {
         if(snap.val()) {
-            const limpo=sanitizeData(snap.val());
+            let limpo=sanitizeData(snap.val());
+            // Se tem alteração local feita (ex: uma baixa) que ainda não foi
+            // confirmada na nuvem, não deixa esse snapshot remoto apagar ela —
+            // reaplica por cima as chaves que mudaram localmente e ainda não foram enviadas.
+            if(pendenteDebounce){
+                const diffLocal={};
+                Object.keys(pendenteDebounce).forEach(k=>{
+                    const antigo=ultimoRemoto?ultimoRemoto[k]:undefined;
+                    if(JSON.stringify(pendenteDebounce[k])!==JSON.stringify(antigo))diffLocal[k]=pendenteDebounce[k];
+                });
+                limpo={...limpo,...diffLocal};
+            }
             ultimoRemoto=limpo;
             localStorage.setItem(KEY, JSON.stringify(limpo));
             DATA = limpo;
@@ -238,7 +251,17 @@ if (typeof firebase !== 'undefined' && !firebase.apps.length) {
             pendenteEnvio=d;
             return;
         }
-        enviarDiff(d);
+        // Debounce: se várias baixas/edições acontecem em sequência rápida (ex: dar
+        // baixa em vários clientes um atrás do outro), espera elas pararem por um
+        // instante antes de mandar pra nuvem — manda tudo junto de uma vez só, em
+        // vez de disparar uma escrita por clique e arriscar uma corrida entre o
+        // eco de uma escrita e a próxima mudança local ainda não confirmada.
+        pendenteDebounce=d;
+        if(timerDebounce)clearTimeout(timerDebounce);
+        timerDebounce=setTimeout(()=>{
+            const dd=pendenteDebounce;pendenteDebounce=null;timerDebounce=null;
+            enviarDiff(dd);
+        },600);
     };
 }
 let DATA=loadData();
@@ -2226,10 +2249,11 @@ function renderAgenda(gerente,embutido){
         stRow.appendChild(btn({style:{flex:1,padding:"6px 4px",fontSize:10,fontWeight:800,background:isA?v.faixa:"#f5f5f5",color:isA?"#fff":"#8B8FA8",borderRadius:8,border:"2px solid "+(isA?v.faixa:"#eee")},onClick:()=>{
           const ids=new Set(grupo.map(e=>e.id));
           if(k==="finalizado"){
-            // "Finalizado" precisa SEMPRE lançar na cobrança — senão o serviço some sem virar cobrança pro cliente.
-            // Reaproveita a mesma rotina do "Dar Baixa" (cria o atendimento com pago:false se ainda não existir).
+            // "Finalizado" precisa SEMPRE lançar na cobrança E reagendar — abre a mesma tela
+            // "Forma de Pagamento" do botão "Dar Baixa" (antes chamava um atalho que lançava
+            // a cobrança mas pulava o reagendamento automático).
             const grupoAtual=(DATA.agenda||[]).filter(a=>ids.has(a.id));
-            darBaixaGrupo(grupoAtual.length>0?grupoAtual:grupo,buildEvs);
+            abrirPagamentoModal(grupoAtual.length>0?grupoAtual:grupo,buildEvs,DATA.gruposWAPag||{},true); // true = sem WA
           } else {
             updSilent(d=>({...d,agenda:d.agenda.map(a=>ids.has(a.id)?{...a,statusCor:k}:a)}));
             buildEvs();
