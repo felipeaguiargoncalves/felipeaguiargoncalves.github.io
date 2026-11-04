@@ -1303,7 +1303,7 @@ function abrirCadastroPetModal(casaNum,pref,onDone){
     updSilent(d=>({...d,modelos:{...d.modelos,[casaNum]:validos.map(p=>({nome:p.nome.trim(),raca:p.raca.trim(),cor:(p.cor||"").trim(),nasc:p.nasc||"",peso:(p.peso||"").trim(),servicos:[{nome:"Banho",valor:""}]}))}}));
     // Também grava pets no histórico de cadastro usando campo "pets" na casa
     const casaKey=pref==="cad1"?"casas":"casas2";
-    updSilent(d=>{const casasD={...d[casaKey]};if(casasD[casaNum])casasD[casaNum]={...casasD[casaNum],pets:validos.map(p=>({nome:p.nome.trim(),raca:p.raca.trim(),cor:(p.cor||"").trim(),nasc:p.nasc||"",peso:(p.peso||"").trim()}))};return{...d,[casaKey]:casasD};});
+    updSilent(d=>{const casasD={...d[casaKey]};if(casasD[casaNum])casasD[casaNum]={...casasD[casaNum],pets:validos.map(p=>({nome:p.nome.trim(),raca:p.raca.trim(),cor:(p.cor||"").trim(),nasc:p.nasc||"",peso:(p.peso||"").trim(),novo:true}))};return{...d,[casaKey]:casasD};});
     svP.textContent="Salvo! ✅";svP.style.background="linear-gradient(135deg,#2DC653,#52e87b)";
     setTimeout(()=>{if(mv)mv.remove();if(onDone)onDone(casaNum);},1200);
   }},"Salvar Pets");
@@ -1765,7 +1765,10 @@ function renderGrade(titulo,pref,mes){
       let bColor="#FFE4EF",sBg="#fff0f0",sColor="#e53e3e",sTxt="Pendente";
       if(isPago){bColor="#2DC653";sBg="#e8fbed";sColor="#2DC653";sTxt="Pago";}
       else if(isEnviado){bColor="#FFD93D";sBg="#FFFBEE";sColor="#E8A000";sTxt="Enviado";}
-      else if(isSemBanho){bColor="#FFE4EF";sBg="#f9f9f9";sColor="#8B8FA8";sTxt="Sem banho";}
+      else if(isSemBanho){
+        if(cb.semBanho){bColor="#60A5FA";sBg="#DBEAFE";sColor="#1D4ED8";sTxt="Sem banho ✓";}
+        else{bColor="#FFE4EF";sBg="#f9f9f9";sColor="#8B8FA8";sTxt="Sem banho";}
+      }
       const c=div({className:"btn card",style:{padding:"13px 8px",display:"flex",flexDirection:"column",alignItems:"center",gap:5,borderTop:"4px solid "+bColor,cursor:"pointer"}});
       let _sx=0,_sy=0,_mv=false;
       c.addEventListener("touchstart",e=>{_sx=e.touches[0].clientX;_sy=e.touches[0].clientY;_mv=false;},{passive:true});
@@ -1827,6 +1830,10 @@ function renderDet(pref,mes,numero){
     scT.appendChild(si);scT.appendChild(tr);sc.appendChild(scT);
     const nB=btn({style:{width:"100%",padding:"10px",background:nota?"linear-gradient(135deg,#FFD93D,#F5A623)":"#fff",color:nota?"#fff":"#8B8FA8",border:"2px solid "+(nota?"#E8A000":"#FFE4EF"),borderRadius:12,fontSize:13,marginBottom:tel?10:0},onClick:()=>{const c2=getCob();saveCob(mes,numero,{...c2,notaEnviada:!nota});build();}},nota?"✓ Nota enviada":"Marcar nota como enviada");
     sc.appendChild(nB);
+    if(ats.length===0){
+      const semB=!!cob.semBanho;
+      sc.appendChild(btn({style:{width:"100%",padding:"10px",background:semB?"#DBEAFE":"#fff",color:semB?"#1D4ED8":"#8B8FA8",border:"2px solid "+(semB?"#60A5FA":"#FFE4EF"),borderRadius:12,fontSize:13,marginTop:10,marginBottom:tel?10:0},onClick:()=>{const c2=getCob();saveCob(mes,numero,{...c2,semBanho:!semB});build();}},semB?"✓ Sem banho este mês":"Marcar como Sem banho"));
+    }
     if(tel){
       const waR=div({style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}});
 
@@ -2416,14 +2423,43 @@ function abrirAddPetGrupoModal(rep,grupoAtual,onDone,gerente){
   // ── Cadastro avulso (pet novo, sem histórico)
   cont.appendChild(h("p",{style:{fontWeight:800,color:"#8B8FA8",fontSize:12,marginBottom:10,textTransform:"uppercase",letterSpacing:.6}},"Pet avulso (não cadastrado)"));
   const nomI=inp({className:"fi",placeholder:"Nome do pet",style:{marginBottom:10}});
+  const racaI=inp({className:"fi",placeholder:"Ex: Shih-Tzu",style:{marginBottom:10}});
+  const corI=inp({className:"fi",placeholder:"Ex: Caramelo",style:{marginBottom:10}});
+  const pesoI=inp({className:"fi",type:"number",placeholder:"Ex: 8.5",style:{marginBottom:10}});
+  const nascI=inp({className:"fi",type:"date",style:{marginBottom:10}});
   const valI=inp({className:"fi",type:"number",placeholder:"Valor R$",style:{marginBottom:14}});
   cont.appendChild(lbl("Nome do Pet"));cont.appendChild(nomI);
+  cont.appendChild(lbl("Raça"));cont.appendChild(racaI);
+  const extraRow2=div({style:{display:"flex",gap:8}});
+  const cW=div({style:{flex:1}});cW.appendChild(lbl("Cor"));cW.appendChild(corI);
+  const pW=div({style:{flex:1}});pW.appendChild(lbl("Peso (kg)"));pW.appendChild(pesoI);
+  extraRow2.appendChild(cW);extraRow2.appendChild(pW);
+  cont.appendChild(extraRow2);
+  cont.appendChild(lbl("Data de Nascimento"));cont.appendChild(nascI);
   cont.appendChild(lbl("Valor (R$)"));cont.appendChild(valI);
   cont.appendChild(btn({style:{width:"100%",padding:"14px",background:"linear-gradient(135deg,#FF6B9D,#FFD93D)",color:"#fff",fontSize:15,borderRadius:14,fontWeight:800},onClick:()=>{
     if(!nomI.value.trim()){alert("Informe o nome do pet!");return;}
-    const novoEv={id:Date.now(),data:rep.data,pet:nomI.value.trim(),casa:casaNum,morador,servico:rep.servico||"Banho",func:rep.func||"",hora:rep.hora||"08:00",endereco:endStr,telefone,buscado:false,isCad1:isCad1Grupo};
+    const infoPet={raca:racaI.value.trim(),cor:corI.value.trim(),peso:pesoI.value.trim(),nasc:nascI.value||""};
+    const novoEv={id:Date.now(),data:rep.data,pet:nomI.value.trim(),casa:casaNum,morador,servico:rep.servico||"Banho",func:rep.func||"",hora:rep.hora||"08:00",endereco:endStr,telefone,buscado:false,isCad1:isCad1Grupo,novoPet:true,infoPet};
     if(valI.value&&parseFloat(valI.value)>0)novoEv.valorCustom=valI.value;
-    updSilent(d=>({...d,agenda:[...d.agenda,novoEv].sort((a,b)=>a.data.localeCompare(b.data))}));
+    // Cadastra o pet de verdade na casa (assim a raça aparece na agenda e ele deixa de ser "avulso")
+    const campoCasa=isCad1Grupo?"casas":"casas2";
+    const campoMod=isCad1Grupo?"modelos":"modelos2";
+    updSilent(d=>{
+      const casasD={...(d[campoCasa]||{})};
+      if(casasD[casaNum]){
+        const petsAtuais=casasD[casaNum].pets||[];
+        if(!petsAtuais.some(p=>(p.nome||"").trim().toLowerCase()===novoEv.pet.toLowerCase())){
+          casasD[casaNum]={...casasD[casaNum],pets:[...petsAtuais,{nome:novoEv.pet,...infoPet}]};
+        }
+      }
+      const modD={...(d[campoMod]||{})};
+      const modAtuais=modD[casaNum]||[];
+      if(!modAtuais.some(p=>(p.nome||"").trim().toLowerCase()===novoEv.pet.toLowerCase())){
+        modD[casaNum]=[...modAtuais,{nome:novoEv.pet,raca:infoPet.raca,cor:infoPet.cor,nasc:infoPet.nasc,peso:infoPet.peso,servicos:[{nome:"Banho",valor:""}]}];
+      }
+      return{...d,[campoCasa]:casasD,[campoMod]:modD,agenda:[...d.agenda,novoEv].sort((a,b)=>a.data.localeCompare(b.data))};
+    });
     DATA=loadData();if(mv)mv.remove();onDone&&onDone();
   }},"✓ Adicionar ao Agendamento"));
 
@@ -2476,6 +2512,28 @@ function abrirWATelebusca(grupo,gwa){
   let msg=`🚗 ROTA PLANET DOGS\n📅 ${fmtD(rep.data)} - ${rep.hora||"08:00"}\n\n🏠 Casa ${rep.casa} - ${rep.morador||""}\n🐶 Pets: ${pets}\n✂ Servico: ${rep.servico||"Banho"}\n👤 Responsavel: ${rep.func||""}`;
   if(rep.endereco)msg+=`\n\n📍 Endereco:\n${rep.endereco}\n\n🗺 Maps: ${mapsUrl(rep.endereco)}`;
 
+  // Pet/cliente NOVO: manda a ficha completa só neste momento (nas próximas mensagens não repete)
+  const novosPets=grupo.filter(e=>e.novoPet);
+  if(novosPets.length){
+    msg+=`\n\n🆕 NOVO CADASTRO — FICHA COMPLETA`;
+    msg+=`\n👤 Tutor: ${rep.morador||""}`;
+    if(rep.telefone)msg+=`\n📞 Tel: ${rep.telefone}`;
+    novosPets.forEach(e=>{
+      const i=e.infoPet||{};
+      msg+=`\n\n🐶 ${e.pet||"Pet"}`;
+      if(i.raca)msg+=`\n   Raça: ${i.raca}`;
+      if(i.cor)msg+=`\n   Cor: ${i.cor}`;
+      if(i.peso)msg+=`\n   Peso: ${i.peso} kg`;
+      if(i.nasc)msg+=`\n   Nascimento: ${fmtD(i.nasc)}`;
+    });
+  }
+  const idsNovos=new Set(novosPets.map(e=>e.id));
+  const marcarFichaEnviada=()=>{
+    if(!idsNovos.size)return;
+    updSilent(d=>({...d,agenda:d.agenda.map(a=>idsNovos.has(a.id)?{...a,novoPet:false}:a)}));
+    DATA=loadData();
+  };
+
   const diaSem=new Date(rep.data+"T12:00:00").getDay();
   const linkGrupo=((gwa||{})[diaSem]||"").trim();
 
@@ -2484,13 +2542,13 @@ function abrirWATelebusca(grupo,gwa){
   let mv=null;
 
   // Preview da mensagem
-  const pre=h("textarea",{style:{width:"100%",height:140,padding:"10px",borderRadius:12,border:"1.5px solid #FFE4EF",fontSize:11,fontFamily:"monospace",resize:"none",background:"#FAFAFA",color:"#1A1A2E",marginBottom:12}});
+  const pre=h("textarea",{style:{width:"100%",height:(novosPets.length?260:140),padding:"10px",borderRadius:12,border:"1.5px solid #FFE4EF",fontSize:11,fontFamily:"monospace",resize:"none",background:"#FAFAFA",color:"#1A1A2E",marginBottom:12}});
   pre.value=msg;pre.readOnly=true;
   cont.appendChild(pre);
 
   // Botão copiar
   const cpBtn=btn({style:{width:"100%",padding:"13px",background:"linear-gradient(135deg,#1A1A2E,#2d2d4e)",color:"#fff",fontSize:14,fontWeight:800,borderRadius:12,marginBottom:10},onClick:()=>{
-    copiarTexto(msg,cpBtn);
+    copiarTexto(msg,cpBtn);marcarFichaEnviada();
   }},"📋 Copiar Mensagem");
   cont.appendChild(cpBtn);
 
@@ -2498,7 +2556,7 @@ function abrirWATelebusca(grupo,gwa){
   if(linkGrupo.startsWith("https://")){
     cont.appendChild(btn({style:{width:"100%",padding:"13px",background:"linear-gradient(135deg,#25D366,#128C7E)",color:"#fff",fontSize:14,fontWeight:800,borderRadius:12,marginBottom:10},onClick:()=>{
       // Copia a mensagem
-      navigator.clipboard.writeText(msg).catch(()=>{});
+      navigator.clipboard.writeText(msg).catch(()=>{});marcarFichaEnviada();
       // Abre o grupo imediatamente — sem fechar o modal, sem toast que some
       window.open(linkGrupo,"_blank");
       // Toast DEPOIS de abrir, para o usuário saber que foi copiado
@@ -2513,7 +2571,7 @@ function abrirWATelebusca(grupo,gwa){
   // Botão WA direto (sem grupo)
   cont.appendChild(btn({style:{width:"100%",padding:"13px",background:"linear-gradient(135deg,#3B82F6,#60a5fa)",color:"#fff",fontSize:14,fontWeight:800,borderRadius:12},onClick:()=>{
     const url="https://api.whatsapp.com/send?text="+encodeURIComponent(msg);
-    window.open(url,"_blank");
+    window.open(url,"_blank");marcarFichaEnviada();
     if(mv)mv.remove();
   }},"💬 Abrir WA com Mensagem"));
 
@@ -2789,6 +2847,7 @@ function abrirPagamentoModal(grupo,onDone,gwaRota,semWA){
       buscado:false,
       statusCor:"pendente",
       repetirDias:dias,
+      novoPet:false,
     }));
     updSilent(d=>({...d,agenda:[...d.agenda,...novos].sort((a,b)=>a.data.localeCompare(b.data))}));
     DATA=loadData();
@@ -3171,12 +3230,30 @@ function abrirAgModal(dataInicial,onDone,getAllPets,gerente){
     const selecionados=selIdxs.map(i=>petsFiltrados[i]).filter(Boolean);
     if(selecionados.length===0){alert("Selecione pelo menos um pet!");return;}
     let novas=[...DATA.agenda];
+    const petsConsumidos=[];
     selecionados.forEach((p,pi)=>{
       const base={data:dI.value,pet:p.pet,casa:p.casa,morador:p.morador,servico:servicoSel,func:FUNCS[funcIdx].n,hora:hI.value,endereco:p.endereco,telefone:p.telefone,buscado:false,repetirDias:0,isCad1:p.isCad1};
+      // Pet recém-cadastrado: o evento leva a ficha completa pra mensagem de WhatsApp (só desta vez)
+      const regCasa=((p.isCad1?DATA.casas:DATA.casas2)||{})[p.casa]||{};
+      const regPet=(regCasa.pets||[]).find(x=>(x.nome||"").trim().toLowerCase()===(p.pet||"").trim().toLowerCase());
+      if(regPet&&regPet.novo){
+        base.novoPet=true;
+        base.infoPet={raca:regPet.raca||"",cor:regPet.cor||"",peso:regPet.peso||"",nasc:regPet.nasc||""};
+        petsConsumidos.push({casa:p.casa,isCad1:p.isCad1,nome:regPet.nome});
+      }
       novas.push({...base,id:Date.now()+pi*100});
     });
     novas.sort((a,b)=>a.data.localeCompare(b.data));
-    updSilent(d=>({...d,agenda:novas}));DATA=loadData();
+    updSilent(d=>{
+      const nd={...d,agenda:novas};
+      // consome a marca "novo" do cadastro pra ficha não repetir nos próximos agendamentos
+      petsConsumidos.forEach(pc=>{
+        const campo=pc.isCad1?"casas":"casas2";
+        const c=(nd[campo]||{})[pc.casa];
+        if(c&&c.pets){nd[campo]={...nd[campo],[pc.casa]:{...c,pets:c.pets.map(x=>x.nome===pc.nome?{...x,novo:false}:x)}};}
+      });
+      return nd;
+    });DATA=loadData();
     if(mv)mv.remove();onDone&&onDone();
   }},"Salvar"));
   mv=openModal("Agendar",cont,()=>{});
